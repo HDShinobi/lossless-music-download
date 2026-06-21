@@ -1,12 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'theme/app_theme.dart';
+import 'providers/locale_provider.dart';
 
 void main() => runApp(const ProviderScope(child: MyApp()));
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
   @override
-  Widget build(BuildContext context) =>
-      MaterialApp(title: 'Lossless Music', theme: appTheme(), home: const Scaffold());
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locale = ref.watch(localeProvider);
+    return MaterialApp(
+      onGenerateTitle: (ctx) => AppLocalizations.of(ctx).appTitle,
+      theme: appTheme(),
+      locale: locale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      home: const Scaffold(),
+    );
+  }
 }

@@ -1,0 +1,9 @@
+{
+  "@@locale": "en",
+  "appTitle": "Lossless Music",
+  "tabSearch": "Search",
+  "tabQueue": "Queue",
+  "tabServer": "Server",
+  "tabLibrary": "Library",
+  "tabSettings": "Settings"
+}
