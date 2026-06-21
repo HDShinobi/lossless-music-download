@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:lossless_music_download/models/store_extension.dart';
 import 'package:lossless_music_download/services/extension_registry_service.dart';
 
 const _aggregatorUrl = 'https://example.com/repos.json';
@@ -152,6 +153,41 @@ void main() {
         final file = File(path);
         expect(file.existsSync(), isTrue);
         expect(file.readAsBytesSync(), equals(_fakeExtBytes));
+      } finally {
+        tempDir.deleteSync(recursive: true);
+      }
+    });
+
+    test('downloadExtension with path-traversal id writes inside destDir', () async {
+      // Build an extension whose id contains path-traversal sequences.
+      final evilExt = StoreExtension(
+        id: '../../evil',
+        displayName: 'Evil',
+        version: '1.0.0',
+        description: 'path traversal test',
+        category: 'audio',
+        downloadUrl: _downloadUrl,
+        sourceName: 'test',
+      );
+
+      final tempDir = Directory.systemTemp.createTempSync('ext_registry_traversal_');
+      try {
+        final path = await svc.downloadExtension(evilExt, tempDir.path);
+
+        // The written file must live inside tempDir.
+        final resolvedFile = File(path).absolute;
+        expect(
+          resolvedFile.path,
+          startsWith(tempDir.absolute.path),
+          reason: 'written path must be inside destDir',
+        );
+
+        // The file name must contain the sanitized id (dots and slashes replaced).
+        expect(
+          resolvedFile.parent.path,
+          equals(tempDir.absolute.path),
+          reason: 'parent dir must be exactly destDir',
+        );
       } finally {
         tempDir.deleteSync(recursive: true);
       }

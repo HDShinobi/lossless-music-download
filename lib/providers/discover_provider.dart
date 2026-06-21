@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -50,8 +52,13 @@ class DiscoverController extends AsyncNotifier<List<StoreExtension>> {
     final path = await ref
         .read(registryServiceProvider)
         .downloadExtension(e, '$extDir/_dl');
-    await ref.read(backendBridgeProvider).installExtension(path);
-    ref.invalidate(extensionsProvider); // refresh installed list
+    try {
+      await ref.read(backendBridgeProvider).installExtension(path);
+      ref.invalidate(extensionsProvider); // refresh installed list
+    } catch (_) {
+      try { await File(path).delete(); } catch (_) {}
+      rethrow;
+    }
   }
 
   Future<void> setAggregatorUrl(String url) async {

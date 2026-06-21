@@ -45,5 +45,6 @@
   "aggregatorUrlHint": "Paste repos.json URL",
   "save": "Save",
   "cancel": "Cancel",
-  "installFailed": "Install failed"
+  "installFailed": "Install failed",
+  "invalidUrl": "Invalid URL"
 }

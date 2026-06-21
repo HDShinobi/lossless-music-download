@@ -182,6 +182,15 @@ class _AggregatorRow extends ConsumerWidget {
     controller.dispose();
 
     if (result != null && result.isNotEmpty) {
+      final uri = Uri.tryParse(result.trim());
+      if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https') || uri.host.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppLocalizations.of(context).invalidUrl)),
+          );
+        }
+        return;
+      }
       await ref.read(discoverProvider.notifier).setAggregatorUrl(result);
     }
   }

@@ -39,10 +39,14 @@ class ExtensionRegistryService {
 
   /// Download the .spotiflac-ext to destDir/[id].spotiflac-ext; returns the file path.
   Future<String> downloadExtension(StoreExtension e, String destDir) async {
+    final safeId = e.id.replaceAll(RegExp(r'[^A-Za-z0-9_.-]'), '_');
+    if (safeId.isEmpty || safeId == '.' || safeId == '..') {
+      throw ArgumentError('invalid extension id: ${e.id}');
+    }
     final res = await _client.get(Uri.parse(e.downloadUrl));
     if (res.statusCode != 200) throw HttpException('download ${res.statusCode}');
     final dir = Directory(destDir)..createSync(recursive: true);
-    final path = '${dir.path}/${e.id}.spotiflac-ext';
+    final path = '${dir.path}/$safeId.spotiflac-ext';
     File(path).writeAsBytesSync(res.bodyBytes);
     return path;
   }

@@ -45,5 +45,6 @@
   "aggregatorUrlHint": "Dán URL repos.json",
   "save": "Lưu",
   "cancel": "Huỷ",
-  "installFailed": "Cài thất bại"
+  "installFailed": "Cài thất bại",
+  "invalidUrl": "URL không hợp lệ"
 }
