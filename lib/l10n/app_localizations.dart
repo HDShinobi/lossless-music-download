@@ -235,6 +235,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No special permissions'**
   String get permNone;
+
+  /// No description provided for @aggregatorSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Aggregator source'**
+  String get aggregatorSource;
+
+  /// No description provided for @changeAggregator.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get changeAggregator;
+
+  /// No description provided for @install.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get install;
+
+  /// No description provided for @installed.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get installed;
+
+  /// No description provided for @installing.
+  ///
+  /// In en, this message translates to:
+  /// **'Installing...'**
+  String get installing;
+
+  /// No description provided for @allCategories.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get allCategories;
+
+  /// No description provided for @catDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get catDownload;
+
+  /// No description provided for @catMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Metadata'**
+  String get catMetadata;
+
+  /// No description provided for @catLyrics.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics'**
+  String get catLyrics;
+
+  /// No description provided for @discoverEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No extensions yet. Check the aggregator source.'**
+  String get discoverEmpty;
+
+  /// No description provided for @discoverError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load list. Check the source/URL.'**
+  String get discoverError;
+
+  /// No description provided for @changeAggregatorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change aggregator source'**
+  String get changeAggregatorTitle;
+
+  /// No description provided for @aggregatorUrlHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste repos.json URL'**
+  String get aggregatorUrlHint;
+
+  /// No description provided for @save.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get save;
+
+  /// No description provided for @cancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get cancel;
+
+  /// No description provided for @installFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Install failed'**
+  String get installFailed;
 }
 
 class _AppLocalizationsDelegate

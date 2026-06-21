@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
+import 'package:lossless_music_download/models/store_extension.dart';
+import 'package:lossless_music_download/providers/discover_provider.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/screens/sources_screen.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
@@ -54,12 +56,24 @@ InstalledExtension _fakeExt({
     );
 
 // ---------------------------------------------------------------------------
+// Fake DiscoverController that returns a fixed list without network calls.
+// ---------------------------------------------------------------------------
+class _FakeDiscoverController extends DiscoverController {
+  final List<StoreExtension> _list;
+  _FakeDiscoverController(this._list);
+
+  @override
+  Future<List<StoreExtension>> build() async => _list;
+}
+
+// ---------------------------------------------------------------------------
 // Helper: pump SourcesScreen with provided extension list
 // ---------------------------------------------------------------------------
 Future<void> pumpSourcesScreen(
   WidgetTester tester,
-  List<InstalledExtension> exts,
-) async {
+  List<InstalledExtension> exts, {
+  List<StoreExtension> catalogExts = const [],
+}) async {
   final fake = _FakeBridge(exts);
   await tester.pumpWidget(
     ProviderScope(
@@ -68,6 +82,8 @@ Future<void> pumpSourcesScreen(
         appDirsProvider.overrideWithValue(
           Future.value(('/fake/ext', '/fake/data')),
         ),
+        discoverProvider.overrideWith(() => _FakeDiscoverController(catalogExts)),
+        aggregatorUrlProvider.overrideWith(() => _FakeAggregatorUrlNotifier()),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -78,6 +94,14 @@ Future<void> pumpSourcesScreen(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+class _FakeAggregatorUrlNotifier extends AggregatorUrlNotifier {
+  @override
+  String build() => 'https://example.com/repos.json';
+
+  @override
+  Future<void> load() async {}
 }
 
 // ---------------------------------------------------------------------------
@@ -116,12 +140,28 @@ void main() {
     });
 
     testWidgets(
-        'shows Coming soon when Discover segment is tapped',
+        'shows DiscoverTab empty state when Discover segment is tapped',
         (tester) async {
-      await pumpSourcesScreen(tester, []);
+      await pumpSourcesScreen(tester, [], catalogExts: []);
 
       // Tap Discover segment
       await tester.tap(find.text('Discover'));
+      await tester.pumpAndSettle();
+
+      // DiscoverTab is now shown — no "Coming soon" for Discover
+      expect(
+        find.text('No extensions yet. Check the aggregator source.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets(
+        'shows Coming soon when Priority segment is tapped',
+        (tester) async {
+      await pumpSourcesScreen(tester, []);
+
+      // Tap Priority segment
+      await tester.tap(find.text('Priority'));
       await tester.pumpAndSettle();
 
       expect(find.text('Coming soon'), findsOneWidget);

@@ -29,5 +29,21 @@
   "enabled": "Enabled",
   "disabled": "Disabled",
   "extNotFound": "Extension not found",
-  "permNone": "No special permissions"
+  "permNone": "No special permissions",
+  "aggregatorSource": "Aggregator source",
+  "changeAggregator": "Change",
+  "install": "Install",
+  "installed": "Installed",
+  "installing": "Installing...",
+  "allCategories": "All",
+  "catDownload": "Download",
+  "catMetadata": "Metadata",
+  "catLyrics": "Lyrics",
+  "discoverEmpty": "No extensions yet. Check the aggregator source.",
+  "discoverError": "Could not load list. Check the source/URL.",
+  "changeAggregatorTitle": "Change aggregator source",
+  "aggregatorUrlHint": "Paste repos.json URL",
+  "save": "Save",
+  "cancel": "Cancel",
+  "installFailed": "Install failed"
 }

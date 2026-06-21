@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import '../providers/extensions_provider.dart';
+import '../widgets/discover_tab.dart';
 
 class SourcesScreen extends ConsumerStatefulWidget {
   const SourcesScreen({super.key});
@@ -41,7 +42,10 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
   }
 
   Widget _buildBody(BuildContext context, AppLocalizations t) {
-    if (_selectedSegment == 1 || _selectedSegment == 2) {
+    if (_selectedSegment == 1) {
+      return const DiscoverTab();
+    }
+    if (_selectedSegment == 2) {
       return Center(child: Text(t.comingSoon));
     }
 

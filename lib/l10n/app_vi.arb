@@ -29,5 +29,21 @@
   "enabled": "Bật",
   "disabled": "Tắt",
   "extNotFound": "Không tìm thấy extension",
-  "permNone": "Không yêu cầu quyền đặc biệt"
+  "permNone": "Không yêu cầu quyền đặc biệt",
+  "aggregatorSource": "Nguồn tổng hợp",
+  "changeAggregator": "Đổi",
+  "install": "Cài",
+  "installed": "Đã cài",
+  "installing": "Đang cài...",
+  "allCategories": "Tất cả",
+  "catDownload": "Tải",
+  "catMetadata": "Metadata",
+  "catLyrics": "Lyrics",
+  "discoverEmpty": "Chưa có extension nào. Kiểm tra nguồn tổng hợp.",
+  "discoverError": "Không tải được danh sách. Kiểm tra nguồn/URL.",
+  "changeAggregatorTitle": "Đổi nguồn tổng hợp",
+  "aggregatorUrlHint": "Dán URL repos.json",
+  "save": "Lưu",
+  "cancel": "Huỷ",
+  "installFailed": "Cài thất bại"
 }

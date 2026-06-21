@@ -78,4 +78,52 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get permNone => 'Không yêu cầu quyền đặc biệt';
+
+  @override
+  String get aggregatorSource => 'Nguồn tổng hợp';
+
+  @override
+  String get changeAggregator => 'Đổi';
+
+  @override
+  String get install => 'Cài';
+
+  @override
+  String get installed => 'Đã cài';
+
+  @override
+  String get installing => 'Đang cài...';
+
+  @override
+  String get allCategories => 'Tất cả';
+
+  @override
+  String get catDownload => 'Tải';
+
+  @override
+  String get catMetadata => 'Metadata';
+
+  @override
+  String get catLyrics => 'Lyrics';
+
+  @override
+  String get discoverEmpty => 'Chưa có extension nào. Kiểm tra nguồn tổng hợp.';
+
+  @override
+  String get discoverError => 'Không tải được danh sách. Kiểm tra nguồn/URL.';
+
+  @override
+  String get changeAggregatorTitle => 'Đổi nguồn tổng hợp';
+
+  @override
+  String get aggregatorUrlHint => 'Dán URL repos.json';
+
+  @override
+  String get save => 'Lưu';
+
+  @override
+  String get cancel => 'Huỷ';
+
+  @override
+  String get installFailed => 'Cài thất bại';
 }

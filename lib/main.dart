@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'theme/app_theme.dart';
 import 'providers/locale_provider.dart';
+import 'providers/discover_provider.dart';
 import 'router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final container = ProviderContainer();
   await container.read(localeProvider.notifier).load();
+  await container.read(aggregatorUrlProvider.notifier).load();
   runApp(UncontrolledProviderScope(container: container, child: const MyApp()));
 }
 

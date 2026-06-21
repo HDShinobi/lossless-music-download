@@ -78,4 +78,52 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get permNone => 'No special permissions';
+
+  @override
+  String get aggregatorSource => 'Aggregator source';
+
+  @override
+  String get changeAggregator => 'Change';
+
+  @override
+  String get install => 'Install';
+
+  @override
+  String get installed => 'Installed';
+
+  @override
+  String get installing => 'Installing...';
+
+  @override
+  String get allCategories => 'All';
+
+  @override
+  String get catDownload => 'Download';
+
+  @override
+  String get catMetadata => 'Metadata';
+
+  @override
+  String get catLyrics => 'Lyrics';
+
+  @override
+  String get discoverEmpty => 'No extensions yet. Check the aggregator source.';
+
+  @override
+  String get discoverError => 'Could not load list. Check the source/URL.';
+
+  @override
+  String get changeAggregatorTitle => 'Change aggregator source';
+
+  @override
+  String get aggregatorUrlHint => 'Paste repos.json URL';
+
+  @override
+  String get save => 'Save';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get installFailed => 'Install failed';
 }
