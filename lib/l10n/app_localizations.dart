@@ -409,6 +409,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No downloads yet.'**
   String get queueEmpty;
+
+  /// No description provided for @libraryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No downloads yet.'**
+  String get libraryEmpty;
+
+  /// No description provided for @libraryCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} files'**
+  String libraryCount(int count);
 }
 
 class _AppLocalizationsDelegate

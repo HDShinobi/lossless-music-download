@@ -58,5 +58,14 @@
   "download": "Tải",
   "downloadStarted": "Đã thêm vào hàng đợi",
   "downloadFailed": "Tải thất bại",
-  "queueEmpty": "Chưa có tải nào."
+  "queueEmpty": "Chưa có tải nào.",
+  "libraryEmpty": "Chưa tải bài nào.",
+  "libraryCount": "{count} file",
+  "@libraryCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

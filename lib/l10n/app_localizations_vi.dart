@@ -165,4 +165,12 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get queueEmpty => 'Chưa có tải nào.';
+
+  @override
+  String get libraryEmpty => 'Chưa tải bài nào.';
+
+  @override
+  String libraryCount(int count) {
+    return '$count file';
+  }
 }

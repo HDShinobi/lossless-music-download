@@ -58,5 +58,14 @@
   "download": "Download",
   "downloadStarted": "Added to queue",
   "downloadFailed": "Download failed",
-  "queueEmpty": "No downloads yet."
+  "queueEmpty": "No downloads yet.",
+  "libraryEmpty": "No downloads yet.",
+  "libraryCount": "{count} files",
+  "@libraryCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

@@ -165,4 +165,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get queueEmpty => 'No downloads yet.';
+
+  @override
+  String get libraryEmpty => 'No downloads yet.';
+
+  @override
+  String libraryCount(int count) {
+    return '$count files';
+  }
 }
