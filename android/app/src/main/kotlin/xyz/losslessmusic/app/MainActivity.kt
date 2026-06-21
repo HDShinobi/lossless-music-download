@@ -67,6 +67,16 @@ class MainActivity : FlutterActivity() {
                                 call.argument<String>("isrc")!!
                             )
                         )
+                        "getExtensionSettings" -> result.success(
+                            Bridge.getExtensionSettingsJSON(call.argument<String>("id")!!)
+                        )
+                        "setExtensionSettings" -> {
+                            Bridge.setExtensionSettingsJSON(
+                                call.argument<String>("id")!!,
+                                call.argument<String>("settingsJson")!!
+                            )
+                            result.success(null)
+                        }
                         else -> result.notImplemented()
                     }
                 } catch (e: Exception) {

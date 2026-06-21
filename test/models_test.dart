@@ -63,6 +63,49 @@ void main() {
     expect(ext.types.length, 2);
   });
 
+  test('InstalledExtension.fromJson parses full Go-shaped JSON with permissions + provider flags', () {
+    final ext = InstalledExtension.fromJson({
+      'id': 'tidal',
+      'name': 'tidal',
+      'display_name': 'Tidal HiFi',
+      'version': '2.0.0',
+      'description': 'Tidal lossless download extension',
+      'icon_path': '/data/ext/tidal/icon.png',
+      'types': ['download_provider', 'lyrics_provider'],
+      'enabled': true,
+      'status': 'active',
+      'error_message': '',
+      'permissions': ['network', 'storage', 'credentials'],
+      'has_metadata_provider': false,
+      'has_download_provider': true,
+      'has_lyrics_provider': true,
+    });
+
+    expect(ext.id, 'tidal');
+    expect(ext.displayName, 'Tidal HiFi');
+    expect(ext.name, 'Tidal HiFi'); // name mirrors displayName (reads display_name)
+    expect(ext.description, 'Tidal lossless download extension');
+    expect(ext.iconPath, '/data/ext/tidal/icon.png');
+    expect(ext.status, 'active');
+    expect(ext.types, containsAll(['download_provider', 'lyrics_provider']));
+    expect(ext.permissions, containsAll(['network', 'storage', 'credentials']));
+    expect(ext.permissions.length, 3);
+    expect(ext.hasMetadataProvider, isFalse);
+    expect(ext.hasDownloadProvider, isTrue);
+    expect(ext.hasLyricsProvider, isTrue);
+  });
+
+  test('InstalledExtension.fromJson tolerates missing optional fields', () {
+    final ext = InstalledExtension.fromJson({'id': 'minimal', 'name': 'min', 'version': '0.1'});
+    expect(ext.permissions, isEmpty);
+    expect(ext.hasMetadataProvider, isFalse);
+    expect(ext.hasDownloadProvider, isFalse);
+    expect(ext.hasLyricsProvider, isFalse);
+    expect(ext.iconPath, isNull);
+    expect(ext.status, '');
+    expect(ext.description, '');
+  });
+
   test('DownloadProgress.fromJson round-trip', () {
     final p = DownloadProgress.fromJson({
       'item_id': 'abc',

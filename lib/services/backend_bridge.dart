@@ -78,4 +78,13 @@ class BackendBridge {
     );
     return raw == null || raw.isEmpty ? {} : Map<String, dynamic>.from(jsonDecode(raw));
   }
+
+  Future<Map<String, dynamic>> getExtensionSettings(String id) async {
+    final raw = await _c.invokeMethod<String>('getExtensionSettings', {'id': id});
+    if (raw == null || raw.isEmpty) return {};
+    return Map<String, dynamic>.from(jsonDecode(raw));
+  }
+
+  Future<void> setExtensionSettings(String id, Map<String, dynamic> settings) =>
+      _c.invokeMethod('setExtensionSettings', {'id': id, 'settingsJson': jsonEncode(settings)});
 }

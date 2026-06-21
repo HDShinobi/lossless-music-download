@@ -86,6 +86,20 @@ func AllowDownloadDir(path string) {
 	gobackend.AllowDownloadDir(path)
 }
 
+// --- Extension settings ---
+
+// GetExtensionSettingsJSON returns a JSON-encoded map of settings for the
+// extension identified by id.
+func GetExtensionSettingsJSON(id string) (string, error) {
+	return gobackend.GetExtensionSettingsJSON(id)
+}
+
+// SetExtensionSettingsJSON stores settings for the extension identified by id
+// from a JSON-encoded map. Returns an error if the JSON is invalid.
+func SetExtensionSettingsJSON(id, settingsJSON string) error {
+	return gobackend.SetExtensionSettingsJSON(id, settingsJSON)
+}
+
 // --- Duplicate detection ---
 
 // CheckDuplicate checks whether a track identified by isrc already exists
