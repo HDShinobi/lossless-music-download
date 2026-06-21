@@ -50,5 +50,10 @@
   "priorityIntro": "Best-source thử lần lượt theo thứ tự này.",
   "groupDownload": "Tải",
   "groupMetadata": "Metadata",
-  "priorityEmpty": "Chưa có nguồn nào cho mục này."
+  "priorityEmpty": "Chưa có nguồn nào cho mục này.",
+  "searchHint": "Tìm bài hát, album...",
+  "searchEmpty": "Không có kết quả.",
+  "searchNoSources": "Chưa có nguồn nào. Vào Khám phá để cài.",
+  "searchError": "Tìm kiếm lỗi.",
+  "download": "Tải"
 }

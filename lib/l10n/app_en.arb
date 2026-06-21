@@ -50,5 +50,10 @@
   "priorityIntro": "Best-source tries each in this order.",
   "groupDownload": "Download",
   "groupMetadata": "Metadata",
-  "priorityEmpty": "No sources for this group yet."
+  "priorityEmpty": "No sources for this group yet.",
+  "searchHint": "Search songs, albums...",
+  "searchEmpty": "No results.",
+  "searchNoSources": "No sources yet. Install one in Discover.",
+  "searchError": "Search failed.",
+  "download": "Download"
 }
