@@ -8,16 +8,29 @@ const _channel = MethodChannel('xyz.losslessmusic/native');
 Future<String> nativePing() async =>
     await _channel.invokeMethod<String>('ping') ?? 'null';
 
+Future<String> downloadProgress() async =>
+    await _channel.invokeMethod<String>('getDownloadProgress') ?? 'null';
+
 class App extends StatelessWidget {
   const App({super.key});
   @override
   Widget build(BuildContext context) => MaterialApp(
         home: Scaffold(
           body: Center(
-            child: FutureBuilder<String>(
-              future: nativePing(),
-              builder: (c, s) => Text('native: ${s.data ?? "..."}',
-                  key: const Key('ping_text')),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FutureBuilder<String>(
+                  future: nativePing(),
+                  builder: (c, s) => Text('native: ${s.data ?? "..."}',
+                      key: const Key('ping_text')),
+                ),
+                FutureBuilder<String>(
+                  future: downloadProgress(),
+                  builder: (c, s) => Text('progress: ${s.data ?? "..."}',
+                      key: const Key('progress_text')),
+                ),
+              ],
             ),
           ),
         ),
