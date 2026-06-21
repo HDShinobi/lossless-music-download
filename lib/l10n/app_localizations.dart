@@ -475,6 +475,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tải xuống'**
   String get downloadCta;
+
+  /// No description provided for @queueStatusQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'In queue'**
+  String get queueStatusQueued;
+
+  /// No description provided for @queueStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed · tap to retry'**
+  String get queueStatusFailed;
+
+  /// No description provided for @queueStatusDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Verified · in Library'**
+  String get queueStatusDone;
 }
 
 class _AppLocalizationsDelegate

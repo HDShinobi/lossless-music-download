@@ -201,4 +201,13 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get downloadCta => 'Tải xuống';
+
+  @override
+  String get queueStatusQueued => 'Trong hàng đợi';
+
+  @override
+  String get queueStatusFailed => 'Lỗi · chạm để thử lại';
+
+  @override
+  String get queueStatusDone => 'Verified · đã vào Thư viện';
 }

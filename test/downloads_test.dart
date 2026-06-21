@@ -101,7 +101,7 @@ void main() {
       );
     }
 
-    testWidgets('shows LinearProgressIndicator and cancel button for active download',
+    testWidgets('shows progress card with cancel button for active download',
         (tester) async {
       await tester.pumpWidget(
         buildQueue(items: [
@@ -109,14 +109,17 @@ void main() {
             itemId: 'x',
             status: 'downloading',
             progress: 0.5,
-            bytesReceived: 100,
+            bytesReceived: 104857600, // 100 MB
           ),
         ]),
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      // New QueueItem uses a brand card with FractionallySizedBox progress fill
+      // (not a LinearProgressIndicator) — verify the cancel icon is present
+      // and that the mono status line contains 'MB'.
       expect(find.byIcon(Icons.cancel_outlined), findsOneWidget);
+      expect(find.textContaining('MB'), findsWidgets);
     });
 
     testWidgets('shows queueEmpty text when list is empty', (tester) async {

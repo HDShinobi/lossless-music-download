@@ -1,12 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 
-import '../models/download_progress.dart';
 import '../providers/downloads_provider.dart';
-import '../providers/extensions_provider.dart';
+import '../widgets/queue_item.dart';
 
 class QueueScreen extends ConsumerWidget {
   const QueueScreen({super.key});
@@ -29,7 +26,7 @@ class QueueScreen extends ConsumerWidget {
             itemCount: items.length,
             itemBuilder: (context, index) {
               final item = items[index];
-              return _DownloadTile(item: item);
+              return QueueItem(item: item);
             },
           );
         },
@@ -38,30 +35,3 @@ class QueueScreen extends ConsumerWidget {
   }
 }
 
-class _DownloadTile extends ConsumerWidget {
-  const _DownloadTile({required this.item});
-  final DownloadProgress item;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final t = AppLocalizations.of(context);
-    final bridge = ref.read(backendBridgeProvider);
-
-    return ListTile(
-      title: Text(item.itemId),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          LinearProgressIndicator(value: item.progress),
-          const SizedBox(height: 4),
-          Text(item.status),
-        ],
-      ),
-      trailing: IconButton(
-        icon: const Icon(Icons.cancel_outlined),
-        tooltip: t.cancel,
-        onPressed: () => unawaited(bridge.cancelDownload(item.itemId).catchError((_) {})),
-      ),
-    );
-  }
-}

@@ -201,4 +201,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get downloadCta => 'Tải xuống';
+
+  @override
+  String get queueStatusQueued => 'In queue';
+
+  @override
+  String get queueStatusFailed => 'Failed · tap to retry';
+
+  @override
+  String get queueStatusDone => 'Verified · in Library';
 }

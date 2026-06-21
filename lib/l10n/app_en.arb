@@ -76,5 +76,8 @@
   "settingAskBeforeDownloadDesc": "Show a sheet to pick source and quality for each download",
   "downloadSheetSource": "Source",
   "downloadSheetQuality": "Quality",
-  "downloadCta": "Tải xuống"
+  "downloadCta": "Tải xuống",
+  "queueStatusQueued": "In queue",
+  "queueStatusFailed": "Failed · tap to retry",
+  "queueStatusDone": "Verified · in Library"
 }

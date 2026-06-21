@@ -76,5 +76,8 @@
   "settingAskBeforeDownloadDesc": "Hiển thị bảng chọn nguồn và chất lượng cho mỗi lần tải",
   "downloadSheetSource": "Nguồn",
   "downloadSheetQuality": "Chất lượng",
-  "downloadCta": "Tải xuống"
+  "downloadCta": "Tải xuống",
+  "queueStatusQueued": "Trong hàng đợi",
+  "queueStatusFailed": "Lỗi · chạm để thử lại",
+  "queueStatusDone": "Verified · đã vào Thư viện"
 }
