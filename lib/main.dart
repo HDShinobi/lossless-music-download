@@ -4,6 +4,7 @@ import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'theme/app_theme.dart';
 import 'providers/locale_provider.dart';
 import 'providers/discover_provider.dart';
+import 'providers/download_dir_provider.dart';
 import 'router.dart';
 
 void main() async {
@@ -11,6 +12,10 @@ void main() async {
   final container = ProviderContainer();
   await container.read(localeProvider.notifier).load();
   await container.read(aggregatorUrlProvider.notifier).load();
+  // Best-effort: wire download directory at startup; failures must not block app boot.
+  try {
+    await container.read(downloadDirProvider.future);
+  } catch (_) {}
   runApp(UncontrolledProviderScope(container: container, child: const MyApp()));
 }
 
