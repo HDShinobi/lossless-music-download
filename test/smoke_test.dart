@@ -6,6 +6,8 @@ import 'package:lossless_music_download/main.dart';
 void main() {
   testWidgets('app boots inside ProviderScope', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: MyApp()));
+    await tester.pumpAndSettle();
     expect(find.byType(MaterialApp), findsOneWidget);
+    expect(find.text('Tìm'), findsWidgets); // default vi Search tab
   });
 }

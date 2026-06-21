@@ -1,5 +1,5 @@
 name: lossless_music_download
-description: "A new Flutter project."
+description: "Lossless music downloader (Android)."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -37,7 +37,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^3.0.0
-  go_router: ^14.0.0
+  go_router: ^14.8.1
   intl: any
   shared_preferences: ^2.3.0
 

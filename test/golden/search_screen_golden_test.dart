@@ -19,6 +19,16 @@ void main() {
             home: const SearchScreen(),
           ),
         ),
+        GoldenTestScenario(
+          name: 'en',
+          constraints: const BoxConstraints.tightFor(width: 390, height: 844),
+          child: MaterialApp(
+            locale: const Locale('en'),
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            home: const SearchScreen(),
+          ),
+        ),
       ],
     ),
   );

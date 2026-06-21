@@ -5,7 +5,12 @@ import 'theme/app_theme.dart';
 import 'providers/locale_provider.dart';
 import 'router.dart';
 
-void main() => runApp(const ProviderScope(child: MyApp()));
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final container = ProviderContainer();
+  await container.read(localeProvider.notifier).load();
+  runApp(UncontrolledProviderScope(container: container, child: const MyApp()));
+}
 
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
