@@ -9,6 +9,7 @@ build/
 # Android
 android/.gradle/
 android/app/libs/*.aar
+android/app/libs/*.jar
 android/local.properties
 android/key.properties
 *.keystore

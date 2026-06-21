@@ -18,10 +18,11 @@ void main() {
           return jsonEncode([
             {
               'id': 'deezer',
-              'name': 'Deezer',
+              'name': 'deezer',
+              'display_name': 'Deezer',
               'version': '1.1.5',
               'enabled': true,
-              'type': ['download_provider']
+              'types': ['download_provider']
             }
           ]);
         case 'searchTracks':

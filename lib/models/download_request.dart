@@ -1,22 +1,26 @@
 class DownloadRequest {
-  final String title, artist, outputDir;
-  final String? album, isrc, spotifyId, quality, audioFormat, filenameFormat;
-  final bool useExtensions, embedMetadata, embedCover, embedLyrics;
+  final String trackName, artistName, outputDir;
+  final String? albumName, isrc, spotifyId, quality, filenameFormat;
+  final bool useExtensions, embedMetadata, embedMaxQualityCover, embedLyrics;
   const DownloadRequest({
-    required this.title, required this.artist, required this.outputDir,
-    this.album, this.isrc, this.spotifyId, this.quality, this.audioFormat,
+    required this.trackName, required this.artistName, required this.outputDir,
+    this.albumName, this.isrc, this.spotifyId, this.quality,
     this.filenameFormat = '{artist}/{album}/{track} {title}',
-    this.useExtensions = true, this.embedMetadata = true, this.embedCover = true, this.embedLyrics = true,
+    this.useExtensions = true, this.embedMetadata = true,
+    this.embedMaxQualityCover = true, this.embedLyrics = true,
   });
   Map<String, dynamic> toJson() => {
-        'title': title, 'artist': artist, 'outputDir': outputDir,
-        if (album != null) 'album': album,
+        'track_name': trackName,
+        'artist_name': artistName,
+        'output_dir': outputDir,
+        if (albumName != null) 'album_name': albumName,
         if (isrc != null) 'isrc': isrc,
-        if (spotifyId != null) 'spotifyId': spotifyId,
+        if (spotifyId != null) 'spotify_id': spotifyId,
         if (quality != null) 'quality': quality,
-        if (audioFormat != null) 'audioFormat': audioFormat,
-        'filenameFormat': filenameFormat,
-        'useExtensions': useExtensions,
-        'embedMetadata': embedMetadata, 'embedCover': embedCover, 'embedLyrics': embedLyrics,
+        'filename_format': filenameFormat,
+        'use_extensions': useExtensions,
+        'embed_metadata': embedMetadata,
+        'embed_max_quality_cover': embedMaxQualityCover,
+        'embed_lyrics': embedLyrics,
       };
 }
