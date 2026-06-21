@@ -227,4 +227,28 @@ class AppLocalizationsVi extends AppLocalizations {
   String serveBannerSubtitle(int count) {
     return '$count bài cho thiết bị khác';
   }
+
+  @override
+  String get verifiedLossless => 'Lossless thật';
+
+  @override
+  String get verifiedUnknown => 'Chua xac minh';
+
+  @override
+  String get verifiedSpectrumNote => 'Pho minh hoa. Phan tich day du sap co.';
+
+  @override
+  String get statFormat => 'Dinh dang';
+
+  @override
+  String get statSize => 'Dung luong';
+
+  @override
+  String get statBitDepth => 'Do sau bit';
+
+  @override
+  String get statSampleRate => 'Tan so lay mau';
+
+  @override
+  String get verifiedServeTitle => 'Phat cho thiet bi khac';
 }

@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/widgets.dart';
+import 'providers/library_provider.dart';
 import 'widgets/main_shell.dart';
 import 'screens/search_screen.dart';
 import 'screens/queue_screen.dart';
@@ -8,6 +9,7 @@ import 'screens/library_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/sources_screen.dart';
 import 'screens/extension_detail_screen.dart';
+import 'screens/verified_screen.dart';
 
 GoRoute _r(String path, Widget child) =>
     GoRoute(path: path, builder: (c, s) => child);
@@ -21,7 +23,19 @@ final appRouter = GoRouter(
         StatefulShellBranch(routes: [_r('/search', const SearchScreen())]),
         StatefulShellBranch(routes: [_r('/queue', const QueueScreen())]),
         StatefulShellBranch(routes: [_r('/server', const ServerScreen())]),
-        StatefulShellBranch(routes: [_r('/library', const LibraryScreen())]),
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/library',
+            builder: (c, s) => const LibraryScreen(),
+            routes: [
+              GoRoute(
+                path: 'verified',
+                builder: (c, s) =>
+                    VerifiedScreen(entry: s.extra as LibraryEntry),
+              ),
+            ],
+          ),
+        ]),
         StatefulShellBranch(routes: [
           GoRoute(
             path: '/settings',

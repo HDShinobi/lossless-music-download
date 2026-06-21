@@ -227,4 +227,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String serveBannerSubtitle(int count) {
     return '$count tracks to other devices';
   }
+
+  @override
+  String get verifiedLossless => 'Genuine lossless';
+
+  @override
+  String get verifiedUnknown => 'Not verified';
+
+  @override
+  String get verifiedSpectrumNote =>
+      'Illustrative spectrum. Full analysis coming.';
+
+  @override
+  String get statFormat => 'Format';
+
+  @override
+  String get statSize => 'Size';
+
+  @override
+  String get statBitDepth => 'Bit depth';
+
+  @override
+  String get statSampleRate => 'Sample rate';
+
+  @override
+  String get verifiedServeTitle => 'Serve to other devices';
 }

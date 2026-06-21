@@ -91,5 +91,13 @@
         "type": "int"
       }
     }
-  }
+  },
+  "verifiedLossless": "Genuine lossless",
+  "verifiedUnknown": "Not verified",
+  "verifiedSpectrumNote": "Illustrative spectrum. Full analysis coming.",
+  "statFormat": "Format",
+  "statSize": "Size",
+  "statBitDepth": "Bit depth",
+  "statSampleRate": "Sample rate",
+  "verifiedServeTitle": "Serve to other devices"
 }

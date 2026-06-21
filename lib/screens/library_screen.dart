@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'package:lossless_music_download/providers/library_provider.dart';
 import 'package:lossless_music_download/widgets/library_track_tile.dart';
@@ -94,8 +95,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Widget _buildAllView(List<LibraryEntry> entries) {
     return ListView.builder(
       itemCount: entries.length,
-      itemBuilder: (context, index) =>
-          LibraryTrackTile(entry: entries[index]),
+      itemBuilder: (context, index) => LibraryTrackTile(
+        entry: entries[index],
+        onTap: () => context.go('/library/verified', extra: entries[index]),
+      ),
     );
   }
 
@@ -125,7 +128,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         ),
       );
       for (final track in tracks) {
-        widgets.add(LibraryTrackTile(entry: track));
+        widgets.add(LibraryTrackTile(
+          entry: track,
+          onTap: () => context.go('/library/verified', extra: track),
+        ));
       }
     }
 
@@ -140,8 +146,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     }
     return ListView.builder(
       itemCount: singles.length,
-      itemBuilder: (context, index) =>
-          LibraryTrackTile(entry: singles[index]),
+      itemBuilder: (context, index) => LibraryTrackTile(
+        entry: singles[index],
+        onTap: () =>
+            context.go('/library/verified', extra: singles[index]),
+      ),
     );
   }
 }

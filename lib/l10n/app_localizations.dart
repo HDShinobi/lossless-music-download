@@ -523,6 +523,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} tracks to other devices'**
   String serveBannerSubtitle(int count);
+
+  /// No description provided for @verifiedLossless.
+  ///
+  /// In en, this message translates to:
+  /// **'Genuine lossless'**
+  String get verifiedLossless;
+
+  /// No description provided for @verifiedUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Not verified'**
+  String get verifiedUnknown;
+
+  /// No description provided for @verifiedSpectrumNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Illustrative spectrum. Full analysis coming.'**
+  String get verifiedSpectrumNote;
+
+  /// No description provided for @statFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Format'**
+  String get statFormat;
+
+  /// No description provided for @statSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Size'**
+  String get statSize;
+
+  /// No description provided for @statBitDepth.
+  ///
+  /// In en, this message translates to:
+  /// **'Bit depth'**
+  String get statBitDepth;
+
+  /// No description provided for @statSampleRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Sample rate'**
+  String get statSampleRate;
+
+  /// No description provided for @verifiedServeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Serve to other devices'**
+  String get verifiedServeTitle;
 }
 
 class _AppLocalizationsDelegate
