@@ -26,7 +26,7 @@ class DownloadController {
   const DownloadController(this._ref);
   final Ref _ref;
 
-  Future<void> start(Track track) async {
+  Future<void> start(Track track, {String? source, String? quality}) async {
     final dir = await _ref.read(downloadDirProvider.future);
     final bridge = _ref.read(backendBridgeProvider);
     final req = DownloadRequest(
@@ -36,6 +36,8 @@ class DownloadController {
       albumName: track.albumName,
       isrc: track.isrc,
       useExtensions: true,
+      source: source,
+      quality: quality,
     );
     await bridge.downloadByStrategy(req);
   }

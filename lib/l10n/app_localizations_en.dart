@@ -185,4 +185,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get queueError => 'Could not load queue.';
+
+  @override
+  String get settingAskBeforeDownload => 'Choose source before download';
+
+  @override
+  String get settingAskBeforeDownloadDesc =>
+      'Show a sheet to pick source and quality for each download';
+
+  @override
+  String get downloadSheetSource => 'Source';
+
+  @override
+  String get downloadSheetQuality => 'Quality';
+
+  @override
+  String get downloadCta => 'Tải xuống';
 }

@@ -71,5 +71,10 @@
   "refresh": "Refresh",
   "libraryError": "Could not load library.",
   "unitMb": "MB",
-  "queueError": "Could not load queue."
+  "queueError": "Could not load queue.",
+  "settingAskBeforeDownload": "Choose source before download",
+  "settingAskBeforeDownloadDesc": "Show a sheet to pick source and quality for each download",
+  "downloadSheetSource": "Source",
+  "downloadSheetQuality": "Quality",
+  "downloadCta": "Tải xuống"
 }

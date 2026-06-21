@@ -185,4 +185,20 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get queueError => 'Lỗi tải hàng đợi.';
+
+  @override
+  String get settingAskBeforeDownload => 'Chọn nguồn trước khi tải';
+
+  @override
+  String get settingAskBeforeDownloadDesc =>
+      'Hiển thị bảng chọn nguồn và chất lượng cho mỗi lần tải';
+
+  @override
+  String get downloadSheetSource => 'Nguồn';
+
+  @override
+  String get downloadSheetQuality => 'Chất lượng';
+
+  @override
+  String get downloadCta => 'Tải xuống';
 }

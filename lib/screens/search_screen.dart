@@ -5,20 +5,59 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import '../models/track.dart';
+import '../providers/download_options_provider.dart';
 import '../providers/downloads_provider.dart';
 import '../providers/extensions_provider.dart';
 import '../providers/search_provider.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/download_sheet.dart';
 import '../widgets/track_tile.dart';
 
 class SearchScreen extends ConsumerWidget {
   const SearchScreen({super.key});
 
-  void _onDownload(BuildContext context, WidgetRef ref, Track track) {
+  Future<void> _onDownload(BuildContext context, WidgetRef ref, Track track) async {
     final t = AppLocalizations.of(context);
     final controller = ref.read(downloadControllerProvider);
+    final askBefore = ref.read(askBeforeDownloadProvider);
+
+    if (!askBefore) {
+      unawaited(
+        controller.start(track).catchError((Object _) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(t.downloadFailed)),
+            );
+          }
+        }),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t.downloadStarted)),
+      );
+      return;
+    }
+
+    // askBefore == true: show source/quality sheet
+    final sources = ref
+            .read(extensionsProvider)
+            .value
+            ?.where((e) => e.enabled && e.hasDownloadProvider)
+            .toList() ??
+        [];
+    if (!context.mounted) return;
+
+    final choice = await showDownloadSheet(
+      context,
+      track: track,
+      sources: sources,
+    );
+    if (!context.mounted) return;
+    if (choice == null) return; // cancelled
+
     unawaited(
-      controller.start(track).catchError((Object _) {
+      controller
+          .start(track, source: choice.sourceId, quality: choice.quality)
+          .catchError((Object _) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(t.downloadFailed)),
@@ -97,7 +136,7 @@ class SearchScreen extends ConsumerWidget {
           // Results body
           Expanded(
             child: _SearchBody(
-              onDownload: (ctx, track) => _onDownload(ctx, ref, track),
+              onDownload: (ctx, track) => unawaited(_onDownload(ctx, ref, track)),
             ),
           ),
         ],

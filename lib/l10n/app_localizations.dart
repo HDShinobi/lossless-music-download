@@ -445,6 +445,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not load queue.'**
   String get queueError;
+
+  /// No description provided for @settingAskBeforeDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose source before download'**
+  String get settingAskBeforeDownload;
+
+  /// No description provided for @settingAskBeforeDownloadDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Show a sheet to pick source and quality for each download'**
+  String get settingAskBeforeDownloadDesc;
+
+  /// No description provided for @downloadSheetSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get downloadSheetSource;
+
+  /// No description provided for @downloadSheetQuality.
+  ///
+  /// In en, this message translates to:
+  /// **'Quality'**
+  String get downloadSheetQuality;
+
+  /// No description provided for @downloadCta.
+  ///
+  /// In en, this message translates to:
+  /// **'Tải xuống'**
+  String get downloadCta;
 }
 
 class _AppLocalizationsDelegate

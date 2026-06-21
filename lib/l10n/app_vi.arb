@@ -71,5 +71,10 @@
   "refresh": "Làm mới",
   "libraryError": "Không tải được thư viện.",
   "unitMb": "MB",
-  "queueError": "Lỗi tải hàng đợi."
+  "queueError": "Lỗi tải hàng đợi.",
+  "settingAskBeforeDownload": "Chọn nguồn trước khi tải",
+  "settingAskBeforeDownloadDesc": "Hiển thị bảng chọn nguồn và chất lượng cho mỗi lần tải",
+  "downloadSheetSource": "Nguồn",
+  "downloadSheetQuality": "Chất lượng",
+  "downloadCta": "Tải xuống"
 }
