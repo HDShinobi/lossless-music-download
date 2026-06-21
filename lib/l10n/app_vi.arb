@@ -5,5 +5,27 @@
   "tabQueue": "Hàng đợi",
   "tabServer": "Máy chủ",
   "tabLibrary": "Thư viện",
-  "tabSettings": "Cài đặt"
+  "tabSettings": "Cài đặt",
+  "sourcesTitle": "Nguồn & Extension",
+  "tabInstalled": "Đã cài",
+  "tabDiscover": "Khám phá",
+  "tabPriority": "Ưu tiên",
+  "noExtensions": "Chưa có nguồn nào. Thêm ở Khám phá.",
+  "comingSoon": "Sắp có",
+  "permissions": "Quyền truy cập",
+  "permNetwork": "Mạng",
+  "permStorage": "Lưu trữ cục bộ",
+  "permFile": "Ghi file",
+  "removeExtension": "Gỡ extension",
+  "settings": "Cài đặt",
+  "sourcesInUse": "đang dùng {count} nguồn",
+  "@sourcesInUse": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "enabled": "Bật",
+  "disabled": "Tắt"
 }

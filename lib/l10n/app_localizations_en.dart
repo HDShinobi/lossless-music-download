@@ -25,4 +25,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tabSettings => 'Settings';
+
+  @override
+  String get sourcesTitle => 'Sources & Extensions';
+
+  @override
+  String get tabInstalled => 'Installed';
+
+  @override
+  String get tabDiscover => 'Discover';
+
+  @override
+  String get tabPriority => 'Priority';
+
+  @override
+  String get noExtensions => 'No sources yet. Add one in Discover.';
+
+  @override
+  String get comingSoon => 'Coming soon';
+
+  @override
+  String get permissions => 'Permissions';
+
+  @override
+  String get permNetwork => 'Network';
+
+  @override
+  String get permStorage => 'Local storage';
+
+  @override
+  String get permFile => 'File write';
+
+  @override
+  String get removeExtension => 'Remove extension';
+
+  @override
+  String get settings => 'Settings';
+
+  @override
+  String sourcesInUse(int count) {
+    return 'using $count sources';
+  }
+
+  @override
+  String get enabled => 'Enabled';
+
+  @override
+  String get disabled => 'Disabled';
 }

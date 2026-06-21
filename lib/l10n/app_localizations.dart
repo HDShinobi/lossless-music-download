@@ -133,6 +133,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Settings'**
   String get tabSettings;
+
+  /// No description provided for @sourcesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sources & Extensions'**
+  String get sourcesTitle;
+
+  /// No description provided for @tabInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get tabInstalled;
+
+  /// No description provided for @tabDiscover.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover'**
+  String get tabDiscover;
+
+  /// No description provided for @tabPriority.
+  ///
+  /// In en, this message translates to:
+  /// **'Priority'**
+  String get tabPriority;
+
+  /// No description provided for @noExtensions.
+  ///
+  /// In en, this message translates to:
+  /// **'No sources yet. Add one in Discover.'**
+  String get noExtensions;
+
+  /// No description provided for @comingSoon.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming soon'**
+  String get comingSoon;
+
+  /// No description provided for @permissions.
+  ///
+  /// In en, this message translates to:
+  /// **'Permissions'**
+  String get permissions;
+
+  /// No description provided for @permNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Network'**
+  String get permNetwork;
+
+  /// No description provided for @permStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Local storage'**
+  String get permStorage;
+
+  /// No description provided for @permFile.
+  ///
+  /// In en, this message translates to:
+  /// **'File write'**
+  String get permFile;
+
+  /// No description provided for @removeExtension.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove extension'**
+  String get removeExtension;
+
+  /// No description provided for @settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get settings;
+
+  /// No description provided for @sourcesInUse.
+  ///
+  /// In en, this message translates to:
+  /// **'using {count} sources'**
+  String sourcesInUse(int count);
+
+  /// No description provided for @enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get enabled;
+
+  /// No description provided for @disabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get disabled;
 }
 
 class _AppLocalizationsDelegate

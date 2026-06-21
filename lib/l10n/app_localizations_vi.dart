@@ -25,4 +25,51 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get tabSettings => 'Cài đặt';
+
+  @override
+  String get sourcesTitle => 'Nguồn & Extension';
+
+  @override
+  String get tabInstalled => 'Đã cài';
+
+  @override
+  String get tabDiscover => 'Khám phá';
+
+  @override
+  String get tabPriority => 'Ưu tiên';
+
+  @override
+  String get noExtensions => 'Chưa có nguồn nào. Thêm ở Khám phá.';
+
+  @override
+  String get comingSoon => 'Sắp có';
+
+  @override
+  String get permissions => 'Quyền truy cập';
+
+  @override
+  String get permNetwork => 'Mạng';
+
+  @override
+  String get permStorage => 'Lưu trữ cục bộ';
+
+  @override
+  String get permFile => 'Ghi file';
+
+  @override
+  String get removeExtension => 'Gỡ extension';
+
+  @override
+  String get settings => 'Cài đặt';
+
+  @override
+  String sourcesInUse(int count) {
+    return 'đang dùng $count nguồn';
+  }
+
+  @override
+  String get enabled => 'Bật';
+
+  @override
+  String get disabled => 'Tắt';
 }

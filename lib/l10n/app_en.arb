@@ -5,5 +5,27 @@
   "tabQueue": "Queue",
   "tabServer": "Server",
   "tabLibrary": "Library",
-  "tabSettings": "Settings"
+  "tabSettings": "Settings",
+  "sourcesTitle": "Sources & Extensions",
+  "tabInstalled": "Installed",
+  "tabDiscover": "Discover",
+  "tabPriority": "Priority",
+  "noExtensions": "No sources yet. Add one in Discover.",
+  "comingSoon": "Coming soon",
+  "permissions": "Permissions",
+  "permNetwork": "Network",
+  "permStorage": "Local storage",
+  "permFile": "File write",
+  "removeExtension": "Remove extension",
+  "settings": "Settings",
+  "sourcesInUse": "using {count} sources",
+  "@sourcesInUse": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "enabled": "Enabled",
+  "disabled": "Disabled"
 }
