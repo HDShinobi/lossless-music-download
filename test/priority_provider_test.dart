@@ -6,7 +6,7 @@ import 'package:lossless_music_download/providers/priority_provider.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
 
 // ---------------------------------------------------------------------------
-// Fake bridge — only overrides the priority-related methods.
+// Fake bridge - only overrides the priority-related methods.
 // ---------------------------------------------------------------------------
 class FakePriorityBridge extends BackendBridge {
   final List<String> _downloadPriority;
@@ -61,9 +61,9 @@ InstalledExtension _ext({
     );
 
 /// Extensions under test:
-///   extA  — download only
-///   extB  — download + metadata
-///   extC  — metadata only
+///   extA  - download only
+///   extB  - download + metadata
+///   extC  - metadata only
 final _testExts = [
   _ext(id: 'extA', hasDownload: true),
   _ext(id: 'extB', hasDownload: true, hasMetadata: true),
@@ -97,7 +97,7 @@ class _FakeExtController extends ExtensionsController {
 // Tests
 // ---------------------------------------------------------------------------
 void main() {
-  group('priorityProvider — reconcile', () {
+  group('priorityProvider - reconcile', () {
     test('download list: saved order first, new candidates appended', () async {
       // savedOrder = ['extB'] → extB comes first, extA appended after
       final bridge = FakePriorityBridge(
@@ -150,7 +150,7 @@ void main() {
     });
   });
 
-  group('priorityProvider — reorderDownload persists', () {
+  group('priorityProvider - reorderDownload persists', () {
     test('reorderDownload(0, 2) moves extB to index 1 and calls setDownloadPriority',
         () async {
       // Start: download = [extB, extA]  (extB saved first)
