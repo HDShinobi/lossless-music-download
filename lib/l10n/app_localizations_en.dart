@@ -173,4 +173,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String libraryCount(int count) {
     return '$count files';
   }
+
+  @override
+  String get refresh => 'Refresh';
+
+  @override
+  String get libraryError => 'Could not load library.';
+
+  @override
+  String get unitMb => 'MB';
+
+  @override
+  String get queueError => 'Could not load queue.';
 }

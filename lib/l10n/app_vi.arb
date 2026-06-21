@@ -67,5 +67,9 @@
         "type": "int"
       }
     }
-  }
+  },
+  "refresh": "Làm mới",
+  "libraryError": "Không tải được thư viện.",
+  "unitMb": "MB",
+  "queueError": "Lỗi tải hàng đợi."
 }

@@ -20,7 +20,7 @@ class QueueScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(t.tabQueue)),
       body: asyncDownloads.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) => Center(child: Text(e.toString())),
+        error: (e, st) => Center(child: Text(t.queueError)),
         data: (items) {
           if (items.isEmpty) {
             return Center(child: Text(t.queueEmpty));

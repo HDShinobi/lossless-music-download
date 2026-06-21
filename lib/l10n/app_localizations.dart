@@ -421,6 +421,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} files'**
   String libraryCount(int count);
+
+  /// No description provided for @refresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get refresh;
+
+  /// No description provided for @libraryError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load library.'**
+  String get libraryError;
+
+  /// No description provided for @unitMb.
+  ///
+  /// In en, this message translates to:
+  /// **'MB'**
+  String get unitMb;
+
+  /// No description provided for @queueError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load queue.'**
+  String get queueError;
 }
 
 class _AppLocalizationsDelegate

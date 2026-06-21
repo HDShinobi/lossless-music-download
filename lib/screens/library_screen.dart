@@ -17,14 +17,14 @@ class LibraryScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
+            tooltip: t.refresh,
             onPressed: () => ref.invalidate(libraryProvider),
           ),
         ],
       ),
       body: asyncEntries.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => const Center(child: Text('Could not load library.')),
+        error: (e, _) => Center(child: Text(t.libraryError)),
         data: (entries) {
           if (entries.isEmpty) {
             return Center(child: Text(t.libraryEmpty));
@@ -48,7 +48,7 @@ class LibraryScreen extends ConsumerWidget {
                     return ListTile(
                       leading: const Icon(Icons.music_note),
                       title: Text(entry.name),
-                      subtitle: Text('$sizeMb MB'),
+                      subtitle: Text('$sizeMb ${t.unitMb}'),
                     );
                   },
                 ),

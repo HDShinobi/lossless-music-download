@@ -173,4 +173,16 @@ class AppLocalizationsVi extends AppLocalizations {
   String libraryCount(int count) {
     return '$count file';
   }
+
+  @override
+  String get refresh => 'Làm mới';
+
+  @override
+  String get libraryError => 'Không tải được thư viện.';
+
+  @override
+  String get unitMb => 'MB';
+
+  @override
+  String get queueError => 'Lỗi tải hàng đợi.';
 }

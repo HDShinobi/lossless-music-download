@@ -67,5 +67,9 @@
         "type": "int"
       }
     }
-  }
+  },
+  "refresh": "Refresh",
+  "libraryError": "Could not load library.",
+  "unitMb": "MB",
+  "queueError": "Could not load queue."
 }
