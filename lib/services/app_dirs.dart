@@ -10,7 +10,8 @@ class AppDirs {
   static Future<String> downloadDir() async {
     final base =
         await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory();
-    final d = Directory('${base.path}/LosslessMusic')..createSync(recursive: true);
+    final d = Directory('${base.path}/LosslessMusic');
+    await d.create(recursive: true);
     return d.path;
   }
 }

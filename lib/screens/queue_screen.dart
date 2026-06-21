@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
@@ -58,7 +60,7 @@ class _DownloadTile extends ConsumerWidget {
       trailing: IconButton(
         icon: const Icon(Icons.cancel_outlined),
         tooltip: t.cancel,
-        onPressed: () => bridge.cancelDownload(item.itemId),
+        onPressed: () => unawaited(bridge.cancelDownload(item.itemId).catchError((_) {})),
       ),
     );
   }
