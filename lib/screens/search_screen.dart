@@ -9,6 +9,7 @@ import '../providers/downloads_provider.dart';
 import '../providers/extensions_provider.dart';
 import '../providers/search_provider.dart';
 import '../theme/app_tokens.dart';
+import '../widgets/track_tile.dart';
 
 class SearchScreen extends ConsumerWidget {
   const SearchScreen({super.key});
@@ -131,32 +132,10 @@ class _SearchBody extends ConsumerWidget {
           itemCount: tracks.length,
           itemBuilder: (context, index) {
             final track = tracks[index];
-            return ListTile(
-              leading: SizedBox(
-                width: 48,
-                height: 48,
-                child: track.coverUrl != null
-                    ? Image.network(
-                        track.coverUrl!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (ctx, err, trace) =>
-                            const Icon(Icons.music_note),
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return const Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          );
-                        },
-                      )
-                    : const Icon(Icons.music_note),
-              ),
-              title: Text(track.name),
-              subtitle: Text(track.artists),
-              trailing: IconButton(
-                icon: const Icon(Icons.download_outlined),
-                tooltip: t.download,
-                onPressed: () => onDownload(context, track),
-              ),
+            return TrackTile(
+              track: track,
+              qualityHint: null,
+              onDownload: () => onDownload(context, track),
             );
           },
         );
