@@ -27,8 +27,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = 1
         versionName = "0.1.0"
+        // Phase 0: gomobile .aar is arm64-only (see scripts/build_android.sh). Add x86_64/armeabi-v7a here AND to the gomobile -target before any release build.
         ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
