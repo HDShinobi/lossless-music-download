@@ -1,0 +1,81 @@
+import 'dart:convert';
+import 'package:flutter/services.dart';
+import '../models/track.dart';
+import '../models/installed_extension.dart';
+import '../models/download_request.dart';
+import '../models/download_progress.dart';
+
+class BackendBridge {
+  BackendBridge([MethodChannel? channel])
+      : _c = channel ?? const MethodChannel('xyz.losslessmusic/native');
+  final MethodChannel _c;
+
+  Future<void> initExtensionSystem(String extDir, String dataDir) =>
+      _c.invokeMethod('initExtensionSystem', {'extDir': extDir, 'dataDir': dataDir});
+
+  Future<String?> installExtension(String path) =>
+      _c.invokeMethod<String>('loadExtensionFromPath', {'path': path});
+
+  Future<List<InstalledExtension>> getInstalledExtensions() async {
+    final raw = await _c.invokeMethod<String>('getInstalledExtensions');
+    if (raw == null || raw.isEmpty) return [];
+    final decoded = jsonDecode(raw);
+    final list = decoded is List ? decoded : (decoded['extensions'] as List? ?? []);
+    return list.map((e) => InstalledExtension.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  Future<void> setExtensionEnabled(String id, bool enabled) =>
+      _c.invokeMethod('setExtensionEnabled', {'id': id, 'enabled': enabled});
+
+  Future<void> removeExtension(String id) => _c.invokeMethod('removeExtension', {'id': id});
+
+  Future<List<Track>> searchTracks(
+    String query, {
+    int limit = 20,
+    bool includeExtensions = true,
+  }) async {
+    final raw = await _c.invokeMethod<String>(
+      'searchTracks',
+      {'query': query, 'limit': limit, 'includeExtensions': includeExtensions},
+    );
+    if (raw == null || raw.isEmpty) return [];
+    final decoded = jsonDecode(raw);
+    final list = decoded is List ? decoded : (decoded['tracks'] as List? ?? []);
+    return list.map((e) => Track.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  Future<Map<String, dynamic>> downloadByStrategy(DownloadRequest req) async {
+    final raw = await _c.invokeMethod<String>(
+      'downloadByStrategy',
+      {'requestJson': jsonEncode(req.toJson())},
+    );
+    return raw == null || raw.isEmpty ? {} : Map<String, dynamic>.from(jsonDecode(raw));
+  }
+
+  Future<List<DownloadProgress>> getAllProgress() async {
+    final raw = await _c.invokeMethod<String>('getAllProgress');
+    if (raw == null || raw.isEmpty) return [];
+    final decoded = jsonDecode(raw);
+    final List<dynamic> list = decoded is List
+        ? decoded
+        : (decoded['items'] as List? ?? (decoded as Map).values.toList());
+    return list.map((e) => DownloadProgress.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  Future<void> cancelDownload(String itemId) =>
+      _c.invokeMethod('cancelDownload', {'itemId': itemId});
+
+  Future<void> setDownloadDirectory(String path) =>
+      _c.invokeMethod('setDownloadDirectory', {'path': path});
+
+  Future<void> allowDownloadDir(String path) =>
+      _c.invokeMethod('allowDownloadDir', {'path': path});
+
+  Future<Map<String, dynamic>> checkDuplicate(String outputDir, String isrc) async {
+    final raw = await _c.invokeMethod<String>(
+      'checkDuplicate',
+      {'outputDir': outputDir, 'isrc': isrc},
+    );
+    return raw == null || raw.isEmpty ? {} : Map<String, dynamic>.from(jsonDecode(raw));
+  }
+}

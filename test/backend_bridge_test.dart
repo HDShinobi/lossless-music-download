@@ -1,0 +1,53 @@
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'dart:convert';
+import 'package:lossless_music_download/services/backend_bridge.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  const channel = MethodChannel('xyz.losslessmusic/native');
+  final bridge = BackendBridge();
+  final calls = <MethodCall>[];
+
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      switch (call.method) {
+        case 'getInstalledExtensions':
+          return jsonEncode([
+            {
+              'id': 'deezer',
+              'name': 'Deezer',
+              'version': '1.1.5',
+              'enabled': true,
+              'type': ['download_provider']
+            }
+          ]);
+        case 'searchTracks':
+          return jsonEncode({
+            'tracks': [
+              {'id': 't1', 'name': 'Song', 'artists': 'A'}
+            ]
+          });
+        default:
+          return null;
+      }
+    });
+  });
+  tearDown(() => calls.clear());
+
+  test('getInstalledExtensions parses list', () async {
+    final list = await bridge.getInstalledExtensions();
+    expect(list.single.id, 'deezer');
+    expect(list.single.enabled, true);
+  });
+
+  test('searchTracks sends args + parses tracks', () async {
+    final tracks = await bridge.searchTracks('hello', limit: 5);
+    expect(tracks.single.name, 'Song');
+    final c = calls.firstWhere((c) => c.method == 'searchTracks');
+    expect(c.arguments['query'], 'hello');
+    expect(c.arguments['limit'], 5);
+  });
+}
