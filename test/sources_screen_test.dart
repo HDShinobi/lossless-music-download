@@ -6,6 +6,7 @@ import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/models/store_extension.dart';
 import 'package:lossless_music_download/providers/discover_provider.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
+import 'package:lossless_music_download/providers/priority_provider.dart';
 import 'package:lossless_music_download/screens/sources_screen.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
 
@@ -84,6 +85,7 @@ Future<void> pumpSourcesScreen(
         ),
         discoverProvider.overrideWith(() => _FakeDiscoverController(catalogExts)),
         aggregatorUrlProvider.overrideWith(() => _FakeAggregatorUrlNotifier()),
+        priorityProvider.overrideWith(() => _FakePriorityController()),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -102,6 +104,14 @@ class _FakeAggregatorUrlNotifier extends AggregatorUrlNotifier {
 
   @override
   Future<void> load() async {}
+}
+
+// ---------------------------------------------------------------------------
+// Fake PriorityController that returns an empty state without any I/O.
+// ---------------------------------------------------------------------------
+class _FakePriorityController extends PriorityController {
+  @override
+  Future<PriorityState> build() async => const PriorityState([], []);
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +166,7 @@ void main() {
     });
 
     testWidgets(
-        'shows Coming soon when Priority segment is tapped',
+        'shows PriorityTab when Priority segment is tapped',
         (tester) async {
       await pumpSourcesScreen(tester, []);
 
@@ -164,7 +174,9 @@ void main() {
       await tester.tap(find.text('Priority'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Coming soon'), findsOneWidget);
+      // PriorityTab renders group headers (en locale)
+      expect(find.text('Download'), findsOneWidget);
+      expect(find.text('Metadata'), findsOneWidget);
     });
   });
 }

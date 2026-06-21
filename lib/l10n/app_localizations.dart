@@ -331,6 +331,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Install failed'**
   String get installFailed;
+
+  /// No description provided for @invalidUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid URL'**
+  String get invalidUrl;
+
+  /// No description provided for @priorityIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Best-source tries each in this order.'**
+  String get priorityIntro;
+
+  /// No description provided for @groupDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get groupDownload;
+
+  /// No description provided for @groupMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Metadata'**
+  String get groupMetadata;
+
+  /// No description provided for @priorityEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No sources for this group yet.'**
+  String get priorityEmpty;
 }
 
 class _AppLocalizationsDelegate

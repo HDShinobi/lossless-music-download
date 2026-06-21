@@ -126,4 +126,19 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get installFailed => 'Install failed';
+
+  @override
+  String get invalidUrl => 'Invalid URL';
+
+  @override
+  String get priorityIntro => 'Best-source tries each in this order.';
+
+  @override
+  String get groupDownload => 'Download';
+
+  @override
+  String get groupMetadata => 'Metadata';
+
+  @override
+  String get priorityEmpty => 'No sources for this group yet.';
 }

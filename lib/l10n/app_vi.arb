@@ -46,5 +46,9 @@
   "save": "Lưu",
   "cancel": "Huỷ",
   "installFailed": "Cài thất bại",
-  "invalidUrl": "URL không hợp lệ"
+  "invalidUrl": "URL không hợp lệ",
+  "priorityIntro": "Best-source thử lần lượt theo thứ tự này.",
+  "groupDownload": "Tải",
+  "groupMetadata": "Metadata",
+  "priorityEmpty": "Chưa có nguồn nào cho mục này."
 }

@@ -126,4 +126,19 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get installFailed => 'Cài thất bại';
+
+  @override
+  String get invalidUrl => 'URL không hợp lệ';
+
+  @override
+  String get priorityIntro => 'Best-source thử lần lượt theo thứ tự này.';
+
+  @override
+  String get groupDownload => 'Tải';
+
+  @override
+  String get groupMetadata => 'Metadata';
+
+  @override
+  String get priorityEmpty => 'Chưa có nguồn nào cho mục này.';
 }

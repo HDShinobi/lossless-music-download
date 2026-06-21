@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import '../providers/extensions_provider.dart';
 import '../widgets/discover_tab.dart';
+import '../widgets/priority_tab.dart';
 
 class SourcesScreen extends ConsumerStatefulWidget {
   const SourcesScreen({super.key});
@@ -46,7 +47,7 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
       return const DiscoverTab();
     }
     if (_selectedSegment == 2) {
-      return Center(child: Text(t.comingSoon));
+      return const PriorityTab();
     }
 
     // Segment 0: Installed
