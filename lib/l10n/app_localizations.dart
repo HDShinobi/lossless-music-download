@@ -395,7 +395,7 @@ abstract class AppLocalizations {
   /// No description provided for @downloadStarted.
   ///
   /// In en, this message translates to:
-  /// **'Download started'**
+  /// **'Added to queue'**
   String get downloadStarted;
 
   /// No description provided for @downloadFailed.
@@ -407,14 +407,8 @@ abstract class AppLocalizations {
   /// No description provided for @queueEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No downloads in queue.'**
+  /// **'No downloads yet.'**
   String get queueEmpty;
-
-  /// No description provided for @cancelDownload.
-  ///
-  /// In en, this message translates to:
-  /// **'Cancel download'**
-  String get cancelDownload;
 }
 
 class _AppLocalizationsDelegate

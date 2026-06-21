@@ -158,14 +158,11 @@ class AppLocalizationsVi extends AppLocalizations {
   String get download => 'Tải';
 
   @override
-  String get downloadStarted => 'Đã bắt đầu tải';
+  String get downloadStarted => 'Đã thêm vào hàng đợi';
 
   @override
   String get downloadFailed => 'Tải thất bại';
 
   @override
-  String get queueEmpty => 'Không có tải xuống nào trong hàng đợi.';
-
-  @override
-  String get cancelDownload => 'Huỷ tải';
+  String get queueEmpty => 'Chưa có tải nào.';
 }

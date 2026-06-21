@@ -68,9 +68,10 @@ void main() {
 
       expect(fake.recorded, hasLength(1));
       final req = fake.recorded.first;
-      expect(req.trackName, 'My Song');
-      expect(req.outputDir, _kTestDir);
-      expect(req.useExtensions, isTrue);
+      final json = req.toJson();
+      expect(json['track_name'], 'My Song');
+      expect(json['output_dir'], _kTestDir);
+      expect(json['use_extensions'], isTrue);
     });
   });
 
@@ -122,7 +123,7 @@ void main() {
       await tester.pumpWidget(buildQueue(items: []));
       await tester.pumpAndSettle();
 
-      expect(find.text('No downloads in queue.'), findsOneWidget);
+      expect(find.text('No downloads yet.'), findsOneWidget);
     });
   });
 }

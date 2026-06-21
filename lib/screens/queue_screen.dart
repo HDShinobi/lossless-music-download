@@ -57,7 +57,7 @@ class _DownloadTile extends ConsumerWidget {
       ),
       trailing: IconButton(
         icon: const Icon(Icons.cancel_outlined),
-        tooltip: t.cancelDownload,
+        tooltip: t.cancel,
         onPressed: () => bridge.cancelDownload(item.itemId),
       ),
     );

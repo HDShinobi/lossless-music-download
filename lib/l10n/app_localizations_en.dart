@@ -158,14 +158,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get download => 'Download';
 
   @override
-  String get downloadStarted => 'Download started';
+  String get downloadStarted => 'Added to queue';
 
   @override
   String get downloadFailed => 'Download failed';
 
   @override
-  String get queueEmpty => 'No downloads in queue.';
-
-  @override
-  String get cancelDownload => 'Cancel download';
+  String get queueEmpty => 'No downloads yet.';
 }
