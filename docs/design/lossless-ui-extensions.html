@@ -1,0 +1,226 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lossless Music Download - Nguồn & Extension</title>
+<style>
+  :root{
+    --ground:#0E0F11; --surface:#15171A; --surface-2:#1C1F23; --surface-3:#252930;
+    --line:#2A2E34; --line-soft:#1E2228; --text:#E9EBEE; --muted:#888F98; --muted-2:#565C65;
+    --accent:#36D399; --accent-soft:#11261D; --accent-line:#1f4d3a; --accent-ink:#04150E;
+    --warn:#E0B341; --warn-soft:#2a2310; --warn-line:#4d4022;
+    --down:#E06A52;
+    --font-sans: system-ui, -apple-system, "SF Pro Text", "Segoe UI", Roboto, "Be Vietnam Pro", "Noto Sans", Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  *{ box-sizing:border-box; } html,body{ margin:0; }
+  body{ background:radial-gradient(900px 600px at 8% -10%, #16191d 0%, rgba(22,25,29,0) 58%), radial-gradient(800px 560px at 102% -4%, #121b18 0%, rgba(18,27,24,0) 55%), var(--ground);
+    color:var(--text); font-family:var(--font-sans); -webkit-font-smoothing:antialiased; line-height:1.5; min-height:100vh; }
+  .grain{ position:fixed; inset:0; z-index:9999; pointer-events:none; opacity:.045; mix-blend-mode:overlay; background-repeat:repeat; }
+  .wrap{ max-width:1180px; margin:0 auto; padding:56px 24px 80px; }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  .eyebrow{ font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--muted); margin:0 0 16px; }
+  h1.t{ font-size:clamp(32px,6vw,56px); font-weight:800; letter-spacing:-.035em; margin:0 0 10px; }
+  .lead{ max-width:720px; font-size:17px; color:#C2C7CD; margin:0; text-wrap:pretty; }
+  .lead b{ color:var(--text); }
+  .flow{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:24px 0 56px; font-family:var(--font-mono); font-size:12px; color:var(--muted); }
+  .flow .node{ border:1px solid var(--line); background:var(--surface); border-radius:10px; padding:8px 12px; }
+  .flow .node b{ color:var(--accent); font-weight:600; }
+  .flow .ar{ color:var(--muted-2); }
+
+  .gallery{ display:grid; grid-template-columns:repeat(2,1fr); gap:34px 28px; }
+  @media (min-width:1000px){ .gallery{ grid-template-columns:repeat(4,1fr); } }
+  @media (max-width:680px){ .gallery{ grid-template-columns:1fr; } }
+
+  .phone{ background:#050607; border:1px solid #2b2f35; border-radius:34px; padding:9px; box-shadow:0 34px 64px -34px rgba(0,0,0,.92), 0 0 0 1px rgba(255,255,255,.02) inset; }
+  .screen{ position:relative; background:var(--ground); border-radius:26px; height:680px; overflow:hidden; display:flex; flex-direction:column; }
+  .caption{ margin:14px 4px 0; } .caption .t{ font-size:14px; font-weight:600; } .caption .d{ font-size:12.5px; color:var(--muted); margin-top:2px; text-wrap:pretty; }
+  .caption .tag{ font-size:11px; color:var(--accent); }
+
+  .status{ display:flex; justify-content:space-between; align-items:center; padding:12px 18px 4px; font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:11px; color:var(--muted); }
+  .status .dots{ display:flex; gap:4px; } .status .dots i{ width:4px; height:4px; border-radius:50%; background:var(--muted-2); display:block; }
+  .top{ display:flex; align-items:center; gap:10px; padding:8px 16px 8px; }
+  .top .back{ color:var(--muted); font-size:20px; line-height:1; }
+  .top h4{ font-size:20px; font-weight:700; letter-spacing:-.02em; margin:0; flex:1; }
+  .top .gear{ color:var(--muted); }
+  .top .gear svg{ width:20px; height:20px; display:block; }
+  .crumb{ padding:2px 16px 4px; font-size:11.5px; color:var(--muted-2); }
+
+  .body{ flex:1; overflow:hidden; padding:0 14px; } .body.scroll{ overflow-y:auto; }
+
+  /* segmented */
+  .seg{ display:flex; gap:5px; padding:6px 4px 12px; }
+  .seg b{ flex:1; text-align:center; font-size:11.5px; padding:7px 6px; border-radius:9px; color:var(--muted); border:1px solid var(--line); font-weight:500; }
+  .seg b.on{ color:var(--accent-ink); background:var(--accent); border-color:var(--accent); font-weight:700; }
+
+  /* source row */
+  .src{ display:flex; align-items:center; gap:11px; padding:11px 8px; border-radius:11px; }
+  .src + .src{ border-top:1px solid var(--line-soft); }
+  .ico{ width:38px; height:38px; border-radius:9px; flex:none; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; color:var(--text); background:linear-gradient(135deg,#23272d,#15181c); }
+  .src .info{ flex:1; min-width:0; }
+  .src .nm{ font-size:13.5px; font-weight:600; display:flex; align-items:center; gap:7px; }
+  .health{ width:7px; height:7px; border-radius:50%; flex:none; }
+  .health.up{ background:var(--accent); box-shadow:0 0 6px var(--accent); }
+  .health.down{ background:var(--down); }
+  .src .meta{ font-size:11.5px; color:var(--muted); margin-top:2px; display:flex; gap:7px; align-items:center; }
+  .cat{ font-family:var(--font-mono); font-size:9px; letter-spacing:.04em; padding:2px 6px; border-radius:6px; border:1px solid var(--line); color:var(--muted); text-transform:uppercase; }
+  .cat.dl{ color:var(--accent); border-color:var(--accent-line); }
+  .ver{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  .sw{ width:42px; height:25px; border-radius:99px; position:relative; flex:none; transition:background .2s ease; }
+  .sw.on{ background:var(--accent); } .sw.off{ background:var(--surface-3); }
+  .sw i{ position:absolute; top:3px; width:19px; height:19px; border-radius:50%; transition:left .2s ease, right .2s ease; }
+  .sw.on i{ right:3px; background:var(--accent-ink); } .sw.off i{ left:3px; background:var(--muted); }
+
+  .banner{ display:flex; align-items:center; gap:9px; background:var(--warn-soft); border:1px solid var(--warn-line); border-radius:11px; padding:10px 12px; margin:0 4px 12px; }
+  .banner.acc{ background:var(--accent-soft); border-color:var(--accent-line); }
+  .banner .x{ font-size:12px; flex:1; } .banner .x b{ color:var(--warn); }
+  .banner.acc .x b{ color:var(--accent); }
+  .banner .go{ font-size:11.5px; color:var(--accent); font-weight:600; white-space:nowrap; }
+
+  /* discover */
+  .agg{ display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:11px 12px; margin:0 4px 12px; }
+  .agg .lbl{ flex:1; } .agg .lbl b{ font-size:12.5px; } .agg .lbl small{ display:block; color:var(--muted); font-size:11px; }
+  .agg .swp{ font-size:11px; color:var(--accent); white-space:nowrap; }
+  .chips{ display:flex; gap:6px; padding:0 4px 12px; overflow-x:auto; }
+  .chips b{ font-size:11px; padding:6px 11px; border-radius:99px; color:var(--muted); border:1px solid var(--line); white-space:nowrap; font-weight:500; }
+  .chips b.on{ color:var(--accent-ink); background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .install{ font-size:11px; font-weight:700; color:var(--accent); border:1px solid var(--accent-line); background:var(--accent-soft); border-radius:9px; padding:7px 13px; white-space:nowrap; }
+  .installed{ font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:9px; padding:7px 11px; white-space:nowrap; display:flex; align-items:center; gap:5px; }
+  .installed svg{ width:12px; height:12px; color:var(--accent); }
+
+  /* priority */
+  .pri{ display:flex; align-items:center; gap:11px; padding:12px 12px; background:var(--surface); border:1px solid var(--line); border-radius:12px; margin:0 4px 8px; }
+  .pri .rank{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:13px; color:var(--accent); font-weight:700; width:18px; }
+  .pri .nm{ flex:1; font-size:13px; font-weight:600; }
+  .pri .nm small{ display:block; font-weight:400; color:var(--muted); font-size:11px; }
+  .pri .grip{ color:var(--muted-2); letter-spacing:1px; }
+
+  /* detail */
+  .dhd{ display:flex; gap:13px; align-items:center; padding:4px 6px 14px; }
+  .dhd .ico{ width:54px; height:54px; border-radius:13px; font-size:18px; }
+  .dhd .nm{ font-size:18px; font-weight:700; }
+  .dhd .su{ font-size:12.5px; color:var(--muted); margin-top:3px; display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
+  .badge-comm{ font-size:9.5px; font-family:var(--font-mono); letter-spacing:.03em; color:var(--warn); border:1px solid var(--warn-line); background:var(--warn-soft); border-radius:6px; padding:2px 6px; }
+  .desc{ font-size:12.5px; color:#b9bec5; margin:0 6px 16px; text-wrap:pretty; }
+  .sec{ font-size:11px; color:var(--muted); font-weight:600; margin:14px 8px 9px; letter-spacing:.02em; }
+  .perm{ display:flex; align-items:flex-start; gap:10px; padding:10px 12px; background:var(--surface); border:1px solid var(--line); border-radius:11px; margin:0 4px 8px; }
+  .perm svg{ width:16px; height:16px; color:var(--muted); flex:none; margin-top:1px; }
+  .perm .pp{ flex:1; min-width:0; } .perm .pp b{ font-size:12.5px; }
+  .perm .pp .doms{ font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-top:3px; word-break:break-all; line-height:1.45; }
+  .setrow{ display:flex; align-items:center; gap:10px; padding:11px 12px; background:var(--surface); border:1px solid var(--line); border-radius:11px; margin:0 4px 8px; }
+  .setrow .pp{ flex:1; } .setrow .pp b{ font-size:12.5px; } .setrow .pp small{ display:block; color:var(--muted); font-size:11px; }
+  .setrow .val{ font-family:var(--font-mono); font-size:11px; color:var(--accent); }
+  .cta{ display:flex; align-items:center; justify-content:center; gap:9px; background:var(--accent); color:var(--accent-ink); font-weight:700; font-size:15px; border-radius:13px; padding:14px; margin:16px 4px 4px; }
+  .cta svg{ width:18px; height:18px; }
+  .note-off{ text-align:center; font-size:11px; color:var(--muted); margin:9px 4px 0; }
+
+  .footnote{ margin:56px auto 0; max-width:680px; text-align:center; color:var(--muted-2); font-size:12.5px; }
+</style>
+
+<div class="grain" id="grain" aria-hidden="true"></div>
+<div class="wrap">
+  <p class="eyebrow">Nguồn & Extension · trong Cài đặt</p>
+  <h1 class="t">Nguồn nhạc, gọn trong một aggregator</h1>
+  <p class="lead">Người dùng không dán URL. App kéo <b>một aggregator</b> (đổi được), tự gộp nhiều repo cộng đồng thành <b>một catalog</b>, bấm là cài. Extension mặc định <b>tắt</b> tới khi bạn bật.</p>
+  <div class="flow">
+    <span class="node">Aggregator <b>đổi được</b></span><span class="ar">→</span>
+    <span class="node">nhiều <b>registry.json</b> repo</span><span class="ar">→</span>
+    <span class="node">catalog gộp</span><span class="ar">→</span>
+    <span class="node"><b>.ext</b> sandbox (Goja)</span>
+  </div>
+
+  <div class="gallery">
+
+    <!-- A: ĐÃ CÀI -->
+    <div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <div class="top"><span class="back">‹</span><h4>Nguồn</h4></div>
+        <div class="crumb">Cài đặt › Nguồn & Extension</div>
+        <div class="body scroll">
+          <div class="seg"><b class="on">Đã cài</b><b>Khám phá</b><b>Ưu tiên</b></div>
+          <div class="banner"><svg viewBox="0 0 24 24" fill="none" stroke="var(--warn)" stroke-width="2"><path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/></svg><div class="x"><b>1 nguồn không phản hồi.</b> Qobuz đang lỗi endpoint.</div></div>
+          <div class="src"><div class="ico">D</div><div class="info"><div class="nm"><span class="health up"></span>Deezer</div><div class="meta"><span class="cat dl">Download</span><span class="ver">v1.1.5</span></div></div><div class="sw on"><i></i></div></div>
+          <div class="src"><div class="ico">T</div><div class="info"><div class="nm"><span class="health up"></span>Tidal</div><div class="meta"><span class="cat dl">Download</span><span class="ver">v1.0.9</span></div></div><div class="sw on"><i></i></div></div>
+          <div class="src"><div class="ico">Q</div><div class="info"><div class="nm"><span class="health down"></span>Qobuz</div><div class="meta"><span class="cat dl">Download</span><span class="ver">v1.0.7</span> · <span style="color:var(--down)">không phản hồi</span></div></div><div class="sw on"><i></i></div></div>
+          <div class="src"><div class="ico">S</div><div class="info"><div class="nm"><span class="health up"></span>Spotify Web</div><div class="meta"><span class="cat">Metadata</span><span class="ver">v1.9.12</span></div></div><div class="sw on"><i></i></div></div>
+          <div class="src"><div class="ico">A</div><div class="info"><div class="nm"><span class="health up"></span>Apple Music</div><div class="meta"><span class="cat">Lyrics</span><span class="ver">v1.3.3</span> · <span style="color:var(--accent)">có bản 1.3.4</span></div></div><div class="sw off"><i></i></div></div>
+        </div>
+      </div></div>
+      <div class="caption"><div class="t">Đã cài · <span class="tag">bật/tắt · health · cập nhật</span></div><div class="d">Chấm xanh = nguồn đang sống (health check). Chạm vào một dòng để xem quyền, đổi settings, hoặc gỡ.</div></div>
+    </div>
+
+    <!-- B: KHÁM PHÁ -->
+    <div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <div class="top"><span class="back">‹</span><h4>Nguồn</h4></div>
+        <div class="crumb">Cài đặt › Nguồn & Extension</div>
+        <div class="body scroll">
+          <div class="seg"><b>Đã cài</b><b class="on">Khám phá</b><b>Ưu tiên</b></div>
+          <div class="agg"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg><div class="lbl"><b>community-aggregator</b><small>gộp từ 4 repo · 13 extension</small></div><span class="swp">Đổi ›</span></div>
+          <div class="chips"><b class="on">Tất cả</b><b>Download</b><b>Metadata</b><b>Lyrics</b></div>
+          <div class="src"><div class="ico">Az</div><div class="info"><div class="nm">Amazon Music</div><div class="meta"><span class="cat dl">Download</span> · Atmos + lossless</div></div><span class="install">Cài</span></div>
+          <div class="src"><div class="ico">Y</div><div class="info"><div class="nm">YouTube Music</div><div class="meta"><span class="cat dl">Download</span><span class="ver">v2.3.8</span></div></div><span class="install">Cài</span></div>
+          <div class="src"><div class="ico">Sc</div><div class="info"><div class="nm">SoundCloud</div><div class="meta"><span class="cat dl">Download</span><span class="ver">v1.0.5</span></div></div><span class="install">Cài</span></div>
+          <div class="src"><div class="ico">P</div><div class="info"><div class="nm">Pandora</div><div class="meta"><span class="cat dl">Download</span><span class="ver">v1.0.8</span></div></div><span class="install">Cài</span></div>
+          <div class="src"><div class="ico">D</div><div class="info"><div class="nm">Deezer</div><div class="meta"><span class="cat dl">Download</span><span class="ver">v1.1.5</span></div></div><span class="installed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg>Đã cài</span></div>
+        </div>
+      </div></div>
+      <div class="caption"><div class="t">Khám phá · <span class="tag">catalog gộp, 1 chạm</span></div><div class="d">Mọi extension từ các repo gộp lại, lọc theo loại. Dòng "Đổi ›" để power-user trỏ aggregator khác.</div></div>
+    </div>
+
+    <!-- C: ƯU TIÊN -->
+    <div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <div class="top"><span class="back">‹</span><h4>Nguồn</h4></div>
+        <div class="crumb">Cài đặt › Nguồn & Extension</div>
+        <div class="body scroll">
+          <div class="seg"><b>Đã cài</b><b>Khám phá</b><b class="on">Ưu tiên</b></div>
+          <div class="banner acc"><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M12 2l2.4 5 5.6.5-4.2 3.7 1.3 5.5L12 19.5 6.9 22.2l1.3-5.5L4 13l5.6-.5z"/></svg><div class="x">Best-source picker thử lần lượt theo thứ tự này.</div></div>
+          <div class="sec">Tải xuống</div>
+          <div class="pri"><span class="rank">1</span><div class="nm">Qobuz<small>tới 24/192 · hi-res</small></div><span class="grip">⠿</span></div>
+          <div class="pri"><span class="rank">2</span><div class="nm">Tidal<small>tới 24/192</small></div><span class="grip">⠿</span></div>
+          <div class="pri"><span class="rank">3</span><div class="nm">Deezer<small>16/44 FLAC</small></div><span class="grip">⠿</span></div>
+          <div class="sec">Metadata</div>
+          <div class="pri"><span class="rank">1</span><div class="nm">Spotify Web<small>ISRC + home feed</small></div><span class="grip">⠿</span></div>
+          <div class="pri"><span class="rank">2</span><div class="nm">Apple Music<small>label, composer</small></div><span class="grip">⠿</span></div>
+          <div class="sec">Lyrics</div>
+          <div class="pri"><span class="rank">1</span><div class="nm">Apple Music<small>word-by-word</small></div><span class="grip">⠿</span></div>
+        </div>
+      </div></div>
+      <div class="caption"><div class="t">Thứ tự ưu tiên · <span class="tag">kéo-thả, tách 3 loại</span></div><div class="d">Tách riêng Tải / Metadata / Lyrics vì một nguồn có thể giỏi metadata nhưng dở tải. Đây là não của best-source.</div></div>
+    </div>
+
+    <!-- D: CHI TIẾT + XIN QUYỀN -->
+    <div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <div class="top"><span class="back">‹</span><h4>Chi tiết</h4></div>
+        <div class="body scroll">
+          <div class="dhd"><div class="ico">D</div><div><div class="nm">Deezer</div><div class="su"><span class="cat dl">Download</span><span class="ver">v1.1.5</span><span class="badge-comm">cộng đồng · chưa kiểm</span></div></div></div>
+          <p class="desc">Deezer metadata và download provider. Tìm bài/album/playlist/nghệ sĩ, tải FLAC.</p>
+          <div class="sec">Extension này được phép truy cập</div>
+          <div class="perm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></svg><div class="pp"><b>Mạng (7 domain)</b><div class="doms">api.deezer.com · www.deezer.com · *.dzcdn.net · api.zarz.moe · dl.musicdl.me · link.deezer.com · deezer.page.link</div></div></div>
+          <div class="perm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-7L9 5H6a2 2 0 00-2 2z"/></svg><div class="pp"><b>Lưu trữ cục bộ</b><div class="doms" style="color:var(--muted)">Bộ nhớ key-value riêng của extension</div></div></div>
+          <div class="perm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3v5h5M9 13h6M9 17h6M7 21h10a2 2 0 002-2V8l-5-5H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg><div class="pp"><b>Ghi file</b><div class="doms" style="color:var(--muted)">Ghi file tải về vào thư mục đã cấp</div></div></div>
+          <div class="sec">Cài đặt</div>
+          <div class="setrow"><div class="pp"><b>Chất lượng mặc định</b><small>FLAC - stream tốt nhất</small></div><span class="val">FLAC ›</span></div>
+          <div class="setrow"><div class="pp"><b>ARL (tùy chọn)</b><small>tài khoản riêng để mở hi-res</small></div><span class="val">chưa đặt ›</span></div>
+          <div class="cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3v12M7 11l5 5 5-5M5 21h14"/></svg>Cài và bật</div>
+          <p class="note-off">Sau khi cài, extension vẫn tắt tới khi bạn bật thủ công.</p>
+        </div>
+      </div></div>
+      <div class="caption"><div class="t">Chi tiết · <span class="tag">xin quyền kiểu Android</span></div><div class="d">Hiện rõ domain mạng + quyền file (đọc thẳng từ manifest thật). Badge "chưa kiểm" + mặc định tắt để an toàn.</div></div>
+    </div>
+
+  </div>
+  <p class="footnote">Phần Nguồn, cùng ngôn ngữ v0.2. Domain trong màn chi tiết lấy từ manifest Deezer thật.</p>
+</div>
+
+<script>
+(function(){ try{ var g=document.createElement('canvas'); g.width=g.height=120; var gc=g.getContext('2d'); var id=gc.createImageData(120,120);
+  for(var i=0;i<id.data.length;i+=4){ var v=(Math.random()*255)|0; id.data[i]=id.data[i+1]=id.data[i+2]=v; id.data[i+3]=255; } gc.putImageData(id,0,0);
+  document.getElementById('grain').style.backgroundImage='url('+g.toDataURL()+')'; }catch(e){} })();
+</script>

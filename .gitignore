@@ -1,0 +1,22 @@
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+.packages
+*.iml
+.idea/
+# Android
+android/.gradle/
+android/app/libs/*.aar
+android/local.properties
+android/key.properties
+*.keystore
+*.jks
+# Go
+go_backend/.gomobile/
+# macOS
+.DS_Store
+# Scratch
+.remember/tmp/
+.remember/logs/

@@ -1,0 +1,457 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lossless Music Download - giao diện v0.2 (taste-skill)</title>
+<style>
+  :root{
+    --ground:#0E0F11;       /* graphite near-black, trung tính (không tím) */
+    --surface:#15171A;
+    --surface-2:#1C1F23;
+    --surface-3:#252930;
+    --line:#2A2E34;
+    --line-soft:#1E2228;
+    --text:#E9EBEE;
+    --muted:#888F98;
+    --muted-2:#565C65;
+    --accent:#36D399;        /* emerald - accent DUY NHẤT (verified / live / primary) */
+    --accent-soft:#11261D;
+    --accent-line:#1f4d3a;
+    --accent-ink:#04150E;
+    --radius:18px;
+    --font-sans: system-ui, -apple-system, "SF Pro Text", "Segoe UI", Roboto, "Be Vietnam Pro", "Noto Sans", Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; }
+  body{
+    background:
+      radial-gradient(900px 600px at 8% -10%, #16191d 0%, rgba(22,25,29,0) 58%),
+      radial-gradient(800px 560px at 102% -4%, #121b18 0%, rgba(18,27,24,0) 55%),
+      var(--ground);
+    color:var(--text);
+    font-family:var(--font-sans);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5; min-height:100vh;
+  }
+  .grain{ position:fixed; inset:0; z-index:9999; pointer-events:none; opacity:.045; mix-blend-mode:overlay; background-repeat:repeat; }
+  .wrap{ max-width:1180px; margin:0 auto; padding:56px 24px 80px; position:relative; }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  /* identity */
+  .eyebrow{ font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:var(--muted); margin:0 0 18px; }
+  .wordmark{ display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin:0 0 6px; }
+  .wordmark h1{ font-size:clamp(36px,7vw,72px); font-weight:800; letter-spacing:-.04em; line-height:.94; margin:0; }
+  .wordmark h1 .dim{ color:var(--muted-2); font-weight:700; }
+  .wordmark .chip{ font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); border:1px solid var(--accent-line); background:var(--accent-soft); padding:5px 10px; border-radius:999px; align-self:center; }
+  .thesis{ max-width:700px; font-size:clamp(16px,2vw,20px); color:#C2C7CD; margin:18px 0 0; text-wrap:pretty; }
+  .thesis b{ color:var(--text); font-weight:600; }
+  .skillnote{ margin:18px 0 0; font-size:13px; color:var(--muted); }
+  .skillnote code{ font-family:var(--font-mono); color:var(--accent); font-size:12px; }
+
+  /* rationale */
+  .rationale{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin:40px 0 60px; }
+  .rcard{ background:linear-gradient(180deg,var(--surface) 0%, #111316 100%); border:1px solid var(--line); border-radius:var(--radius); padding:20px; box-shadow:0 18px 40px -28px rgba(0,0,0,.8); }
+  .rcard h3{ font-size:15px; font-weight:600; letter-spacing:-.01em; color:var(--text); margin:0 0 14px; }
+  .swatches{ display:flex; gap:8px; }
+  .sw{ flex:1; border-radius:10px; height:54px; border:1px solid rgba(255,255,255,.05); display:flex; align-items:flex-end; padding:7px; }
+  .sw span{ font-family:var(--font-mono); font-size:9px; }
+  .type-sample .big{ font-size:30px; font-weight:800; letter-spacing:-.03em; line-height:1; }
+  .type-sample .num{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:13px; color:var(--accent); letter-spacing:.04em; margin-top:12px; }
+  .type-sample .body{ font-size:13px; color:var(--muted); margin-top:8px; }
+  .sig{ display:flex; gap:13px; align-items:center; }
+  .sig canvas{ width:96px; height:60px; border-radius:8px; display:block; background:#070809; }
+  .sig p{ margin:0; font-size:12.5px; color:var(--muted); }
+  .sig p b{ color:var(--text); font-weight:600; }
+
+  .gallery-head{ display:flex; align-items:baseline; gap:14px; margin:0 0 26px; }
+  .gallery-head h2{ font-size:24px; font-weight:700; letter-spacing:-.02em; margin:0; }
+  .gallery-head .num{ font-family:var(--font-mono); color:var(--muted-2); font-size:13px; letter-spacing:.08em; }
+  .gallery{ display:grid; grid-template-columns:repeat(3,1fr); gap:34px 28px; }
+
+  /* phone */
+  .phone{ background:#050607; border:1px solid #2b2f35; border-radius:34px; padding:9px; box-shadow:0 34px 64px -34px rgba(0,0,0,.92), 0 0 0 1px rgba(255,255,255,.02) inset; }
+  .screen{ position:relative; background:var(--ground); border-radius:26px; height:660px; overflow:hidden; display:flex; flex-direction:column; }
+  .caption{ margin:14px 4px 0; }
+  .caption .t{ font-size:14px; font-weight:600; }
+  .caption .d{ font-size:12.5px; color:var(--muted); margin-top:2px; text-wrap:pretty; }
+  .caption .tag{ font-size:11px; color:var(--accent); }
+
+  .status{ display:flex; justify-content:space-between; align-items:center; padding:12px 18px 4px; font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:11px; color:var(--muted); }
+  .status .dots{ display:flex; gap:4px; align-items:center; }
+  .status .dots i{ width:4px; height:4px; border-radius:50%; background:var(--muted-2); display:block; }
+
+  .ah{ padding:10px 18px 12px; }
+  .ah h4{ font-size:24px; font-weight:700; letter-spacing:-.025em; margin:0; }
+  .ah .sub{ font-size:12.5px; color:var(--muted); margin-top:3px; }
+
+  .body{ flex:1; overflow:hidden; padding:0 14px; }
+  .body.scroll{ overflow-y:auto; }
+
+  .nav{ display:flex; justify-content:space-around; align-items:center; padding:10px 8px calc(10px + env(safe-area-inset-bottom)); border-top:1px solid var(--line-soft); background:rgba(11,12,14,.72); backdrop-filter:blur(8px); }
+  .nav a{ display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--muted-2); text-decoration:none; font-size:9.5px; transition:color .2s ease; }
+  .nav a svg{ width:21px; height:21px; }
+  .nav a.on{ color:var(--accent); }
+  .nav a:hover{ color:var(--text); }
+  .nav a:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:6px; }
+
+  .searchbar{ display:flex; align-items:center; gap:10px; background:var(--surface-2); border:1px solid var(--line); border-radius:14px; padding:11px 14px; margin:2px 4px 14px; transition:border-color .2s ease; }
+  .searchbar:hover{ border-color:#3a3f47; }
+  .searchbar svg{ width:17px; height:17px; color:var(--muted); flex:none; }
+  .searchbar span{ color:var(--muted); font-size:13.5px; }
+  .searchbar .ext{ margin-left:auto; font-size:10px; color:var(--accent); border:1px solid var(--accent-line); border-radius:7px; padding:3px 7px; white-space:nowrap; }
+
+  .seg{ display:flex; gap:6px; padding:0 4px 14px; }
+  .seg b{ font-size:11.5px; padding:6px 11px; border-radius:9px; color:var(--muted); border:1px solid var(--line); font-weight:500; }
+  .seg b.on{ color:var(--accent-ink); background:var(--accent); border-color:var(--accent); font-weight:700; }
+
+  .row{ display:flex; align-items:center; gap:12px; padding:9px 6px; border-radius:10px; transition:background .2s ease; }
+  .row:hover{ background:var(--surface); }
+  .row + .row{ border-top:1px solid var(--line-soft); }
+  .art{ width:46px; height:46px; border-radius:9px; flex:none; position:relative; overflow:hidden; background:linear-gradient(135deg,#23272d,#15181c); }
+  .art.a2{ background:linear-gradient(135deg,#2a2630,#171419); }
+  .art.a3{ background:linear-gradient(135deg,#1d2b2a,#101817); }
+  .art.a4{ background:linear-gradient(135deg,#2b2a1f,#181711); }
+  .art .ver{ position:absolute; right:3px; bottom:3px; width:14px; height:14px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; }
+  .art .ver svg{ width:9px; height:9px; color:var(--accent-ink); }
+  .meta{ min-width:0; flex:1; }
+  .meta .ti{ font-size:13.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .meta .su{ font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .fmt{ font-size:10.5px; text-align:right; flex:none; }
+  .fmt .q{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; color:var(--accent); font-weight:600; }
+  .fmt .s{ color:var(--muted-2); display:block; margin-top:2px; }
+
+  .sheet-hd{ display:flex; gap:13px; align-items:center; padding:2px 4px 16px; }
+  .sheet-hd .art{ width:58px; height:58px; }
+  .sheet-hd .ti{ font-size:16px; font-weight:700; }
+  .sheet-hd .su{ font-size:13px; color:var(--muted); }
+  .best{ display:flex; align-items:center; gap:9px; background:var(--accent-soft); border:1px solid var(--accent-line); border-radius:12px; padding:10px 12px; margin:0 4px 14px; }
+  .best svg{ width:16px; height:16px; color:var(--accent); flex:none; }
+  .best .x{ font-size:12px; }
+  .best .x b{ color:var(--accent); }
+  .qlist{ margin:0 4px; }
+  .qopt{ display:flex; align-items:center; gap:12px; padding:13px 14px; border:1px solid var(--line); border-radius:13px; margin-bottom:9px; background:var(--surface); transition:border-color .2s ease, transform .1s ease; }
+  .qopt:hover{ border-color:#3a3f47; }
+  .qopt:active{ transform:scale(.99); }
+  .qopt.sel{ border-color:var(--accent); background:var(--accent-soft); }
+  .qrad{ width:18px; height:18px; border-radius:50%; border:2px solid var(--muted-2); flex:none; }
+  .qopt.sel .qrad{ border-color:var(--accent); background:radial-gradient(circle at center, var(--accent) 0 5px, transparent 6px); }
+  .qopt .lbl{ flex:1; } .qopt .lbl b{ font-size:13px; } .qopt .lbl small{ display:block; color:var(--muted); font-size:11.5px; }
+  .qopt .sz{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:11px; color:var(--muted); }
+  .cta{ display:flex; align-items:center; justify-content:center; gap:9px; background:var(--accent); color:var(--accent-ink); font-weight:700; font-size:15px; border-radius:14px; padding:15px; margin:16px 4px 4px; transition:transform .1s ease, filter .2s ease; }
+  .cta:hover{ filter:brightness(1.05); } .cta:active{ transform:translateY(1px); }
+  .cta svg{ width:18px; height:18px; }
+
+  .spec-wrap{ position:relative; margin:2px 4px 0; border-radius:16px; overflow:hidden; border:1px solid #2c2030; background:#070205; }
+  .spec-wrap canvas{ display:block; width:100%; height:220px; }
+  .axis{ position:absolute; right:9px; font-family:var(--font-mono); font-size:9px; color:rgba(255,255,255,.65); }
+  .cutoff{ position:absolute; left:0; right:0; top:11px; height:0; border-top:1px dashed var(--accent); }
+  .cutoff b{ position:absolute; left:9px; top:-15px; font-size:9.5px; color:var(--accent); }
+  .verdict{ display:flex; align-items:center; gap:10px; margin:14px 4px 0; background:var(--accent-soft); border:1px solid var(--accent-line); border-radius:13px; padding:13px; }
+  .verdict .ic{ width:30px; height:30px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; flex:none; }
+  .verdict .ic svg{ width:18px; height:18px; color:var(--accent-ink); }
+  .verdict .tx b{ font-size:14px; } .verdict .tx small{ display:block; color:#86c7ab; font-size:11.5px; }
+  .stats{ display:grid; grid-template-columns:repeat(2,1fr); gap:9px; margin:13px 4px 0; }
+  .stat{ background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:11px 12px; }
+  .stat .v{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:17px; color:var(--accent); font-weight:600; }
+  .stat .l{ font-size:11px; color:var(--muted); margin-top:3px; }
+  .compare{ margin:13px 4px 0; font-size:11.5px; color:var(--muted); }
+  .cbar{ display:flex; align-items:center; gap:8px; margin-top:7px; font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:10px; }
+  .cbar .lbx{ width:36px; }
+  .cbar .track{ flex:1; height:6px; border-radius:3px; background:var(--surface-3); overflow:hidden; }
+  .cbar .track i{ display:block; height:100%; border-radius:3px; }
+
+  .qcard{ background:var(--surface); border:1px solid var(--line); border-radius:15px; padding:13px; margin:2px 4px 11px; }
+  .qcard .top{ display:flex; gap:11px; align-items:center; }
+  .qcard .pct{ margin-left:auto; font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:13px; color:var(--accent); font-weight:600; }
+  .prog{ height:6px; border-radius:3px; background:var(--surface-3); overflow:hidden; margin:12px 0 8px; }
+  .prog i{ display:block; height:100%; background:linear-gradient(90deg,#1c7c5a,var(--accent)); border-radius:3px; }
+  .qstat{ display:flex; justify-content:space-between; font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:10.5px; color:var(--muted); }
+  .seclbl{ font-size:11px; color:var(--muted); margin:16px 8px 8px; font-weight:600; }
+  .qmini{ display:flex; align-items:center; gap:11px; padding:9px 6px; }
+  .qmini + .qmini{ border-top:1px solid var(--line-soft); }
+  .qmini .st{ margin-left:auto; font-size:10px; padding:3px 8px; border-radius:7px; white-space:nowrap; }
+  .st.done{ color:var(--accent); border:1px solid var(--accent-line); }
+  .st.wait{ color:var(--muted); border:1px solid var(--line); }
+
+  .live-hero{ text-align:center; padding:16px 4px 6px; }
+  .pulse{ width:74px; height:74px; border-radius:50%; margin:0 auto 14px; position:relative; display:flex; align-items:center; justify-content:center; background:radial-gradient(circle at center, rgba(54,211,153,.2), rgba(54,211,153,0) 70%); border:1px solid var(--accent-line); }
+  .pulse::before{ content:""; position:absolute; inset:0; border-radius:50%; border:1px solid var(--accent); animation:ring 2.6s ease-out infinite; }
+  .pulse svg{ width:30px; height:30px; color:var(--accent); }
+  @keyframes ring{ 0%{ transform:scale(.7); opacity:.9; } 100%{ transform:scale(1.7); opacity:0; } }
+  .live-hero .on{ font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); font-weight:600; }
+  .live-hero h4{ font-size:19px; font-weight:700; margin:5px 0 2px; }
+  .live-hero .addr{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:13px; color:var(--text); }
+  .live-hero .serving{ font-size:12px; color:var(--muted); margin-top:5px; }
+  .proto{ display:flex; gap:8px; justify-content:center; margin:14px 4px; }
+  .proto b{ font-family:var(--font-mono); font-size:10px; color:var(--accent); border:1px solid var(--accent-line); background:var(--accent-soft); border-radius:8px; padding:5px 10px; }
+  .clients-h{ font-size:11px; color:var(--muted); margin:18px 8px 8px; font-weight:600; }
+  .client{ display:flex; align-items:center; gap:11px; padding:11px 12px; background:var(--surface); border:1px solid var(--line); border-radius:12px; margin:0 4px 8px; }
+  .client .dev{ width:34px; height:34px; border-radius:9px; background:var(--surface-3); display:flex; align-items:center; justify-content:center; flex:none; }
+  .client .dev svg{ width:17px; height:17px; color:var(--muted); }
+  .client .nm{ flex:1; } .client .nm b{ font-size:13px; } .client .nm small{ display:block; color:var(--muted); font-size:11px; }
+  .client .play{ font-size:10px; color:var(--accent); white-space:nowrap; }
+  .toggle{ margin:16px 4px 4px; display:flex; align-items:center; gap:12px; padding:13px; border:1px solid var(--line); border-radius:13px; background:var(--surface); }
+  .toggle .x{ flex:1; } .toggle .x b{ font-size:13px; } .toggle .x small{ display:block; color:var(--muted); font-size:11.5px; }
+  .sw-on{ width:46px; height:27px; border-radius:99px; background:var(--accent); position:relative; flex:none; }
+  .sw-on i{ position:absolute; top:3px; right:3px; width:21px; height:21px; border-radius:50%; background:var(--accent-ink); }
+
+  .lib-sub{ display:flex; justify-content:space-between; align-items:center; padding:0 6px 12px; }
+  .lib-sub .c{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:11.5px; color:var(--muted); }
+  .lib-sub .sortby{ font-size:11px; color:var(--accent); }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:0 4px; }
+  .album .cover{ aspect-ratio:1; border-radius:13px; position:relative; overflow:hidden; }
+  .album .cover .badge{ position:absolute; left:7px; top:7px; font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:8.5px; color:var(--accent-ink); background:var(--accent); padding:3px 6px; border-radius:6px; font-weight:700; }
+  .album .cover .rg{ position:absolute; right:7px; bottom:7px; font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:8.5px; color:#cfe; background:rgba(7,18,14,.72); border:1px solid var(--accent-line); padding:2px 5px; border-radius:6px; }
+  .album .nm{ font-size:12.5px; font-weight:600; margin-top:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .album .ar{ font-size:11.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .footnote{ margin:60px auto 0; max-width:680px; text-align:center; color:var(--muted-2); font-size:12.5px; }
+
+  @media (max-width:960px){ .rationale{ grid-template-columns:1fr; } .gallery{ grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:680px){ .gallery{ grid-template-columns:1fr; } }
+  @media (prefers-reduced-motion: reduce){ .pulse::before{ animation:none; } }
+  a:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+</style>
+
+<div class="grain" id="grain" aria-hidden="true"></div>
+<div class="wrap">
+
+  <p class="eyebrow">Giao diện v0.2 · áp dụng taste-skill</p>
+  <div class="wordmark">
+    <h1>Lossless<span class="dim"> / Tải nhạc</span></h1>
+    <span class="chip">Android · FLAC</span>
+  </div>
+  <p class="thesis">Trình tải nhạc biết <b>tự chứng minh</b> thứ nó tải về là lossless thật, rồi biến điện thoại thành một <b>máy chủ thư viện</b> gọn gàng để các player xịn hơn kéo về qua Wi-Fi.</p>
+  <p class="skillnote">Đọc theo taste-skill: <code>app tiện ích pro-audio (Android) · ngôn ngữ bảng-điều-khiển-thiết-bị-đo · graphite + 1 accent emerald · spectrogram là điểm nóng duy nhất</code> · dials VARIANCE 5 / MOTION 4 / DENSITY 5.</p>
+
+  <section class="rationale">
+    <div class="rcard">
+      <h3>Bảng màu: graphite + một accent</h3>
+      <div class="swatches">
+        <div class="sw" style="background:#0E0F11"><span style="color:#6a7">#0E0F11</span></div>
+        <div class="sw" style="background:#1C1F23"><span style="color:#888F98">#1C1F23</span></div>
+        <div class="sw" style="background:#36D399"><span style="color:#04150E">#36D399</span></div>
+        <div class="sw" style="background:#252930"><span style="color:#888F98">#252930</span></div>
+      </div>
+      <p style="margin:14px 0 0;font-size:12px;color:var(--muted)">Một accent duy nhất (emerald) lo cả verified, live và nút chính. Nền graphite trung tính, không dùng tím để tránh "AI purple". Màu nóng chỉ xuất hiện ở spectrogram.</p>
+    </div>
+    <div class="rcard">
+      <h3>Chữ: sans tiêu đề + mono số liệu</h3>
+      <div class="type-sample">
+        <div class="big">Trong trẻo 24-bit</div>
+        <div class="num">96.0 kHz · DR12 · -6.1 dB TP</div>
+        <div class="body">Số đo dùng mono với chữ số đều cột (tabular-nums) - ngôn ngữ của thiết bị đo. Tiêu đề dùng sans hỗ trợ tiếng Việt đầy đủ.</div>
+      </div>
+    </div>
+    <div class="rcard">
+      <h3>Dấu ấn: phổ tần spectrogram</h3>
+      <div class="sig">
+        <canvas id="specMini" width="192" height="120" aria-label="mẫu phổ tần"></canvas>
+        <p>Biểu đồ phổ là nhân vật chính. Trần đầy đủ tới <b>22 kHz</b> nghĩa là lossless thật; trần thấp là lộ hàng giả.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="gallery-head"><span class="num">06 màn hình</span><h2>Ứng dụng, từng màn hình</h2></div>
+  <div class="gallery">
+
+    <!-- 1 SEARCH -->
+    <div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots"><i></i><i></i><i></i> &nbsp;FLAC</span></div>
+        <div class="ah"><h4>Tìm nhạc lossless</h4><div class="sub">3 nguồn đang bật</div></div>
+        <div class="body scroll">
+          <div class="searchbar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><span>Bài hát, album, hoặc dán link…</span><span class="ext">3 nguồn</span></div>
+          <div class="seg"><b class="on">Bài hát</b><b>Album</b><b>Nghệ sĩ</b><b>Playlist</b></div>
+          <div class="row"><div class="art"><div class="ver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg></div></div><div class="meta"><div class="ti">Halcyon Drift</div><div class="su">Mara Vance · Northern Lines</div></div><div class="fmt"><span class="q">FLAC 24/96</span><span class="s">qua Lossless API</span></div></div>
+          <div class="row"><div class="art a2"><div class="ver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg></div></div><div class="meta"><div class="ti">Paper Lanterns</div><div class="su">Kō · Slow Tide</div></div><div class="fmt"><span class="q">FLAC 16/44</span><span class="s">qua Hi-Res Ext</span></div></div>
+          <div class="row"><div class="art a3"><div class="ver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg></div></div><div class="meta"><div class="ti">Glass Harbour</div><div class="su">Eira Solberg</div></div><div class="fmt"><span class="q">FLAC 24/192</span><span class="s">qua Lossless API</span></div></div>
+          <div class="row"><div class="art a4"></div><div class="meta"><div class="ti">Midnight Ferry</div><div class="su">The Lamplighters · EP</div></div><div class="fmt"><span class="mono" style="color:var(--muted)">AAC 256</span><span class="s">chỉ có lossy</span></div></div>
+          <div class="row"><div class="art"><div class="ver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg></div></div><div class="meta"><div class="ti">Cinder & Smoke</div><div class="su">Vell</div></div><div class="fmt"><span class="q">FLAC 24/48</span><span class="s">qua Lossless API</span></div></div>
+        </div>
+        <nav class="nav">
+          <a class="on" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Tìm</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M18 16v6l4-3z" fill="currentColor" stroke="none"/></svg>Hàng đợi</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12a7 7 0 0114 0"/><path d="M8.5 12a3.5 3.5 0 017 0"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>Máy chủ</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>Thư viện</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>Cài đặt</a>
+        </nav>
+      </div></div>
+      <div class="caption"><div class="t">Tìm kiếm · <span class="tag">verify ngay từ đầu</span></div><div class="d">Tick emerald nghĩa là nguồn cấp được lossless thật. Kết quả chỉ-lossy để xám, không ngụy trang.</div></div>
+    </div>
+
+    <!-- 2 DOWNLOAD -->
+    <div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots"><i></i><i></i><i></i> &nbsp;FLAC</span></div>
+        <div class="ah"><h4>Chọn chất lượng</h4><div class="sub">Glass Harbour · Eira Solberg</div></div>
+        <div class="body scroll">
+          <div class="sheet-hd"><div class="art a3" style="border-radius:12px"></div><div><div class="ti">Glass Harbour</div><div class="su">Eira Solberg · Tide & Tone</div></div></div>
+          <div class="best"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 5 5.6.5-4.2 3.7 1.3 5.5L12 19.5 6.9 22.2l1.3-5.5L4 13l5.6-.5z"/></svg><div class="x">Đã tự chọn nguồn tốt nhất: <b>Lossless API · 24/192</b></div></div>
+          <div class="qlist">
+            <div class="qopt sel"><div class="qrad"></div><div class="lbl"><b>Hi-Res · 24-bit / 192 kHz</b><small>FLAC · bản master phòng thu</small></div><div class="sz">78.4 MB</div></div>
+            <div class="qopt"><div class="qrad"></div><div class="lbl"><b>Hi-Res · 24-bit / 96 kHz</b><small>FLAC</small></div><div class="sz">41.2 MB</div></div>
+            <div class="qopt"><div class="qrad"></div><div class="lbl"><b>CD · 16-bit / 44.1 kHz</b><small>FLAC · lossless</small></div><div class="sz">28.9 MB</div></div>
+            <div class="qopt"><div class="qrad"></div><div class="lbl"><b>Giữ thêm một bản AAC</b><small>cho player ít dung lượng</small></div><div class="sz">+6 MB</div></div>
+          </div>
+          <div class="cta"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 3v12M7 11l5 5 5-5M5 21h14"/></svg>Tải và verify khi xong</div>
+        </div>
+        <nav class="nav">
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Tìm</a>
+          <a class="on" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M18 16v6l4-3z" fill="currentColor" stroke="none"/></svg>Hàng đợi</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12a7 7 0 0114 0"/><path d="M8.5 12a3.5 3.5 0 017 0"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>Máy chủ</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>Thư viện</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>Cài đặt</a>
+        </nav>
+      </div></div>
+      <div class="caption"><div class="t">Bảng tải · <span class="tag">tự chọn nguồn xịn</span></div><div class="d">So mọi extension đang bật và chọn sẵn nguồn cao nhất, bạn vẫn đổi tay được.</div></div>
+    </div>
+
+    <!-- 3 ANALYSIS -->
+    <div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots"><i></i><i></i><i></i> &nbsp;FLAC</span></div>
+        <div class="ah"><h4>Có thật là lossless?</h4><div class="sub">Glass Harbour · phân tích phổ</div></div>
+        <div class="body scroll">
+          <div class="spec-wrap">
+            <canvas id="specMain" width="320" height="220" aria-label="phổ tần đầy đủ của bài hát"></canvas>
+            <div class="cutoff"><b>22.0 kHz · trần đầy đủ</b></div>
+            <div class="axis" style="top:6px">22k</div><div class="axis" style="top:96px">11k</div><div class="axis" style="bottom:6px">0</div>
+          </div>
+          <div class="verdict"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg></div><div class="tx"><b>Đã verify Lossless</b><small>Năng lượng phủ kín tới 22 kHz, không dấu vết transcode.</small></div></div>
+          <div class="stats">
+            <div class="stat"><div class="v">22.0 kHz</div><div class="l">Trần tần số</div></div>
+            <div class="stat"><div class="v">24-bit</div><div class="l">Độ sâu bit</div></div>
+            <div class="stat"><div class="v">96.0 kHz</div><div class="l">Tần số lấy mẫu</div></div>
+            <div class="stat"><div class="v">DR12</div><div class="l">Dải động</div></div>
+          </div>
+          <div class="compare"><div>File này so với hàng giả 320 kbps:</div>
+            <div class="cbar"><span class="lbx" style="color:var(--accent)">thật</span><div class="track"><i style="width:100%;background:var(--accent)"></i></div><span>22.0k</span></div>
+            <div class="cbar"><span class="lbx">320k</span><div class="track"><i style="width:88%;background:var(--muted-2)"></i></div><span>19.5k</span></div>
+          </div>
+        </div>
+        <nav class="nav">
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Tìm</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M18 16v6l4-3z" fill="currentColor" stroke="none"/></svg>Hàng đợi</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12a7 7 0 0114 0"/><path d="M8.5 12a3.5 3.5 0 017 0"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>Máy chủ</a>
+          <a class="on" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>Thư viện</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>Cài đặt</a>
+        </nav>
+      </div></div>
+      <div class="caption"><div class="t">Phân tích âm thanh · <span class="tag">màn hình dấu ấn</span></div><div class="d">Spectrogram là điểm nhấn duy nhất. Lossless thật phủ kín khung; transcode để lại trần phẳng.</div></div>
+    </div>
+
+    <!-- 4 QUEUE -->
+    <div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots"><i></i><i></i><i></i> &nbsp;FLAC</span></div>
+        <div class="ah"><h4>Đang tải</h4><div class="sub">2 đang chạy · 2 chờ</div></div>
+        <div class="body scroll">
+          <div class="qcard"><div class="top"><div class="art a3"></div><div class="meta"><div class="ti">Glass Harbour</div><div class="su">Eira Solberg · 24/192</div></div><div class="pct">61%</div></div><div class="prog"><i style="width:61%"></i></div><div class="qstat"><span>47.8 / 78.4 MB</span><span>8.2 MB/s · 4s</span></div></div>
+          <div class="qcard"><div class="top"><div class="art"></div><div class="meta"><div class="ti">Halcyon Drift</div><div class="su">Mara Vance · 24/96</div></div><div class="pct">23%</div></div><div class="prog"><i style="width:23%"></i></div><div class="qstat"><span>9.4 / 41.2 MB</span><span>6.0 MB/s · 5s</span></div></div>
+          <div class="seclbl">Tiếp theo · 2</div>
+          <div class="qmini"><div class="art a2" style="width:38px;height:38px"></div><div class="meta"><div class="ti">Paper Lanterns</div><div class="su">Kō · 16/44</div></div><span class="st wait">Đang chờ</span></div>
+          <div class="qmini"><div class="art a4" style="width:38px;height:38px"></div><div class="meta"><div class="ti">Cinder & Smoke</div><div class="su">Vell · 24/48</div></div><span class="st wait">Đang chờ</span></div>
+          <div class="seclbl">Xong hôm nay · 1</div>
+          <div class="qmini"><div class="art" style="width:38px;height:38px"><div class="ver"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l5 5L20 6"/></svg></div></div><div class="meta"><div class="ti">Northern Lines</div><div class="su">Mara Vance · 24/96</div></div><span class="st done">Đã verify</span></div>
+        </div>
+        <nav class="nav">
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Tìm</a>
+          <a class="on" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M18 16v6l4-3z" fill="currentColor" stroke="none"/></svg>Hàng đợi</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12a7 7 0 0114 0"/><path d="M8.5 12a3.5 3.5 0 017 0"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>Máy chủ</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>Thư viện</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>Cài đặt</a>
+        </nav>
+      </div></div>
+      <div class="caption"><div class="t">Hàng đợi · <span class="tag">song song, tiếp tục được</span></div><div class="d">Tốc độ và thời gian còn lại bằng chữ mono. Tải xong là gắn nhãn "Đã verify" khi phổ tần đạt.</div></div>
+    </div>
+
+    <!-- 5 SERVER -->
+    <div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots"><i></i><i></i><i></i> &nbsp;Wi-Fi</span></div>
+        <div class="ah"><h4>Máy chủ thư viện</h4><div class="sub">Trên mạng Wi-Fi của bạn</div></div>
+        <div class="body scroll">
+          <div class="live-hero">
+            <div class="pulse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12a7 7 0 0114 0"/><path d="M8.5 12a3.5 3.5 0 017 0"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg></div>
+            <div class="on">Đang phát sóng</div>
+            <h4>Lossless · Pixel</h4>
+            <div class="addr">192.168.1.42:8200</div>
+            <div class="serving">Đang phục vụ 1.284 bài · 142 album</div>
+          </div>
+          <div class="proto"><b>DLNA / UPnP</b><b>WebDAV</b><b>HTTP</b></div>
+          <div class="clients-h">Đang kết nối · 2</div>
+          <div class="client"><div class="dev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg></div><div class="nm"><b>PureBit</b><small>iPhone · DLNA</small></div><span class="play">đang phát</span></div>
+          <div class="client"><div class="dev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 19v2M17 19v2"/></svg></div><div class="nm"><b>USB Audio Player PRO</b><small>Máy tính bảng · DLNA</small></div><span class="play" style="color:var(--muted)">đang duyệt</span></div>
+          <div class="toggle"><div class="x"><b>Tiếp tục phục vụ khi chạy nền</b><small>Dịch vụ nền, vẫn chạy khi tắt màn hình</small></div><div class="sw-on"><i></i></div></div>
+        </div>
+        <nav class="nav">
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Tìm</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M18 16v6l4-3z" fill="currentColor" stroke="none"/></svg>Hàng đợi</a>
+          <a class="on" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12a7 7 0 0114 0"/><path d="M8.5 12a3.5 3.5 0 017 0"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>Máy chủ</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>Thư viện</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>Cài đặt</a>
+        </nav>
+      </div></div>
+      <div class="caption"><div class="t">Máy chủ thư viện · <span class="tag">điểm đinh của v2</span></div><div class="d">Một nút phơi thư viện đã verify qua DLNA và WebDAV. PureBit và UAPP duyệt như mọi nguồn mạng.</div></div>
+    </div>
+
+    <!-- 6 LIBRARY -->
+    <div>
+      <div class="phone"><div class="screen">
+        <div class="status"><span>9:41</span><span class="dots"><i></i><i></i><i></i> &nbsp;FLAC</span></div>
+        <div class="ah"><h4>Thư viện</h4><div class="sub">Đã tải về máy</div></div>
+        <div class="body scroll">
+          <div class="lib-sub"><span class="c">1.284 bài · 142 album · 61.4 GB</span><span class="sortby">Mới nhất ▾</span></div>
+          <div class="grid2">
+            <div class="album"><div class="cover" style="background:linear-gradient(135deg,#2a2630,#171419)"><span class="badge">24/192</span><span class="rg">RG -7.2</span></div><div class="nm">Tide & Tone</div><div class="ar">Eira Solberg</div></div>
+            <div class="album"><div class="cover" style="background:linear-gradient(135deg,#23272d,#15181c)"><span class="badge">24/96</span><span class="rg">RG -6.1</span></div><div class="nm">Northern Lines</div><div class="ar">Mara Vance</div></div>
+            <div class="album"><div class="cover" style="background:linear-gradient(135deg,#1d2b2a,#101817)"><span class="badge">16/44</span><span class="rg">RG -8.0</span></div><div class="nm">Slow Tide</div><div class="ar">Kō</div></div>
+            <div class="album"><div class="cover" style="background:linear-gradient(135deg,#2b2a1f,#181711)"><span class="badge">24/48</span><span class="rg">RG -5.4</span></div><div class="nm">Cinder & Smoke</div><div class="ar">Vell</div></div>
+            <div class="album"><div class="cover" style="background:linear-gradient(135deg,#28222e,#161118)"><span class="badge">24/96</span><span class="rg">RG -6.6</span></div><div class="nm">Lamplight</div><div class="ar">The Lamplighters</div></div>
+            <div class="album"><div class="cover" style="background:linear-gradient(135deg,#1f2a2e,#10171a)"><span class="badge">24/192</span><span class="rg">RG -7.9</span></div><div class="nm">Driftwood</div><div class="ar">Sela</div></div>
+          </div>
+        </div>
+        <nav class="nav">
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>Tìm</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M18 16v6l4-3z" fill="currentColor" stroke="none"/></svg>Hàng đợi</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12a7 7 0 0114 0"/><path d="M8.5 12a3.5 3.5 0 017 0"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/></svg>Máy chủ</a>
+          <a class="on" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>Thư viện</a>
+          <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>Cài đặt</a>
+        </nav>
+      </div></div>
+      <div class="caption"><div class="t">Thư viện · <span class="tag">file sẵn cho player</span></div><div class="d">Mỗi album mang sẵn bit-depth/tần số thật và ReplayGain để player khác đọc chuẩn.</div></div>
+    </div>
+
+  </div>
+  <p class="footnote">v0.2 áp dụng taste-skill. So với v0.1 (vàng-tím) ở file lossless-ui-concept.html.</p>
+</div>
+
+<script>
+(function(){
+  // grain tile
+  try{
+    var g=document.createElement('canvas'); g.width=g.height=120; var gc=g.getContext('2d');
+    var id=gc.createImageData(120,120);
+    for(var i=0;i<id.data.length;i+=4){ var v=(Math.random()*255)|0; id.data[i]=id.data[i+1]=id.data[i+2]=v; id.data[i+3]=255; }
+    gc.putImageData(id,0,0);
+    document.getElementById('grain').style.backgroundImage='url('+g.toDataURL()+')';
+  }catch(e){}
+
+  var stops=[[0,[3,3,8]],[0.18,[34,12,72]],[0.36,[120,28,109]],[0.55,[190,55,103]],[0.72,[233,99,99]],[0.86,[251,160,108]],[1,[252,253,191]]];
+  function magma(t){ if(t<=0)return stops[0][1]; if(t>=1)return stops[stops.length-1][1];
+    for(var i=1;i<stops.length;i++){ if(t<=stops[i][0]){ var a=stops[i-1],b=stops[i],f=(t-a[0])/(b[0]-a[0]);
+      return [a[1][0]+(b[1][0]-a[1][0])*f,a[1][1]+(b[1][1]-a[1][1])*f,a[1][2]+(b[1][2]-a[1][2])*f]; }} return stops[stops.length-1][1]; }
+  function energyAt(ff,tphase,seed){ var base=Math.pow(1-ff,1.25)*0.9+0.06,bands=0;
+    for(var h=1;h<=6;h++){ var c=(0.08*h)+0.05*Math.sin(tphase*0.7+h*1.3+seed),w=0.018+0.004*h; bands+=(0.5/h)*Math.exp(-Math.pow((ff-c)/w,2)); }
+    var air=0.10*(0.5+0.5*Math.sin(tphase*2.1+ff*40+seed))*Math.pow(ff,0.6),trans=0,beat=Math.sin(tphase*3.1+seed*2);
+    if(beat>0.86) trans=(beat-0.86)/0.14*0.5*(1-ff*0.3); return Math.max(0,Math.min(1,base*0.55+bands*0.8+air+trans)); }
+  function drawColumn(ctx,x,h,tphase,seed){ var img=ctx.createImageData(1,h);
+    for(var y=0;y<h;y++){ var ff=1-(y/h),e=energyAt(ff,tphase,seed); if(ff>0.97) e*=(1-(ff-0.97)/0.03)*0.7+0.3;
+      var c=magma(Math.pow(e,0.85)),o=y*4; img.data[o]=c[0];img.data[o+1]=c[1];img.data[o+2]=c[2];img.data[o+3]=255; } ctx.putImageData(img,x,0); }
+  function setup(canvas,seed,animate){ if(!canvas)return; var ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+    for(var x=0;x<W;x++) drawColumn(ctx,x,H,x*0.06,seed); if(!animate)return; var t=W*0.06,last=0;
+    function frame(now){ if(now-last>42){ last=now; ctx.drawImage(canvas,-1,0); t+=0.06; drawColumn(ctx,W-1,H,t,seed); } requestAnimationFrame(frame); } requestAnimationFrame(frame); }
+  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.addEventListener('DOMContentLoaded',function(){ setup(document.getElementById('specMini'),1.7,!reduce); setup(document.getElementById('specMain'),3.2,!reduce); });
+})();
+</script>
