@@ -8,6 +8,7 @@ import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/providers/search_provider.dart'
     as sp show searchProvider, SearchNotifier;
 import 'package:lossless_music_download/screens/search_screen.dart';
+import 'package:lossless_music_download/theme/app_theme.dart';
 
 // ---------------------------------------------------------------------------
 // Fake SearchNotifier that returns a fixed state without I/O
@@ -70,6 +71,7 @@ Future<void> pumpSearchScreen(
             .overrideWith(() => _FakeExtensionsController(extensions)),
       ],
       child: MaterialApp(
+        theme: appTheme(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('en'),
@@ -96,6 +98,25 @@ void main() {
 
       expect(find.text('Song'), findsOneWidget);
       expect(find.byIcon(Icons.download_outlined), findsOneWidget);
+    });
+
+    testWidgets(
+        'source banner uses accent-soft (primaryContainer) decoration',
+        (tester) async {
+      await pumpSearchScreen(
+        tester,
+        tracks: const [],
+        extensions: [_fakeExt(id: 'source1')],
+      );
+
+      final banner = tester.widget<Container>(
+        find.byKey(const Key('sourceBanner')),
+      );
+      final decoration = banner.decoration as BoxDecoration;
+      // primaryContainer == accent-soft #10241A in the brand theme
+      expect(decoration.color, const Color(0xFF10241A));
+      expect(decoration.border, isNotNull);
+      expect(decoration.borderRadius, BorderRadius.circular(12));
     });
 
     testWidgets(

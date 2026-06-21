@@ -8,6 +8,7 @@ import '../models/track.dart';
 import '../providers/downloads_provider.dart';
 import '../providers/extensions_provider.dart';
 import '../providers/search_provider.dart';
+import '../theme/app_tokens.dart';
 
 class SearchScreen extends ConsumerWidget {
   const SearchScreen({super.key});
@@ -43,30 +44,39 @@ class SearchScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(t.tabSearch)),
       body: Column(
         children: [
-          // Banner: "dang dung N nguon" -- kept exactly as before
-          GestureDetector(
-            onTap: () => context.go('/settings/sources'),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Theme.of(context).colorScheme.secondaryContainer,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    t.sourcesInUse(enabledCount),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSecondaryContainer,
-                        ),
-                  ),
-                  Icon(
-                    Icons.chevron_right,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.onSecondaryContainer,
-                  ),
-                ],
+          // Banner: "dang dung N nguon" -- accent-soft card with accent-line border
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: GestureDetector(
+              onTap: () => context.go('/settings/sources'),
+              child: Container(
+                key: const Key('sourceBanner'),
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  border: Border.all(color: context.tokens.accentLine),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      t.sourcesInUse(enabledCount),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onPrimaryContainer,
+                          ),
+                    ),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
