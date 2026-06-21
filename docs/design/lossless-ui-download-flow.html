@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lossless Music Download — Flow tải nhạc (v0.3)</title>
+<style>
+  :root{
+    /* ground + surfaces (ported from design system) */
+    --ground:#0E0F11; --surface:#15171A; --surface-2:#1C1F23; --surface-3:#252930;
+    --line:#2A2E34; --line-soft:#1E2228; --text:#E9EBEE; --muted:#8B929B; --muted-2:#565C65;
+    /* accent = #1DB954 heritage (recomputed soft/line/ink) */
+    --accent:#1DB954; --accent-soft:#10241A; --accent-line:#1f4d36; --accent-ink:#04150C;
+    --warn:#E0B341; --warn-soft:#2a2310; --warn-line:#4d4022;
+    --down:#E06A52; --down-soft:#2a1714;
+    --font-sans: system-ui, -apple-system, "SF Pro Text", "Segoe UI", Roboto, "Be Vietnam Pro", "Noto Sans", Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  *{ box-sizing:border-box; } html,body{ margin:0; }
+  body{
+    background:
+      radial-gradient(900px 600px at 8% -10%, #16191d 0%, rgba(22,25,29,0) 58%),
+      radial-gradient(800px 560px at 102% -4%, #0f1d16 0%, rgba(15,29,22,0) 55%),
+      var(--ground);
+    color:var(--text); font-family:var(--font-sans); -webkit-font-smoothing:antialiased;
+    line-height:1.5; min-height:100vh;
+  }
+  .wrap{ max-width:1320px; margin:0 auto; padding:48px 24px 96px; }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; letter-spacing:-.2px; }
+
+  /* header */
+  .kicker{ font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); font-weight:700; margin:0 0 10px; }
+  h1{ font-size:30px; margin:0 0 12px; letter-spacing:-.02em; font-weight:650; }
+  .lead{ max-width:760px; color:#C2C7CD; font-size:16px; margin:0 0 8px; }
+  .palette{ display:flex; gap:8px; flex-wrap:wrap; margin:22px 0 8px; }
+  .sw{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); background:var(--surface); border:1px solid var(--line); border-radius:9px; padding:7px 11px 7px 8px; }
+  .sw i{ width:16px; height:16px; border-radius:5px; flex:none; box-shadow:inset 0 0 0 1px rgba(255,255,255,.06); }
+
+  /* phone grid */
+  .frames{ display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:34px 28px; margin-top:40px; align-items:start; }
+  .frame{ display:flex; flex-direction:column; }
+  .cap{ margin:0 0 12px; }
+  .cap b{ font-size:14.5px; display:block; }
+  .cap small{ color:var(--muted); font-size:12.5px; }
+  .cap .tag{ color:var(--accent); }
+
+  .phone{ position:relative; background:#050607; border:1px solid #2b2f35; border-radius:34px; padding:9px;
+    box-shadow:0 34px 64px -34px rgba(0,0,0,.92), 0 0 0 1px rgba(255,255,255,.02) inset; }
+  .screen{ position:relative; background:var(--ground); border-radius:26px; overflow:hidden; height:660px; display:flex; flex-direction:column; }
+  .screen::after{ content:""; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(420px 280px at 6% -6%, rgba(29,185,84,.05), transparent 60%); }
+
+  /* status bar */
+  .sb{ display:flex; justify-content:space-between; align-items:center; padding:11px 18px 6px; font-size:12px; color:var(--text); }
+  .sb .r{ display:flex; gap:5px; align-items:center; opacity:.9; }
+  .sb .r i{ width:15px; height:11px; border-radius:2px; background:var(--text); display:inline-block; opacity:.85; }
+
+  /* app bar */
+  .ab{ padding:6px 18px 12px; }
+  .ab h2{ margin:0; font-size:25px; letter-spacing:-.02em; font-weight:600; }
+
+  .body{ flex:1; overflow:hidden; padding:0 14px; }
+
+  /* source banner */
+  .banner{ display:flex; align-items:center; gap:10px; background:var(--accent-soft); border:1px solid var(--accent-line);
+    border-radius:12px; padding:11px 13px; margin:2px 4px 12px; }
+  .banner svg{ flex:none; }
+  .banner .x{ font-size:13px; color:var(--text); }
+  .banner .x b{ color:var(--accent); font-weight:650; }
+  .banner .go{ margin-left:auto; color:var(--accent); font-size:13px; font-weight:600; white-space:nowrap; }
+
+  /* search field */
+  .search{ display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--line);
+    border-radius:13px; padding:12px 14px; margin:0 4px 14px; }
+  .search input{ all:unset; flex:1; color:var(--text); font-size:15px; }
+  .search .ph{ color:var(--muted); font-size:15px; }
+
+  /* track row */
+  .row{ display:flex; align-items:center; gap:12px; padding:9px 6px; border-radius:12px; }
+  .row:hover{ background:var(--surface); }
+  .cov{ width:46px; height:46px; border-radius:9px; flex:none; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:16px; color:#cfe8d8; background:linear-gradient(135deg,#1c3a2a,#142b20); box-shadow:inset 0 0 0 1px rgba(255,255,255,.05); }
+  .cov.b{ background:linear-gradient(135deg,#2a2230,#191420); color:#d8cfe8; }
+  .cov.c{ background:linear-gradient(135deg,#233040,#15202b); color:#cfdce8; }
+  .meta{ flex:1; min-width:0; }
+  .meta .t{ font-size:14.5px; font-weight:550; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .meta .s{ font-size:12.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .qbadge{ font-size:10px; font-weight:700; letter-spacing:.04em; padding:3px 7px; border-radius:6px;
+    border:1px solid var(--line); color:var(--muted); background:var(--surface-2); white-space:nowrap; }
+  .qbadge.hr{ color:var(--accent); border-color:var(--accent-line); background:var(--accent-soft); }
+  .dl{ width:38px; height:38px; flex:none; border-radius:10px; display:flex; align-items:center; justify-content:center;
+    color:var(--accent); border:1px solid var(--accent-line); background:var(--accent-soft); }
+
+  /* bottom nav */
+  .nav{ display:flex; justify-content:space-around; padding:10px 6px calc(10px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line-soft); background:rgba(13,14,16,.86); backdrop-filter:blur(14px); }
+  .nav a{ display:flex; flex-direction:column; align-items:center; gap:3px; font-size:10.5px; color:var(--muted-2); text-decoration:none; padding:4px 10px; border-radius:12px; }
+  .nav a.on{ color:var(--accent); }
+  .nav a.on .ic{ background:var(--accent-soft); }
+  .nav .ic{ width:42px; height:26px; border-radius:13px; display:flex; align-items:center; justify-content:center; }
+
+  /* bottom sheet */
+  .scrim{ position:absolute; inset:0; background:rgba(2,3,4,.62); }
+  .sheet{ position:absolute; left:0; right:0; bottom:0; background:var(--surface); border-top-left-radius:24px; border-top-right-radius:24px;
+    border-top:1px solid var(--line); padding:8px 18px calc(20px + env(safe-area-inset-bottom)); box-shadow:0 -30px 60px -30px rgba(0,0,0,.9); }
+  .grab{ width:38px; height:4px; border-radius:3px; background:var(--surface-3); margin:8px auto 16px; }
+  .sheet h3{ margin:0 0 2px; font-size:17px; }
+  .sheet .sub{ color:var(--muted); font-size:13px; margin:0 0 18px; }
+  .lbl{ font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted-2); font-weight:700; margin:16px 2px 9px; }
+  .chips{ display:flex; gap:8px; flex-wrap:wrap; }
+  .chip{ display:flex; align-items:center; gap:7px; font-size:13px; padding:8px 12px; border-radius:11px; border:1px solid var(--line); background:var(--surface-2); color:var(--text); }
+  .chip.on{ border-color:var(--accent); background:var(--accent-soft); color:var(--accent); font-weight:650; }
+  .dot{ width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 6px var(--accent); }
+  .dot.w{ background:var(--warn); box-shadow:0 0 6px var(--warn); }
+  .opt{ display:flex; align-items:center; gap:12px; padding:13px 14px; border:1px solid var(--line); border-radius:12px; margin-bottom:9px; background:var(--surface-2); }
+  .opt.on{ border-color:var(--accent-line); background:var(--accent-soft); }
+  .opt .o-t{ font-size:14px; font-weight:550; }
+  .opt .o-s{ font-size:12px; color:var(--muted); }
+  .opt .o-r{ margin-left:auto; }
+  .radio{ width:18px; height:18px; border-radius:50%; border:2px solid var(--muted-2); }
+  .radio.on{ border-color:var(--accent); background:radial-gradient(circle at 50% 50%, var(--accent) 0 38%, transparent 42%); }
+  .cta{ display:flex; align-items:center; justify-content:center; gap:9px; background:var(--accent); color:var(--accent-ink);
+    font-weight:700; font-size:15.5px; border-radius:13px; padding:15px; margin:20px 0 6px; }
+  .muted-note{ text-align:center; font-size:12px; color:var(--muted-2); }
+
+  /* queue */
+  .qitem{ background:var(--surface); border:1px solid var(--line-soft); border-radius:14px; padding:12px; margin:0 4px 11px; position:relative; overflow:hidden; }
+  .qfill{ position:absolute; inset:0; background:linear-gradient(90deg, rgba(29,185,84,.16), rgba(29,185,84,.03)); border-right:1px solid var(--accent-line); }
+  .qtop{ display:flex; align-items:center; gap:11px; position:relative; }
+  .qstat{ font-size:11.5px; margin-top:9px; position:relative; }
+  .qstat.dl{ color:var(--accent); font-weight:600; }
+  .qstat.err{ color:var(--down); font-weight:600; }
+  .qstat.wait{ color:var(--muted); }
+  .qact{ width:34px; height:34px; flex:none; border-radius:9px; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); color:var(--muted); background:var(--surface-2); }
+  .qact.acc{ color:var(--accent); border-color:var(--accent-line); background:var(--accent-soft); }
+  .qact.err{ color:var(--down); border-color:#4d2a22; background:var(--down-soft); }
+  .verok{ display:inline-flex; align-items:center; gap:5px; color:var(--accent); font-size:11.5px; font-weight:650; }
+
+  /* library */
+  .seg{ display:flex; background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:4px; margin:0 4px 14px; gap:4px; }
+  .seg b{ flex:1; text-align:center; font-size:13px; font-weight:550; color:var(--muted); padding:8px; border-radius:8px; }
+  .seg b.on{ color:var(--accent-ink); background:var(--accent); font-weight:700; }
+  .ghead{ display:flex; align-items:center; gap:10px; margin:6px 6px 8px; }
+  .ghead .gc{ width:34px; height:34px; border-radius:8px; background:linear-gradient(135deg,#1c3a2a,#142b20); }
+  .ghead .gt b{ font-size:13.5px; } .ghead .gt small{ display:block; color:var(--muted); font-size:11.5px; }
+  .badges{ display:flex; gap:6px; margin-top:4px; }
+  .b2{ font-size:10px; font-weight:650; padding:2px 6px; border-radius:5px; background:var(--surface-2); border:1px solid var(--line); color:var(--muted); }
+  .b2.acc{ color:var(--accent); border-color:var(--accent-line); background:var(--accent-soft); }
+  .serve{ display:flex; align-items:center; gap:11px; background:var(--surface); border:1px solid var(--accent-line); border-radius:13px; padding:13px; margin:8px 4px 4px; }
+  .serve .st{ font-size:13px; } .serve .st b{ color:var(--accent); } .serve .st small{ display:block; color:var(--muted); font-size:11.5px; }
+  .sw-tog{ margin-left:auto; width:42px; height:25px; border-radius:13px; background:var(--accent); position:relative; flex:none; }
+  .sw-tog i{ position:absolute; top:3px; right:3px; width:19px; height:19px; border-radius:50%; background:var(--accent-ink); }
+
+  /* verify */
+  .verhead{ display:flex; gap:14px; align-items:center; padding:4px 6px 14px; }
+  .verhead .vc{ width:72px; height:72px; border-radius:13px; background:linear-gradient(135deg,#1c3a2a,#142b20); flex:none; box-shadow:inset 0 0 0 1px rgba(255,255,255,.05); }
+  .verhead .vt b{ font-size:18px; display:block; letter-spacing:-.01em; }
+  .verhead .vt small{ color:var(--muted); font-size:13px; }
+  .verbadge{ display:flex; align-items:center; gap:9px; background:var(--accent-soft); border:1px solid var(--accent-line); border-radius:12px; padding:11px 13px; margin:0 4px 12px; }
+  .verbadge .vb-t{ font-size:13.5px; } .verbadge .vb-t b{ color:var(--accent); }
+  .spec{ margin:0 4px 12px; border:1px solid var(--line); border-radius:13px; overflow:hidden; background:#0a0c0d; }
+  .spec canvas{ display:block; width:100%; height:150px; }
+  .spec .sc{ display:flex; justify-content:space-between; padding:7px 11px; font-size:11px; color:var(--muted); border-top:1px solid var(--line-soft); }
+  .stats{ display:grid; grid-template-columns:1fr 1fr; gap:9px; margin:0 4px; }
+  .stat{ background:var(--surface); border:1px solid var(--line-soft); border-radius:11px; padding:11px 12px; }
+  .stat .sv{ font-size:16px; font-weight:650; } .stat .sl{ font-size:11px; color:var(--muted); margin-top:2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="kicker">Lossless Music Download · UI/UX v0.3</p>
+  <h1>Flow tải nhạc — hệ màu brand đã sửa</h1>
+  <p class="lead">Mượn nhịp "search → 1 chạm → hàng đợi → thư viện" mượt của SpotiFLAC, nhưng kết bằng 2 thứ riêng của Lossless Music: <b style="color:var(--accent)">Verified</b> (phân tích phổ chứng minh lossless thật) và <b style="color:var(--accent)">Serve</b> (phát qua DLNA/WebDAV). Áp dụng hệ design-token đã thiết kế: surface phân tầng, số kỹ thuật dùng mono tabular-nums, accent <span class="mono">#1DB954</span> sắc nét thay cho màu tự-sinh của <span class="mono">fromSeed</span>.</p>
+  <div class="palette">
+    <span class="sw"><i style="background:#0E0F11"></i>ground #0E0F11</span>
+    <span class="sw"><i style="background:#15171A"></i>surface #15171A</span>
+    <span class="sw"><i style="background:#1C1F23"></i>surface-2 #1C1F23</span>
+    <span class="sw"><i style="background:#252930"></i>surface-3 #252930</span>
+    <span class="sw"><i style="background:#1DB954"></i>accent #1DB954</span>
+    <span class="sw"><i style="background:#E0B341"></i>warn #E0B341</span>
+    <span class="sw"><i style="background:#E06A52"></i>down #E06A52</span>
+  </div>
+
+  <div class="frames">
+
+    <!-- 1. SEARCH -->
+    <div class="frame">
+      <div class="cap"><b>1 · Tìm</b><small>Kết quả + 1 chạm để tải. Badge chất lượng. Banner nguồn dùng accent-soft.</small></div>
+      <div class="phone"><div class="screen">
+        <div class="sb"><span class="mono">10:22</span><span class="r"><i style="width:11px"></i><i style="width:13px"></i><i style="width:24px"></i></span></div>
+        <div class="ab"><h2>Tìm</h2></div>
+        <div class="body">
+          <div class="banner">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+            <span class="x">đang dùng <b>2 nguồn</b></span><span class="go">›</span>
+          </div>
+          <div class="search"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8B929B" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg><span style="color:var(--text);font-size:15px">Adele</span></div>
+          <div class="row"><div class="cov">S</div><div class="meta"><div class="t">Set Fire to the Rain</div><div class="s">Adele · 21</div></div><span class="qbadge hr">HI-RES</span><div class="dl"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2.2"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></div></div>
+          <div class="row"><div class="cov b">S</div><div class="meta"><div class="t">Skyfall</div><div class="s">Adele · Skyfall</div></div><span class="qbadge">FLAC</span><div class="dl"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2.2"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></div></div>
+          <div class="row"><div class="cov c">R</div><div class="meta"><div class="t">Rolling in the Deep</div><div class="s">Adele · 21</div></div><span class="qbadge hr">HI-RES</span><div class="dl"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2.2"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></div></div>
+          <div class="row"><div class="cov">H</div><div class="meta"><div class="t">Hello</div><div class="s">Adele · 25</div></div><span class="qbadge">FLAC</span><div class="dl"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2.2"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></div></div>
+          <div class="row"><div class="cov b">E</div><div class="meta"><div class="t">Easy On Me</div><div class="s">Adele · 30</div></div><span class="qbadge hr">HI-RES</span><div class="dl"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2.2"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></div></div>
+        </div>
+        <div class="nav">
+          <a class="on"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span>Tìm</a>
+          <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#565C65" stroke-width="2"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></span>Hàng đợi</a>
+          <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#565C65" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 010-8.4M16.2 7.8a6 6 0 010 8.4M5 19a10 10 0 010-14M19 5a10 10 0 010 14"/></svg></span>Máy chủ</a>
+          <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#565C65" stroke-width="2"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="19" cy="16" r="3"/></svg></span>Thư viện</a>
+          <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#565C65" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></span>Cài đặt</a>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- 2. DOWNLOAD SHEET -->
+    <div class="frame">
+      <div class="cap"><b>2 · Sheet tải <span class="tag">(chọn nguồn + chất lượng)</span></b><small>Chỉ hiện nếu bật "hỏi trước khi tải". Mặc định tắt → tải thẳng theo Ưu tiên.</small></div>
+      <div class="phone"><div class="screen">
+        <div class="sb"><span class="mono">10:22</span><span class="r"><i style="width:11px"></i><i style="width:13px"></i><i style="width:24px"></i></span></div>
+        <div class="ab"><h2>Tìm</h2></div>
+        <div class="body" style="opacity:.35">
+          <div class="row"><div class="cov">S</div><div class="meta"><div class="t">Set Fire to the Rain</div><div class="s">Adele · 21</div></div><span class="qbadge hr">HI-RES</span></div>
+          <div class="row"><div class="cov b">S</div><div class="meta"><div class="t">Skyfall</div><div class="s">Adele</div></div><span class="qbadge">FLAC</span></div>
+        </div>
+        <div class="scrim"></div>
+        <div class="sheet">
+          <div class="grab"></div>
+          <div style="display:flex;gap:12px;align-items:center;margin-bottom:6px"><div class="cov" style="width:42px;height:42px">S</div><div><h3 style="margin:0">Set Fire to the Rain</h3><div class="sub" style="margin:0">Adele · 21</div></div></div>
+          <div class="lbl">Nguồn</div>
+          <div class="chips">
+            <span class="chip on"><span class="dot"></span>Qobuz</span>
+            <span class="chip"><span class="dot"></span>Tidal</span>
+            <span class="chip"><span class="dot w"></span>Deezer</span>
+          </div>
+          <div class="lbl">Chất lượng</div>
+          <div class="opt on"><div><div class="o-t">FLAC · Hi-Res</div><div class="o-s mono">24-bit / 96.0 kHz</div></div><div class="o-r"><span class="radio on"></span></div></div>
+          <div class="opt"><div><div class="o-t">FLAC · CD</div><div class="o-s mono">16-bit / 44.1 kHz</div></div><div class="o-r"><span class="radio"></span></div></div>
+          <div class="opt"><div><div class="o-t">MP3</div><div class="o-s mono">320 kbps</div></div><div class="o-r"><span class="radio"></span></div></div>
+          <div class="cta"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#04150C" stroke-width="2.4"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg>Tải xuống</div>
+          <div class="muted-note">Tắt hỏi lần sau trong Cài đặt</div>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- 3. QUEUE -->
+    <div class="frame">
+      <div class="cap"><b>3 · Hàng đợi</b><small>Tiến độ gradient + dòng trạng thái mono (MB · % · tốc độ · ETA). Trạng thái từng bài, huỷ/thử lại.</small></div>
+      <div class="phone"><div class="screen">
+        <div class="sb"><span class="mono">10:23</span><span class="r"><i style="width:11px"></i><i style="width:13px"></i><i style="width:24px"></i></span></div>
+        <div class="ab"><h2>Hàng đợi <span style="font-size:14px;color:var(--muted);font-weight:500">· 4 mục</span></h2></div>
+        <div class="body">
+          <div class="qitem">
+            <div class="qfill" style="right:40%"></div>
+            <div class="qtop"><div class="cov">S</div><div class="meta"><div class="t">Set Fire to the Rain</div><div class="s">Adele · Qobuz</div></div>
+              <div class="qact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8B929B" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></div></div>
+            <div class="qstat dl mono">187 MB / 312 MB · 60% · 11.4 MB/s · ~0m 11s</div>
+          </div>
+          <div class="qitem">
+            <div class="qtop"><div class="cov b">S</div><div class="meta"><div class="t">Skyfall</div><div class="s">Adele · Qobuz</div></div>
+              <div class="qact acc"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2"><path d="M12 3a9 9 0 109 9"/></svg></div></div>
+            <div class="qstat wait">Đang ghi metadata + ảnh bìa…</div>
+          </div>
+          <div class="qitem">
+            <div class="qtop"><div class="cov c">R</div><div class="meta"><div class="t">Rolling in the Deep</div><div class="s">Adele · Qobuz</div></div>
+              <div class="qact"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8B929B" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div></div>
+            <div class="qstat wait">Trong hàng đợi</div>
+          </div>
+          <div class="qitem">
+            <div class="qtop"><div class="cov b">E</div><div class="meta"><div class="t">Easy On Me</div><div class="s">Adele · Tidal</div></div>
+              <div class="qact err"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#E06A52" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7M21 4v4h-4"/></svg></div></div>
+            <div class="qstat err">Lỗi mạng · chạm để thử lại</div>
+          </div>
+          <div class="qitem">
+            <div class="qtop"><div class="cov">H</div><div class="meta"><div class="t">Hello</div><div class="s">Adele · 25</div></div>
+              <div class="qact acc"><svg width="15" height="15" viewBox="0 0 24 24" fill="#1DB954" stroke="none"><path d="M8 5v14l11-7z"/></svg></div></div>
+            <div class="qstat"><span class="verok"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg>Verified · đã vào Thư viện</span></div>
+          </div>
+        </div>
+        <div class="nav">
+          <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#565C65" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span>Tìm</a>
+          <a class="on"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></span>Hàng đợi</a>
+          <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#565C65" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 010-8.4M16.2 7.8a6 6 0 010 8.4"/></svg></span>Máy chủ</a>
+          <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#565C65" stroke-width="2"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="19" cy="16" r="3"/></svg></span>Thư viện</a>
+          <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#565C65" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span>Cài đặt</a>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- 4. LIBRARY -->
+    <div class="frame">
+      <div class="cap"><b>4 · Thư viện</b><small>Nhóm Album/Single, badge FLAC·24/96·nguồn (mono), dấu Verified. Banner Serve ở dưới.</small></div>
+      <div class="phone"><div class="screen">
+        <div class="sb"><span class="mono">10:25</span><span class="r"><i style="width:11px"></i><i style="width:13px"></i><i style="width:24px"></i></span></div>
+        <div class="ab"><h2>Thư viện</h2></div>
+        <div class="body">
+          <div class="seg"><b class="on">Tất cả</b><b>Album</b><b>Single</b></div>
+          <div class="ghead"><div class="gc"></div><div class="gt"><b>21</b><small>Adele · 4 bài · FLAC</small></div></div>
+          <div class="row"><div class="cov">S</div><div class="meta"><div class="t">Set Fire to the Rain</div><div class="badges"><span class="b2 acc">FLAC</span><span class="b2 mono">24/96</span><span class="b2">Qobuz</span></div></div><span class="verok"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg></span></div>
+          <div class="row"><div class="cov c">R</div><div class="meta"><div class="t">Rolling in the Deep</div><div class="badges"><span class="b2 acc">FLAC</span><span class="b2 mono">24/96</span><span class="b2">Qobuz</span></div></div><span class="verok"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg></span></div>
+          <div class="ghead" style="margin-top:12px"><div class="gc" style="background:linear-gradient(135deg,#233040,#15202b)"></div><div class="gt"><b>25</b><small>Adele · 1 bài · FLAC</small></div></div>
+          <div class="row"><div class="cov">H</div><div class="meta"><div class="t">Hello</div><div class="badges"><span class="b2 acc">FLAC</span><span class="b2 mono">16/44</span><span class="b2">Tidal</span></div></div><span class="verok"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2.4"><path d="M20 6L9 17l-5-5"/></svg></span></div>
+          <div class="serve">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 010-8.4M16.2 7.8a6 6 0 010 8.4M5 19a10 10 0 010-14M19 5a10 10 0 010 14"/></svg>
+            <div class="st"><b>Đang phát qua DLNA · WebDAV</b><small>12 bài · PureBit, UAPP, Poweramp thấy được</small></div>
+            <div class="sw-tog"><i></i></div>
+          </div>
+        </div>
+        <div class="nav">
+          <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#565C65" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg></span>Tìm</a>
+          <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#565C65" stroke-width="2"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></span>Hàng đợi</a>
+          <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#565C65" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 010-8.4M16.2 7.8a6 6 0 010 8.4"/></svg></span>Máy chủ</a>
+          <a class="on"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="19" cy="16" r="3"/></svg></span>Thư viện</a>
+          <a><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#565C65" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span>Cài đặt</a>
+        </div>
+      </div></div>
+    </div>
+
+    <!-- 5. VERIFY + SERVE -->
+    <div class="frame">
+      <div class="cap"><b>5 · Verified <span class="tag">(điểm khác biệt)</span></b><small>Phổ là "điểm nóng" duy nhất. Chứng minh lossless thật, không phải FLAC giả từ MP3. Kèm Serve.</small></div>
+      <div class="phone"><div class="screen">
+        <div class="sb"><span class="mono">10:26</span><span class="r"><i style="width:11px"></i><i style="width:13px"></i><i style="width:24px"></i></span></div>
+        <div class="body" style="padding-top:8px">
+          <div class="verhead"><div class="vc"></div><div class="vt"><b>Set Fire to the Rain</b><small>Adele · 21</small></div></div>
+          <div class="verbadge">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2.2"><path d="M12 2l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V5z"/><path d="M9 12l2 2 4-4"/></svg>
+            <div class="vb-t"><b>Lossless thật</b> — phổ đầy tới 48 kHz<br><span class="mono" style="color:var(--muted);font-size:11.5px">FLAC 24-bit / 96.0 kHz · DR12</span></div>
+          </div>
+          <div class="spec">
+            <canvas id="spec" width="600" height="300"></canvas>
+            <div class="sc mono"><span>0 kHz</span><span>24</span><span>cutoff 48 kHz ✓</span></div>
+          </div>
+          <div class="stats">
+            <div class="stat"><div class="sv mono">24-bit</div><div class="sl">Độ sâu bit</div></div>
+            <div class="stat"><div class="sv mono">96.0 kHz</div><div class="sl">Tần số lấy mẫu</div></div>
+            <div class="stat"><div class="sv mono">2,304 kbps</div><div class="sl">Bitrate trung bình</div></div>
+            <div class="stat"><div class="sv mono">DR12</div><div class="sl">Dynamic range</div></div>
+          </div>
+          <div class="serve" style="margin-top:14px">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2"><circle cx="12" cy="12" r="2"/><path d="M7.8 16.2a6 6 0 010-8.4M16.2 7.8a6 6 0 010 8.4"/></svg>
+            <div class="st"><b>Phát cho thiết bị khác</b><small>DLNA / WebDAV</small></div>
+            <div class="sw-tog"><i></i></div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</div>
+<script>
+  // Fake "real lossless" spectrogram: energy stays present up to the top band.
+  var c = document.getElementById('spec'); var x = c.getContext('2d');
+  var W = c.width, H = c.height;
+  for (var col = 0; col < W; col += 3){
+    for (var row = 0; row < H; row += 3){
+      var freq = 1 - row / H;               // 0 bottom .. 1 top
+      var base = 0.85 - freq * 0.45;        // gentle high-freq rolloff (natural)
+      var n = Math.sin(col*0.07 + row*0.11) * 0.5 + 0.5;
+      var amp = Math.max(0, base * (0.55 + n*0.5) - (freq>0.96?0.6:0)); // tiny cut only at very top
+      if (amp <= 0.02) continue;
+      var g = Math.floor(120 + amp*135), r = Math.floor(amp*40), b = Math.floor(amp*70);
+      x.fillStyle = 'rgba('+r+','+g+','+b+','+(0.15+amp*0.7)+')';
+      x.fillRect(col, row, 3, 3);
+    }
+  }
+  // cutoff marker near top (48 kHz)
+  x.strokeStyle = 'rgba(29,185,84,0.6)'; x.setLineDash([5,4]); x.lineWidth = 1.5;
+  x.beginPath(); x.moveTo(0, H*0.06); x.lineTo(W, H*0.06); x.stroke();
+</script>
+</body>
+</html>
