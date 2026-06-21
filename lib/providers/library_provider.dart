@@ -8,8 +8,20 @@ class LibraryEntry {
   final String path;
   final String name;
   final int sizeBytes;
+  final String? artistName;
+  final String? albumName;
+  final String format;
+  final bool verified;
 
-  const LibraryEntry(this.path, this.name, this.sizeBytes);
+  const LibraryEntry({
+    required this.path,
+    required this.name,
+    required this.sizeBytes,
+    this.artistName,
+    this.albumName,
+    required this.format,
+    required this.verified,
+  });
 }
 
 const _audioExtensions = {
@@ -33,9 +45,33 @@ final libraryProvider = FutureProvider<List<LibraryEntry>>((ref) async {
       .where(
         (f) => _audioExtensions.contains('.${f.path.split('.').last.toLowerCase()}'),
       );
-  final entries = files
-      .map((f) => LibraryEntry(f.path, f.uri.pathSegments.last, f.lengthSync()))
-      .toList()
+  final entries = files.map((f) {
+    final relativePath = f.path.startsWith(dir)
+        ? f.path.substring(dir.length).replaceFirst(RegExp(r'^/+'), '')
+        : f.path;
+    final segments = relativePath.split('/').where((s) => s.isNotEmpty).toList();
+
+    String? artistName;
+    String? albumName;
+    if (segments.length >= 3) {
+      artistName = segments[0];
+      albumName = segments[1];
+    }
+
+    final ext = f.path.split('.').last.toUpperCase();
+    final format = ext;
+    final verified = format == 'FLAC';
+
+    return LibraryEntry(
+      path: f.path,
+      name: f.uri.pathSegments.last,
+      sizeBytes: f.lengthSync(),
+      artistName: artistName,
+      albumName: albumName,
+      format: format,
+      verified: verified,
+    );
+  }).toList()
     ..sort((a, b) => a.name.compareTo(b.name));
   return entries;
 });

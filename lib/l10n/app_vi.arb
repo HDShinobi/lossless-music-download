@@ -79,5 +79,17 @@
   "downloadCta": "Tải xuống",
   "queueStatusQueued": "Trong hàng đợi",
   "queueStatusFailed": "Lỗi · chạm để thử lại",
-  "queueStatusDone": "Verified · đã vào Thư viện"
+  "queueStatusDone": "Verified · đã vào Thư viện",
+  "libraryAll": "Tất cả",
+  "libraryAlbums": "Album",
+  "librarySingles": "Single",
+  "serveBannerTitle": "Phát qua DLNA · WebDAV",
+  "serveBannerSubtitle": "{count} bài cho thiết bị khác",
+  "@serveBannerSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

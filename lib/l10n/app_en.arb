@@ -79,5 +79,17 @@
   "downloadCta": "Tải xuống",
   "queueStatusQueued": "In queue",
   "queueStatusFailed": "Failed · tap to retry",
-  "queueStatusDone": "Verified · in Library"
+  "queueStatusDone": "Verified · in Library",
+  "libraryAll": "All",
+  "libraryAlbums": "Albums",
+  "librarySingles": "Singles",
+  "serveBannerTitle": "Serving via DLNA · WebDAV",
+  "serveBannerSubtitle": "{count} tracks to other devices",
+  "@serveBannerSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

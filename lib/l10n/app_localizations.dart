@@ -493,6 +493,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Verified · in Library'**
   String get queueStatusDone;
+
+  /// No description provided for @libraryAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get libraryAll;
+
+  /// No description provided for @libraryAlbums.
+  ///
+  /// In en, this message translates to:
+  /// **'Albums'**
+  String get libraryAlbums;
+
+  /// No description provided for @librarySingles.
+  ///
+  /// In en, this message translates to:
+  /// **'Singles'**
+  String get librarySingles;
+
+  /// No description provided for @serveBannerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Serving via DLNA · WebDAV'**
+  String get serveBannerTitle;
+
+  /// No description provided for @serveBannerSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} tracks to other devices'**
+  String serveBannerSubtitle(int count);
 }
 
 class _AppLocalizationsDelegate

@@ -210,4 +210,21 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get queueStatusDone => 'Verified · đã vào Thư viện';
+
+  @override
+  String get libraryAll => 'Tất cả';
+
+  @override
+  String get libraryAlbums => 'Album';
+
+  @override
+  String get librarySingles => 'Single';
+
+  @override
+  String get serveBannerTitle => 'Phát qua DLNA · WebDAV';
+
+  @override
+  String serveBannerSubtitle(int count) {
+    return '$count bài cho thiết bị khác';
+  }
 }

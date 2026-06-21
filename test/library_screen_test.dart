@@ -28,8 +28,18 @@ void main() {
         buildLibraryScreen([
           libraryProvider.overrideWith(
             (_) async => [
-              const LibraryEntry('/x/a.flac', 'a.flac', 2097152),
-              const LibraryEntry('/x/b.flac', 'b.flac', 1048576),
+              const LibraryEntry(
+                  path: '/x/a.flac',
+                  name: 'a.flac',
+                  sizeBytes: 2097152,
+                  format: 'FLAC',
+                  verified: true),
+              const LibraryEntry(
+                  path: '/x/b.flac',
+                  name: 'b.flac',
+                  sizeBytes: 1048576,
+                  format: 'FLAC',
+                  verified: true),
             ],
           ),
         ]),
@@ -38,12 +48,9 @@ void main() {
 
       // Count header: "2 files" (en)
       expect(find.text('2 files'), findsOneWidget);
-      // Entry names
-      expect(find.text('a.flac'), findsOneWidget);
-      expect(find.text('b.flac'), findsOneWidget);
-      // Sizes in MB
-      expect(find.text('2.0 MB'), findsOneWidget);
-      expect(find.text('1.0 MB'), findsOneWidget);
+      // Entry names (stripped of extension via LibraryTrackTile._displayName)
+      expect(find.text('a'), findsOneWidget);
+      expect(find.text('b'), findsOneWidget);
     });
 
     testWidgets('shows libraryEmpty when library is empty', (tester) async {

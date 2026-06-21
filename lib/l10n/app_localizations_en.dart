@@ -210,4 +210,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get queueStatusDone => 'Verified · in Library';
+
+  @override
+  String get libraryAll => 'All';
+
+  @override
+  String get libraryAlbums => 'Albums';
+
+  @override
+  String get librarySingles => 'Singles';
+
+  @override
+  String get serveBannerTitle => 'Serving via DLNA · WebDAV';
+
+  @override
+  String serveBannerSubtitle(int count) {
+    return '$count tracks to other devices';
+  }
 }
