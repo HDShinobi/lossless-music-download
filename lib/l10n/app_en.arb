@@ -55,5 +55,9 @@
   "searchEmpty": "No results.",
   "searchNoSources": "No sources yet. Install one in Discover.",
   "searchError": "Search failed.",
-  "download": "Download"
+  "download": "Download",
+  "downloadStarted": "Download started",
+  "downloadFailed": "Download failed",
+  "queueEmpty": "No downloads in queue.",
+  "cancelDownload": "Cancel download"
 }

@@ -55,5 +55,9 @@
   "searchEmpty": "Không có kết quả.",
   "searchNoSources": "Chưa có nguồn nào. Vào Khám phá để cài.",
   "searchError": "Tìm kiếm lỗi.",
-  "download": "Tải"
+  "download": "Tải",
+  "downloadStarted": "Đã bắt đầu tải",
+  "downloadFailed": "Tải thất bại",
+  "queueEmpty": "Không có tải xuống nào trong hàng đợi.",
+  "cancelDownload": "Huỷ tải"
 }

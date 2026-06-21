@@ -1,17 +1,31 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import '../models/track.dart';
+import '../providers/downloads_provider.dart';
 import '../providers/extensions_provider.dart';
 import '../providers/search_provider.dart';
 
 class SearchScreen extends ConsumerWidget {
   const SearchScreen({super.key});
 
-  void _onDownload(BuildContext context, Track track) {
+  void _onDownload(BuildContext context, WidgetRef ref, Track track) {
+    final t = AppLocalizations.of(context);
+    final controller = ref.read(downloadControllerProvider);
+    unawaited(
+      controller.start(track).catchError((Object _) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(t.downloadFailed)),
+          );
+        }
+      }),
+    );
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Download: ${track.name}')),
+      SnackBar(content: Text(t.downloadStarted)),
     );
   }
 
@@ -70,7 +84,11 @@ class SearchScreen extends ConsumerWidget {
             ),
           ),
           // Results body
-          Expanded(child: _SearchBody(onDownload: _onDownload)),
+          Expanded(
+            child: _SearchBody(
+              onDownload: (ctx, track) => _onDownload(ctx, ref, track),
+            ),
+          ),
         ],
       ),
     );

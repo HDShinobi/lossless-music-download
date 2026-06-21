@@ -141,4 +141,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get priorityEmpty => 'No sources for this group yet.';
+
+  @override
+  String get searchHint => 'Search songs, albums...';
+
+  @override
+  String get searchEmpty => 'No results.';
+
+  @override
+  String get searchNoSources => 'No sources yet. Install one in Discover.';
+
+  @override
+  String get searchError => 'Search failed.';
+
+  @override
+  String get download => 'Download';
+
+  @override
+  String get downloadStarted => 'Download started';
+
+  @override
+  String get downloadFailed => 'Download failed';
+
+  @override
+  String get queueEmpty => 'No downloads in queue.';
+
+  @override
+  String get cancelDownload => 'Cancel download';
 }

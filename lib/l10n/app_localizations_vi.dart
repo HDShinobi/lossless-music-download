@@ -141,4 +141,31 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get priorityEmpty => 'Chưa có nguồn nào cho mục này.';
+
+  @override
+  String get searchHint => 'Tìm bài hát, album...';
+
+  @override
+  String get searchEmpty => 'Không có kết quả.';
+
+  @override
+  String get searchNoSources => 'Chưa có nguồn nào. Vào Khám phá để cài.';
+
+  @override
+  String get searchError => 'Tìm kiếm lỗi.';
+
+  @override
+  String get download => 'Tải';
+
+  @override
+  String get downloadStarted => 'Đã bắt đầu tải';
+
+  @override
+  String get downloadFailed => 'Tải thất bại';
+
+  @override
+  String get queueEmpty => 'Không có tải xuống nào trong hàng đợi.';
+
+  @override
+  String get cancelDownload => 'Huỷ tải';
 }

@@ -361,6 +361,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No sources for this group yet.'**
   String get priorityEmpty;
+
+  /// No description provided for @searchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search songs, albums...'**
+  String get searchHint;
+
+  /// No description provided for @searchEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No results.'**
+  String get searchEmpty;
+
+  /// No description provided for @searchNoSources.
+  ///
+  /// In en, this message translates to:
+  /// **'No sources yet. Install one in Discover.'**
+  String get searchNoSources;
+
+  /// No description provided for @searchError.
+  ///
+  /// In en, this message translates to:
+  /// **'Search failed.'**
+  String get searchError;
+
+  /// No description provided for @download.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get download;
+
+  /// No description provided for @downloadStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Download started'**
+  String get downloadStarted;
+
+  /// No description provided for @downloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Download failed'**
+  String get downloadFailed;
+
+  /// No description provided for @queueEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No downloads in queue.'**
+  String get queueEmpty;
+
+  /// No description provided for @cancelDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel download'**
+  String get cancelDownload;
 }
 
 class _AppLocalizationsDelegate
