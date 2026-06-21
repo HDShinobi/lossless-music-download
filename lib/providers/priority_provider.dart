@@ -34,28 +34,44 @@ class PriorityController extends AsyncNotifier<PriorityState> {
     return PriorityState(_reconcile(dlCand, dl), _reconcile(mdCand, md));
   }
 
+  // Note: an extensionsProvider change triggers build(), which reconciles
+  // saved priority from the backend — this overrides any in-flight optimistic
+  // reorder. That is known and acceptable: the reconciled order is authoritative.
+
   Future<void> reorderDownload(int oldI, int newI) async {
     final s = state.value;
     if (s == null) return;
+    final prev = s; // capture pre-reorder state for rollback
     final list = [...s.download];
     if (newI > oldI) newI -= 1;
     list.insert(newI, list.removeAt(oldI));
     state = AsyncData(PriorityState(list, s.metadata));
-    await ref
-        .read(backendBridgeProvider)
-        .setDownloadPriority(list.map((e) => e.id).toList());
+    try {
+      await ref
+          .read(backendBridgeProvider)
+          .setDownloadPriority(list.map((e) => e.id).toList());
+    } catch (e) {
+      state = AsyncData(prev); // revert UI to last-good order
+      rethrow; // let caller/UI surface it
+    }
   }
 
   Future<void> reorderMetadata(int oldI, int newI) async {
     final s = state.value;
     if (s == null) return;
+    final prev = s; // capture pre-reorder state for rollback
     final list = [...s.metadata];
     if (newI > oldI) newI -= 1;
     list.insert(newI, list.removeAt(oldI));
     state = AsyncData(PriorityState(s.download, list));
-    await ref
-        .read(backendBridgeProvider)
-        .setMetadataPriority(list.map((e) => e.id).toList());
+    try {
+      await ref
+          .read(backendBridgeProvider)
+          .setMetadataPriority(list.map((e) => e.id).toList());
+    } catch (e) {
+      state = AsyncData(prev); // revert UI to last-good order
+      rethrow; // let caller/UI surface it
+    }
   }
 }
 

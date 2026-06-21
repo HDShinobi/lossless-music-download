@@ -71,7 +71,7 @@ final _testExts = [
 ];
 
 ProviderContainer _makeContainer({
-  required FakePriorityBridge bridge,
+  required BackendBridge bridge,
   List<InstalledExtension>? exts,
 }) {
   return ProviderContainer(
@@ -91,6 +91,36 @@ class _FakeExtController extends ExtensionsController {
 
   @override
   Future<List<InstalledExtension>> build() async => _exts;
+}
+
+// ---------------------------------------------------------------------------
+// Fake bridge that throws on set* calls.
+// ---------------------------------------------------------------------------
+class FakeThrowingBridge extends BackendBridge {
+  final List<String> _downloadPriority;
+  final List<String> _metadataPriority;
+
+  FakeThrowingBridge({
+    List<String> downloadPriority = const [],
+    List<String> metadataPriority = const [],
+  })  : _downloadPriority = downloadPriority,
+        _metadataPriority = metadataPriority;
+
+  @override
+  Future<List<String>> getDownloadPriority() async => _downloadPriority;
+
+  @override
+  Future<List<String>> getMetadataPriority() async => _metadataPriority;
+
+  @override
+  Future<void> setDownloadPriority(List<String> ids) async {
+    throw Exception('bridge error: setDownloadPriority failed');
+  }
+
+  @override
+  Future<void> setMetadataPriority(List<String> ids) async {
+    throw Exception('bridge error: setMetadataPriority failed');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +226,68 @@ void main() {
       expect(after.metadata.map((e) => e.id).toList(), ['extB', 'extC']);
       expect(bridge.setMetadataCalls, hasLength(1));
       expect(bridge.setMetadataCalls.first, ['extB', 'extC']);
+    });
+  });
+
+  group('priorityProvider - rollback on bridge failure', () {
+    test('reorderDownload reverts state and rethrows when setDownloadPriority throws',
+        () async {
+      // Start: download = [extB, extA] (extB saved first)
+      final bridge = FakeThrowingBridge(
+        downloadPriority: ['extB'],
+        metadataPriority: [],
+      );
+      final container = _makeContainer(bridge: bridge);
+      addTearDown(container.dispose);
+
+      await container.read(priorityProvider.future);
+
+      final before = container.read(priorityProvider).value!;
+      final originalOrder = before.download.map((e) => e.id).toList();
+
+      // Attempt reorder: move index 0 → 2 (should throw and revert)
+      await expectLater(
+        container.read(priorityProvider.notifier).reorderDownload(0, 2),
+        throwsException,
+      );
+
+      // State must have reverted to original order
+      final after = container.read(priorityProvider).value!;
+      expect(
+        after.download.map((e) => e.id).toList(),
+        originalOrder,
+        reason: 'state must revert to pre-reorder order when bridge call fails',
+      );
+    });
+
+    test('reorderMetadata reverts state and rethrows when setMetadataPriority throws',
+        () async {
+      // Start: metadata = [extC, extB] (extC saved first)
+      final bridge = FakeThrowingBridge(
+        downloadPriority: [],
+        metadataPriority: ['extC'],
+      );
+      final container = _makeContainer(bridge: bridge);
+      addTearDown(container.dispose);
+
+      await container.read(priorityProvider.future);
+
+      final before = container.read(priorityProvider).value!;
+      final originalOrder = before.metadata.map((e) => e.id).toList();
+
+      // Attempt reorder: move index 0 → 2 (should throw and revert)
+      await expectLater(
+        container.read(priorityProvider.notifier).reorderMetadata(0, 2),
+        throwsException,
+      );
+
+      // State must have reverted to original order
+      final after = container.read(priorityProvider).value!;
+      expect(
+        after.metadata.map((e) => e.id).toList(),
+        originalOrder,
+        reason: 'state must revert to pre-reorder order when bridge call fails',
+      );
     });
   });
 }
