@@ -251,5 +251,24 @@ void main() {
         }
       },
     );
+
+    // Regression: cancelling the change-aggregator dialog must not throw
+    // "A TextEditingController was used after being disposed".
+    testWidgets(
+      'cancelling the change-aggregator dialog does not throw',
+      (tester) async {
+        await pumpDiscoverTab(tester, catalog: [_fakeStoreExt()]);
+
+        await tester.tap(find.text('Change')); // changeAggregator (en)
+        await tester.pumpAndSettle();
+        expect(find.byType(TextField), findsOneWidget); // dialog open
+
+        await tester.tap(find.text('Cancel')); // cancel (en)
+        await tester.pumpAndSettle(); // drive the dismiss animation
+
+        expect(tester.takeException(), isNull);
+        expect(find.byType(TextField), findsNothing); // dialog closed
+      },
+    );
   });
 }

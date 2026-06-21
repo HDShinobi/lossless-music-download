@@ -156,33 +156,18 @@ class _AggregatorRow extends ConsumerWidget {
     AppLocalizations t,
     String currentUrl,
   ) async {
-    final controller = TextEditingController(text: currentUrl);
+    // The dialog owns its TextEditingController (see _ChangeAggregatorDialog),
+    // so the controller is disposed with the dialog widget — not synchronously
+    // after showDialog() returns, which raced the dismiss animation and threw
+    // "A TextEditingController was used after being disposed".
     final result = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(t.changeAggregatorTitle),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(hintText: t.aggregatorUrlHint),
-          autofocus: true,
-          keyboardType: TextInputType.url,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(t.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
-            child: Text(t.save),
-          ),
-        ],
-      ),
+      builder: (_) => _ChangeAggregatorDialog(initialUrl: currentUrl),
     );
-    controller.dispose();
 
-    if (result != null && result.isNotEmpty) {
-      final uri = Uri.tryParse(result.trim());
+    final trimmed = result?.trim() ?? '';
+    if (trimmed.isNotEmpty) {
+      final uri = Uri.tryParse(trimmed);
       if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https') || uri.host.isEmpty) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -191,7 +176,7 @@ class _AggregatorRow extends ConsumerWidget {
         }
         return;
       }
-      await ref.read(discoverProvider.notifier).setAggregatorUrl(result);
+      await ref.read(discoverProvider.notifier).setAggregatorUrl(trimmed);
     }
   }
 }
@@ -299,6 +284,55 @@ class _ExtensionTile extends StatelessWidget {
       title: Text(ext.displayName),
       subtitle: Text(subtitle),
       trailing: trailing,
+    );
+  }
+}
+
+/// Change-aggregator dialog content. Owns its [TextEditingController] and
+/// disposes it in [State.dispose] — which Flutter calls only after the dialog's
+/// exit animation finishes, avoiding the "used after disposed" race that
+/// happened when the controller was disposed right after showDialog() returned.
+/// Pops `null` on cancel, or the trimmed URL string on save.
+class _ChangeAggregatorDialog extends StatefulWidget {
+  const _ChangeAggregatorDialog({required this.initialUrl});
+
+  final String initialUrl;
+
+  @override
+  State<_ChangeAggregatorDialog> createState() =>
+      _ChangeAggregatorDialogState();
+}
+
+class _ChangeAggregatorDialogState extends State<_ChangeAggregatorDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialUrl);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(t.changeAggregatorTitle),
+      content: TextField(
+        controller: _controller,
+        decoration: InputDecoration(hintText: t.aggregatorUrlHint),
+        keyboardType: TextInputType.url,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(t.cancel),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: Text(t.save),
+        ),
+      ],
     );
   }
 }
