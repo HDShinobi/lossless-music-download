@@ -10,6 +10,8 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    repositories { flatDir { dirs("libs") } }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -25,6 +27,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = 1
         versionName = "0.1.0"
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     buildTypes {
@@ -38,4 +43,8 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
 }
