@@ -18,3 +18,78 @@ func Ping() string {
 func GetDownloadProgress() string {
 	return gobackend.GetDownloadProgress()
 }
+
+// --- Extension management ---
+
+// InitExtensionSystem initialises the extension subsystem with the given
+// extensions directory and data directory.
+func InitExtensionSystem(extensionsDir, dataDir string) error {
+	return gobackend.InitExtensionSystem(extensionsDir, dataDir)
+}
+
+// LoadExtensionFromPath installs an extension from a local file path and
+// returns a JSON-encoded result or an error.
+func LoadExtensionFromPath(filePath string) (string, error) {
+	return gobackend.LoadExtensionFromPath(filePath)
+}
+
+// GetInstalledExtensions returns a JSON-encoded list of installed extensions.
+func GetInstalledExtensions() (string, error) {
+	return gobackend.GetInstalledExtensions()
+}
+
+// SetExtensionEnabledByID enables or disables an extension by its ID.
+func SetExtensionEnabledByID(id string, enabled bool) error {
+	return gobackend.SetExtensionEnabledByID(id, enabled)
+}
+
+// RemoveExtensionByID uninstalls the extension with the given ID.
+func RemoveExtensionByID(id string) error {
+	return gobackend.RemoveExtensionByID(id)
+}
+
+// --- Search ---
+
+// SearchTracksWithMetadataProvidersJSON searches for tracks using all
+// available metadata providers and returns a JSON-encoded result.
+func SearchTracksWithMetadataProvidersJSON(query string, limit int, includeExtensions bool) (string, error) {
+	return gobackend.SearchTracksWithMetadataProvidersJSON(query, limit, includeExtensions)
+}
+
+// --- Download ---
+
+// DownloadByStrategy starts a download using the strategy encoded in
+// requestJSON and returns a JSON-encoded result.
+func DownloadByStrategy(requestJSON string) (string, error) {
+	return gobackend.DownloadByStrategy(requestJSON)
+}
+
+// GetAllDownloadProgress returns a JSON-encoded snapshot of all active
+// download progress entries.
+func GetAllDownloadProgress() string {
+	return gobackend.GetAllDownloadProgress()
+}
+
+// CancelDownload cancels the download identified by itemID.
+func CancelDownload(itemID string) {
+	gobackend.CancelDownload(itemID)
+}
+
+// SetDownloadDirectory sets the default output directory for downloads.
+func SetDownloadDirectory(path string) error {
+	return gobackend.SetDownloadDirectory(path)
+}
+
+// AllowDownloadDir grants the backend access to a directory (used on
+// platforms that require explicit directory permission grants).
+func AllowDownloadDir(path string) {
+	gobackend.AllowDownloadDir(path)
+}
+
+// --- Duplicate detection ---
+
+// CheckDuplicate checks whether a track identified by isrc already exists
+// in outputDir and returns a JSON-encoded result.
+func CheckDuplicate(outputDir, isrc string) (string, error) {
+	return gobackend.CheckDuplicate(outputDir, isrc)
+}

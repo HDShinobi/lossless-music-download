@@ -12,10 +12,65 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
             .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "ping" -> result.success(Bridge.ping())
-                    "getDownloadProgress" -> result.success(Bridge.getDownloadProgress())
-                    else -> result.notImplemented()
+                try {
+                    when (call.method) {
+                        "ping" -> result.success(Bridge.ping())
+                        "getDownloadProgress" -> result.success(Bridge.getDownloadProgress())
+                        "initExtensionSystem" -> {
+                            Bridge.initExtensionSystem(
+                                call.argument<String>("extDir")!!,
+                                call.argument<String>("dataDir")!!
+                            )
+                            result.success(null)
+                        }
+                        "loadExtensionFromPath" -> result.success(
+                            Bridge.loadExtensionFromPath(call.argument<String>("path")!!)
+                        )
+                        "getInstalledExtensions" -> result.success(Bridge.getInstalledExtensions())
+                        "setExtensionEnabled" -> {
+                            Bridge.setExtensionEnabledByID(
+                                call.argument<String>("id")!!,
+                                call.argument<Boolean>("enabled")!!
+                            )
+                            result.success(null)
+                        }
+                        "removeExtension" -> {
+                            Bridge.removeExtensionByID(call.argument<String>("id")!!)
+                            result.success(null)
+                        }
+                        "searchTracks" -> result.success(
+                            Bridge.searchTracksWithMetadataProvidersJSON(
+                                call.argument<String>("query")!!,
+                                (call.argument<Int>("limit") ?: 20).toLong(),
+                                call.argument<Boolean>("includeExtensions") ?: true
+                            )
+                        )
+                        "downloadByStrategy" -> result.success(
+                            Bridge.downloadByStrategy(call.argument<String>("requestJson")!!)
+                        )
+                        "getAllProgress" -> result.success(Bridge.getAllDownloadProgress())
+                        "cancelDownload" -> {
+                            Bridge.cancelDownload(call.argument<String>("itemId")!!)
+                            result.success(null)
+                        }
+                        "setDownloadDirectory" -> {
+                            Bridge.setDownloadDirectory(call.argument<String>("path")!!)
+                            result.success(null)
+                        }
+                        "allowDownloadDir" -> {
+                            Bridge.allowDownloadDir(call.argument<String>("path")!!)
+                            result.success(null)
+                        }
+                        "checkDuplicate" -> result.success(
+                            Bridge.checkDuplicate(
+                                call.argument<String>("outputDir")!!,
+                                call.argument<String>("isrc")!!
+                            )
+                        )
+                        else -> result.notImplemented()
+                    }
+                } catch (e: Exception) {
+                    result.error("BACKEND_ERROR", e.message, null)
                 }
             }
     }

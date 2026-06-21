@@ -17,4 +17,10 @@ void main() {
     expect(res, isNotNull);
     expect(() => jsonDecode(res!), returnsNormally); // valid JSON
   });
+
+  testWidgets('getAllProgress returns JSON', (tester) async {
+    final res = await channel.invokeMethod<String>('getAllProgress');
+    expect(res, isNotNull);
+    expect(() => jsonDecode(res!), returnsNormally);
+  });
 }
