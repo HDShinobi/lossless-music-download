@@ -158,7 +158,7 @@ void main() {
       await tester.tap(find.text('Discover'));
       await tester.pumpAndSettle();
 
-      // DiscoverTab is now shown — no "Coming soon" for Discover
+      // DiscoverTab is now shown - no "Coming soon" for Discover
       expect(
         find.text('No extensions yet. Check the aggregator source.'),
         findsOneWidget,
