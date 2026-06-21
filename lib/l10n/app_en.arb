@@ -27,5 +27,7 @@
     }
   },
   "enabled": "Enabled",
-  "disabled": "Disabled"
+  "disabled": "Disabled",
+  "extNotFound": "Extension not found",
+  "permNone": "No special permissions"
 }

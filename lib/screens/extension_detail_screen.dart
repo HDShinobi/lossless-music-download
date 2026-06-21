@@ -28,7 +28,7 @@ class ExtensionDetailScreen extends ConsumerWidget {
         if (ext == null) {
           return Scaffold(
             appBar: AppBar(title: Text(id)),
-            body: const Center(child: Text('Extension not found')),
+            body: Center(child: Text(t.extNotFound)),
           );
         }
         return _buildDetail(context, ref, t, ext);
@@ -170,21 +170,12 @@ class ExtensionDetailScreen extends ConsumerWidget {
                 ),
               ],
             ),
+          )
+        else
+          Text(
+            t.permNone,
+            style: Theme.of(context).textTheme.bodySmall,
           ),
-        // Storage permission row (always shown for installed extensions)
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.storage),
-            title: Text(t.permStorage),
-          ),
-        ),
-        // File write permission row
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.edit_document),
-            title: Text(t.permFile),
-          ),
-        ),
       ],
     );
   }

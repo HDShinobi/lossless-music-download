@@ -72,4 +72,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get disabled => 'Disabled';
+
+  @override
+  String get extNotFound => 'Extension not found';
+
+  @override
+  String get permNone => 'No special permissions';
 }

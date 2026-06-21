@@ -223,6 +223,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Disabled'**
   String get disabled;
+
+  /// No description provided for @extNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Extension not found'**
+  String get extNotFound;
+
+  /// No description provided for @permNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No special permissions'**
+  String get permNone;
 }
 
 class _AppLocalizationsDelegate

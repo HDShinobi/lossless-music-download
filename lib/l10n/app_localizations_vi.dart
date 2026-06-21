@@ -72,4 +72,10 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get disabled => 'Tắt';
+
+  @override
+  String get extNotFound => 'Không tìm thấy extension';
+
+  @override
+  String get permNone => 'Không yêu cầu quyền đặc biệt';
 }

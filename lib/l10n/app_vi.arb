@@ -27,5 +27,7 @@
     }
   },
   "enabled": "Bật",
-  "disabled": "Tắt"
+  "disabled": "Tắt",
+  "extNotFound": "Không tìm thấy extension",
+  "permNone": "Không yêu cầu quyền đặc biệt"
 }

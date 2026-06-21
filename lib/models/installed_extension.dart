@@ -22,7 +22,7 @@ class InstalledExtension {
 
   factory InstalledExtension.fromJson(Map<String, dynamic> j) => InstalledExtension(
         id: (j['id'] ?? '').toString(),
-        name: (j['display_name'] ?? j['name'] ?? '').toString(),
+        name: (j['name'] ?? '').toString(),
         version: (j['version'] ?? '').toString(),
         enabled: j['enabled'] == true,
         types: (j['types'] as List?)?.map((e) => e.toString()).toList() ?? const [],

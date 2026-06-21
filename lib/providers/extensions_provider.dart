@@ -28,13 +28,17 @@ class ExtensionsController extends AsyncNotifier<List<InstalledExtension>> {
   }
 
   Future<void> setEnabled(String id, bool enabled) async {
-    await _b.setExtensionEnabled(id, enabled);
-    await refresh();
+    state = await AsyncValue.guard(() async {
+      await _b.setExtensionEnabled(id, enabled);
+      return _b.getInstalledExtensions();
+    });
   }
 
   Future<void> remove(String id) async {
-    await _b.removeExtension(id);
-    await refresh();
+    state = await AsyncValue.guard(() async {
+      await _b.removeExtension(id);
+      return _b.getInstalledExtensions();
+    });
   }
 }
 

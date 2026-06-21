@@ -56,7 +56,8 @@ void main() {
       'types': ['download_provider', 'metadata_provider'],
     });
     expect(ext.id, 'deezer');
-    expect(ext.name, 'Deezer'); // reads display_name
+    expect(ext.name, 'deezer'); // reads Go package slug (name field)
+    expect(ext.displayName, 'Deezer'); // reads display_name
     expect(ext.version, '1.1.5');
     expect(ext.enabled, isTrue);
     expect(ext.types, containsAll(['download_provider', 'metadata_provider']));
@@ -82,8 +83,8 @@ void main() {
     });
 
     expect(ext.id, 'tidal');
-    expect(ext.displayName, 'Tidal HiFi');
-    expect(ext.name, 'Tidal HiFi'); // name mirrors displayName (reads display_name)
+    expect(ext.displayName, 'Tidal HiFi'); // reads display_name
+    expect(ext.name, 'tidal'); // reads Go package slug (name field)
     expect(ext.description, 'Tidal lossless download extension');
     expect(ext.iconPath, '/data/ext/tidal/icon.png');
     expect(ext.status, 'active');

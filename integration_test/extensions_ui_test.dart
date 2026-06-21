@@ -89,13 +89,13 @@ void main() {
     // ── Assertions ────────────────────────────────────────────────────────────
     expect(
       refreshedState.any(
-          (e) => e.id == 'dummy-ui-test' || e.name == 'Dummy UI Test'),
+          (e) => e.id == 'dummy-ui-test' || e.displayName == 'Dummy UI Test'),
       isTrue,
       reason: 'extensionsProvider list should contain the installed extension',
     );
 
     final ext = refreshedState.firstWhere(
-        (e) => e.id == 'dummy-ui-test' || e.name == 'Dummy UI Test');
+        (e) => e.id == 'dummy-ui-test' || e.displayName == 'Dummy UI Test');
 
     expect(ext.displayName, isNotEmpty,
         reason: 'displayName should be non-empty');

@@ -47,7 +47,7 @@ class SearchScreen extends ConsumerWidget {
               ),
             ),
           ),
-          const Expanded(child: Center(child: Text('Search'))),
+          Expanded(child: Center(child: Text(t.comingSoon))),
         ],
       ),
     );
