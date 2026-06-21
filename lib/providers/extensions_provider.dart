@@ -19,6 +19,11 @@ class ExtensionsController extends AsyncNotifier<List<InstalledExtension>> {
   Future<List<InstalledExtension>> build() async {
     final (ext, data) = await ref.read(appDirsProvider);
     await _b.initExtensionSystem(ext, data);
+    // initExtensionSystem only sets the directories; it does NOT load anything.
+    // Without this, extensions installed in a previous session stay on disk but
+    // are absent from the runtime after a restart (banner shows "0 sources",
+    // search finds nothing). Load them so persisted installs reappear.
+    await _b.loadExtensionsFromDir(ext);
     return _b.getInstalledExtensions();
   }
 

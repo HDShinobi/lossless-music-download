@@ -21,6 +21,9 @@ class _FakeBridge extends BackendBridge {
   Future<void> initExtensionSystem(String ext, String data) async {}
 
   @override
+  Future<String?> loadExtensionsFromDir(String dirPath) async => null;
+
+  @override
   Future<List<InstalledExtension>> getInstalledExtensions() async => _list;
 
   @override

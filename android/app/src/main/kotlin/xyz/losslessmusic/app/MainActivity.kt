@@ -27,6 +27,9 @@ class MainActivity : FlutterActivity() {
                             Bridge.loadExtensionFromPath(call.argument<String>("path")!!)
                         )
                         "getInstalledExtensions" -> result.success(Bridge.getInstalledExtensions())
+                        "loadExtensionsFromDir" -> result.success(
+                            Bridge.loadExtensionsFromDir(call.argument<String>("dirPath")!!)
+                        )
                         "setExtensionEnabled" -> {
                             Bridge.setExtensionEnabledByID(
                                 call.argument<String>("id")!!,

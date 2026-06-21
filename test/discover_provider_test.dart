@@ -44,17 +44,29 @@ class _FakeRegistryService extends ExtensionRegistryService {
 // ---------------------------------------------------------------------------
 class _FakeBackendBridge extends BackendBridge {
   final List<String> installCalls = [];
+  final List<(String, bool)> enabledCalls = [];
   final List<InstalledExtension> _extensions;
 
-  _FakeBackendBridge() : _extensions = const [];
+  /// JSON returned by installExtension (mimics the backend payload with `id`).
+  final String? installResult;
+
+  _FakeBackendBridge({this.installResult}) : _extensions = const [];
 
   @override
   Future<void> initExtensionSystem(String extDir, String dataDir) async {}
 
   @override
+  Future<String?> loadExtensionsFromDir(String dirPath) async => null;
+
+  @override
   Future<String?> installExtension(String path) async {
     installCalls.add(path);
-    return null;
+    return installResult;
+  }
+
+  @override
+  Future<void> setExtensionEnabled(String id, bool enabled) async {
+    enabledCalls.add((id, enabled));
   }
 
   @override
@@ -153,6 +165,59 @@ void main() {
       expect(svc.downloadCalls, ['deezer']);
     });
 
+    // Regression: the backend installs extensions DISABLED by default; install()
+    // must auto-enable so the source is usable without a second manual toggle.
+    test('install: auto-enables the extension using the backend id', () async {
+      final extDir = Directory.systemTemp.createTempSync('discover_enable_').path;
+      addTearDown(() => Directory(extDir).deleteSync(recursive: true));
+
+      final ext = _fakeStoreExt('deezer');
+      final svc = _FakeRegistryService.withData(
+        catalog: [ext],
+        downloadPaths: {'deezer': '$extDir/_dl/deezer.spotiflac-ext'},
+      );
+      // Backend returns the authoritative manifest id in its install payload.
+      final bridge = _FakeBackendBridge(
+        installResult: '{"id":"deezer","enabled":false}',
+      );
+      final container = _makeContainer(
+        registryService: svc,
+        bridge: bridge,
+        extDir: extDir,
+      );
+      addTearDown(container.dispose);
+
+      await container.read(discoverProvider.future);
+      await container.read(discoverProvider.notifier).install(ext);
+
+      expect(bridge.enabledCalls, [('deezer', true)],
+          reason: 'install must enable the freshly installed extension');
+    });
+
+    // Falls back to the StoreExtension id when the install payload has no id.
+    test('install: auto-enables via store id when payload lacks an id', () async {
+      final extDir = Directory.systemTemp.createTempSync('discover_enable2_').path;
+      addTearDown(() => Directory(extDir).deleteSync(recursive: true));
+
+      final ext = _fakeStoreExt('tidal');
+      final svc = _FakeRegistryService.withData(
+        catalog: [ext],
+        downloadPaths: {'tidal': '$extDir/_dl/tidal.spotiflac-ext'},
+      );
+      final bridge = _FakeBackendBridge(); // installResult == null
+      final container = _makeContainer(
+        registryService: svc,
+        bridge: bridge,
+        extDir: extDir,
+      );
+      addTearDown(container.dispose);
+
+      await container.read(discoverProvider.future);
+      await container.read(discoverProvider.notifier).install(ext);
+
+      expect(bridge.enabledCalls, [('tidal', true)]);
+    });
+
     test('install: extensionsProvider is invalidated (re-reads bridge)', () async {
       final extDir = Directory.systemTemp.createTempSync('discover_inv_').path;
       addTearDown(() => Directory(extDir).deleteSync(recursive: true));
@@ -246,10 +311,16 @@ class _FakeBackendBridgeWithCounter extends BackendBridge {
   Future<void> initExtensionSystem(String extDir, String dataDir) async {}
 
   @override
+  Future<String?> loadExtensionsFromDir(String dirPath) async => null;
+
+  @override
   Future<String?> installExtension(String path) async {
     installCalls.add(path);
     return null;
   }
+
+  @override
+  Future<void> setExtensionEnabled(String id, bool enabled) async {}
 
   @override
   Future<List<InstalledExtension>> getInstalledExtensions() async =>

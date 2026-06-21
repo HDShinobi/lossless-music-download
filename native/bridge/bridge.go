@@ -38,6 +38,13 @@ func GetInstalledExtensions() (string, error) {
 	return gobackend.GetInstalledExtensions()
 }
 
+// LoadExtensionsFromDir scans a directory and loads every persisted extension
+// into the runtime, so extensions installed in a previous session reappear
+// after an app restart. Returns a JSON summary {"loaded":[...],"errors":[...]}.
+func LoadExtensionsFromDir(dirPath string) (string, error) {
+	return gobackend.LoadExtensionsFromDir(dirPath)
+}
+
 // SetExtensionEnabledByID enables or disables an extension by its ID.
 func SetExtensionEnabledByID(id string, enabled bool) error {
 	return gobackend.SetExtensionEnabledByID(id, enabled)

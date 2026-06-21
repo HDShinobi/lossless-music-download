@@ -16,6 +16,13 @@ class BackendBridge {
   Future<String?> installExtension(String path) =>
       _c.invokeMethod<String>('loadExtensionFromPath', {'path': path});
 
+  /// Loads every persisted extension under [dirPath] into the runtime. Must be
+  /// called after [initExtensionSystem] on startup, otherwise extensions
+  /// installed in a previous session stay on disk but are absent from
+  /// [getInstalledExtensions]. Returns the backend JSON summary (ignored here).
+  Future<String?> loadExtensionsFromDir(String dirPath) =>
+      _c.invokeMethod<String>('loadExtensionsFromDir', {'dirPath': dirPath});
+
   Future<List<InstalledExtension>> getInstalledExtensions() async {
     final raw = await _c.invokeMethod<String>('getInstalledExtensions');
     if (raw == null || raw.isEmpty) return [];

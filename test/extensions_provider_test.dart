@@ -11,6 +11,7 @@ import 'package:lossless_music_download/services/backend_bridge.dart';
 class FakeBackendBridge extends BackendBridge {
   final List<InstalledExtension> _extensions;
   final List<String> initCalls = [];
+  final List<String> loadDirCalls = [];
   final List<(String, bool)> setEnabledCalls = [];
   final List<String> removeCalls = [];
 
@@ -19,6 +20,12 @@ class FakeBackendBridge extends BackendBridge {
   @override
   Future<void> initExtensionSystem(String extDir, String dataDir) async {
     initCalls.add('$extDir|$dataDir');
+  }
+
+  @override
+  Future<String?> loadExtensionsFromDir(String dirPath) async {
+    loadDirCalls.add(dirPath);
+    return null;
   }
 
   @override
@@ -108,6 +115,20 @@ void main() {
       expect(result.map((e) => e.id), containsAll(['deezer', 'tidal']));
       expect(fake.initCalls, hasLength(1));
       expect(fake.initCalls.first, '/fake/extensions|/fake/ext_data');
+    });
+
+    // Regression: build() must load persisted extensions from disk after init,
+    // otherwise extensions installed in a previous session vanish on restart
+    // (banner shows "0 sources", search finds nothing).
+    test('build loads extensions from the extensions dir after init', () async {
+      final fake = FakeBackendBridge([_fakeExt(id: 'deezer')]);
+      final container = _makeContainer(fake);
+      addTearDown(container.dispose);
+
+      await container.read(extensionsProvider.future);
+
+      expect(fake.loadDirCalls, ['/fake/extensions'],
+          reason: 'loadExtensionsFromDir must run on the extensions dir at startup');
     });
 
     test('setEnabled calls bridge and refreshes state', () async {

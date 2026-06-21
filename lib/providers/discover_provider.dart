@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -49,16 +50,39 @@ class DiscoverController extends AsyncNotifier<List<StoreExtension>> {
 
   Future<void> install(StoreExtension e) async {
     final (extDir, _) = await ref.read(appDirsProvider);
+    final bridge = ref.read(backendBridgeProvider);
     final path = await ref
         .read(registryServiceProvider)
         .downloadExtension(e, '$extDir/_dl');
     try {
-      await ref.read(backendBridgeProvider).installExtension(path);
+      final resultJson = await bridge.installExtension(path);
+      // The backend installs new extensions DISABLED by default. Since the user
+      // explicitly chose to install this source, enable it immediately so it is
+      // usable without a second manual toggle. This also persists `_enabled=true`,
+      // so the extension comes back enabled after an app restart.
+      final id = _installedId(resultJson) ?? e.id;
+      if (id.isNotEmpty) {
+        await bridge.setExtensionEnabled(id, true);
+      }
       ref.invalidate(extensionsProvider); // refresh installed list
     } catch (_) {
       try { await File(path).delete(); } catch (_) {}
       rethrow;
     }
+  }
+
+  /// Extracts the extension id from the JSON returned by `installExtension`
+  /// (the authoritative manifest name). Returns null if it cannot be parsed.
+  String? _installedId(String? installResultJson) {
+    if (installResultJson == null || installResultJson.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(installResultJson);
+      if (decoded is Map && decoded['id'] != null) {
+        final id = decoded['id'].toString();
+        return id.isEmpty ? null : id;
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<void> setAggregatorUrl(String url) async {
