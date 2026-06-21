@@ -23,4 +23,11 @@ void main() {
     expect(res, isNotNull);
     expect(() => jsonDecode(res!), returnsNormally);
   });
+
+  testWidgets('getDownloadPriority returns a valid JSON array', (tester) async {
+    final res = await channel.invokeMethod<String>('getDownloadPriority');
+    expect(res, isNotNull);
+    final decoded = jsonDecode(res!);
+    expect(decoded, isA<List>());
+  });
 }

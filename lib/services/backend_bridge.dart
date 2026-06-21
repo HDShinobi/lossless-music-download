@@ -87,4 +87,20 @@ class BackendBridge {
 
   Future<void> setExtensionSettings(String id, Map<String, dynamic> settings) =>
       _c.invokeMethod('setExtensionSettings', {'id': id, 'settingsJson': jsonEncode(settings)});
+
+  Future<List<String>> getDownloadPriority() async {
+    final raw = await _c.invokeMethod<String>('getDownloadPriority');
+    return raw == null || raw.isEmpty ? [] : (jsonDecode(raw) as List).map((e) => e.toString()).toList();
+  }
+
+  Future<void> setDownloadPriority(List<String> ids) =>
+      _c.invokeMethod('setDownloadPriority', {'priorityJson': jsonEncode(ids)});
+
+  Future<List<String>> getMetadataPriority() async {
+    final raw = await _c.invokeMethod<String>('getMetadataPriority');
+    return raw == null || raw.isEmpty ? [] : (jsonDecode(raw) as List).map((e) => e.toString()).toList();
+  }
+
+  Future<void> setMetadataPriority(List<String> ids) =>
+      _c.invokeMethod('setMetadataPriority', {'priorityJson': jsonEncode(ids)});
 }

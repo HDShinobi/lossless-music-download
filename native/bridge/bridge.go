@@ -100,6 +100,28 @@ func SetExtensionSettingsJSON(id, settingsJSON string) error {
 	return gobackend.SetExtensionSettingsJSON(id, settingsJSON)
 }
 
+// --- Provider priority ---
+
+// GetProviderPriorityJSON returns the current download provider priority as a
+// JSON-encoded array of provider/extension IDs.
+func GetProviderPriorityJSON() (string, error) { return gobackend.GetProviderPriorityJSON() }
+
+// SetProviderPriorityJSON sets the download provider priority from a
+// JSON-encoded array of provider/extension IDs.
+func SetProviderPriorityJSON(j string) error { return gobackend.SetProviderPriorityJSON(j) }
+
+// GetMetadataProviderPriorityJSON returns the current metadata provider
+// priority as a JSON-encoded array of provider/extension IDs.
+func GetMetadataProviderPriorityJSON() (string, error) {
+	return gobackend.GetMetadataProviderPriorityJSON()
+}
+
+// SetMetadataProviderPriorityJSON sets the metadata provider priority from a
+// JSON-encoded array of provider/extension IDs.
+func SetMetadataProviderPriorityJSON(j string) error {
+	return gobackend.SetMetadataProviderPriorityJSON(j)
+}
+
 // --- Duplicate detection ---
 
 // CheckDuplicate checks whether a track identified by isrc already exists

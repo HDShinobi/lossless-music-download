@@ -77,6 +77,16 @@ class MainActivity : FlutterActivity() {
                             )
                             result.success(null)
                         }
+                        "getDownloadPriority" -> result.success(Bridge.getProviderPriorityJSON())
+                        "setDownloadPriority" -> {
+                            Bridge.setProviderPriorityJSON(call.argument<String>("priorityJson")!!)
+                            result.success(null)
+                        }
+                        "getMetadataPriority" -> result.success(Bridge.getMetadataProviderPriorityJSON())
+                        "setMetadataPriority" -> {
+                            Bridge.setMetadataProviderPriorityJSON(call.argument<String>("priorityJson")!!)
+                            result.success(null)
+                        }
                         else -> result.notImplemented()
                     }
                 } catch (e: Exception) {
