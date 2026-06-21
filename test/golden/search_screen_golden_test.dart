@@ -6,10 +6,14 @@ import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/screens/search_screen.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
+import 'package:lossless_music_download/theme/app_theme.dart';
 
 class _EmptyBridge extends BackendBridge {
   @override
   Future<void> initExtensionSystem(String ext, String data) async {}
+
+  @override
+  Future<String?> loadExtensionsFromDir(String dirPath) async => null;
 
   @override
   Future<List<InstalledExtension>> getInstalledExtensions() async => [];
@@ -23,6 +27,7 @@ Widget _wrap(Locale locale) => ProviderScope(
         ),
       ],
       child: MaterialApp(
+        theme: appTheme(),
         locale: locale,
         supportedLocales: AppLocalizations.supportedLocales,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
