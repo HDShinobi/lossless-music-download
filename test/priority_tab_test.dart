@@ -47,7 +47,7 @@ final _extC = _fakeExt(
 );
 
 // ---------------------------------------------------------------------------
-// Fake PriorityController — returns fixed state without any async I/O.
+// Fake PriorityController - returns fixed state without any async I/O.
 // ---------------------------------------------------------------------------
 class _FakePriorityController extends PriorityController {
   final List<InstalledExtension> _download;
@@ -64,7 +64,7 @@ class _FakePriorityController extends PriorityController {
 }
 
 // ---------------------------------------------------------------------------
-// Helper — pumps PriorityTab inside ProviderScope + MaterialApp (en).
+// Helper - pumps PriorityTab inside ProviderScope + MaterialApp (en).
 // ---------------------------------------------------------------------------
 Future<void> pumpPriorityTab(
   WidgetTester tester, {
@@ -114,6 +114,10 @@ void main() {
         expect(find.text('Extension Alpha'), findsOneWidget);
         expect(find.text('Extension Beta'), findsOneWidget);
         expect(find.text('Extension Gamma'), findsOneWidget);
+
+        // Rank numbers should be visible
+        expect(find.text('1'), findsWidgets);
+        expect(find.text('2'), findsWidgets);
 
         // At least one ReorderableListView should be present
         expect(find.byType(ReorderableListView), findsWidgets);
