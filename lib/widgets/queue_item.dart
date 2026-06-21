@@ -53,7 +53,7 @@ class QueueItem extends ConsumerWidget {
     final String statusLine;
     switch (state) {
       case _ItemState.downloading:
-        final int? total = item.progress > 0
+        final int? total = (item.progress > 0 && item.bytesReceived > 0)
             ? (item.bytesReceived / item.progress).round()
             : null;
         statusLine = formatProgressLine(

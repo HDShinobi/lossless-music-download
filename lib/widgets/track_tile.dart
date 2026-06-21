@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lossless_music_download/l10n/app_localizations.dart';
 import '../models/track.dart';
 import '../theme/app_tokens.dart';
 
@@ -79,10 +80,13 @@ class TrackTile extends StatelessWidget {
               onTap: onDownload,
               child: Padding(
                 padding: const EdgeInsets.all(8),
-                child: Icon(
-                  Icons.download_outlined,
-                  size: 20,
-                  color: cs.onPrimaryContainer,
+                child: Tooltip(
+                  message: AppLocalizations.of(context).download,
+                  child: Icon(
+                    Icons.download_outlined,
+                    size: 20,
+                    color: cs.onPrimaryContainer,
+                  ),
                 ),
               ),
             ),

@@ -40,9 +40,7 @@ class LibraryTrackTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Center(
-              child: entry.name.isNotEmpty
-                  ? Icon(Icons.music_note, size: 20, color: cs.onSurfaceVariant)
-                  : Icon(Icons.music_note, size: 20, color: cs.onSurfaceVariant),
+              child: Icon(Icons.music_note, size: 20, color: cs.onSurfaceVariant),
             ),
           ),
           const SizedBox(width: 12),

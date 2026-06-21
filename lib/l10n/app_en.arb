@@ -76,7 +76,7 @@
   "settingAskBeforeDownloadDesc": "Show a sheet to pick source and quality for each download",
   "downloadSheetSource": "Source",
   "downloadSheetQuality": "Quality",
-  "downloadCta": "Tải xuống",
+  "downloadCta": "Download",
   "queueStatusQueued": "In queue",
   "queueStatusFailed": "Failed · tap to retry",
   "queueStatusDone": "Verified · in Library",
@@ -86,6 +86,14 @@
   "serveBannerTitle": "Serving via DLNA · WebDAV",
   "serveBannerSubtitle": "{count} tracks to other devices",
   "@serveBannerSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "albumTrackCount": "{count} tracks",
+  "@albumTrackCount": {
     "placeholders": {
       "count": {
         "type": "int"

@@ -124,7 +124,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       widgets.add(
         ListTile(
           title: Text(album),
-          subtitle: Text('$artist · ${tracks.length} tracks'),
+          subtitle: Text('$artist · ${AppLocalizations.of(context).albumTrackCount(tracks.length)}'),
         ),
       );
       for (final track in tracks) {

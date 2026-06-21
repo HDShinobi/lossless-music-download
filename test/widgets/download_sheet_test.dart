@@ -95,7 +95,7 @@ void main() {
       final sources = [_fakeSource(id: 'deezer', displayName: 'Deezer')];
       await _pumpAndShowSheet(tester, sources);
 
-      expect(find.text('Tải xuống'), findsOneWidget);
+      expect(find.text('Download'), findsOneWidget);
     });
 
     testWidgets('tapping CTA returns first source and first quality by default',
@@ -135,7 +135,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Tap CTA without changing selection
-      await tester.tap(find.text('Tải xuống'));
+      await tester.tap(find.text('Download'));
       await tester.pumpAndSettle();
 
       expect(result, isNotNull);
@@ -187,7 +187,7 @@ void main() {
       await tester.tap(find.text('MP3'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Tải xuống'));
+      await tester.tap(find.text('Download'));
       await tester.pumpAndSettle();
 
       expect(result!.sourceId, 'tidal');

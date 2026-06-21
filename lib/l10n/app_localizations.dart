@@ -473,7 +473,7 @@ abstract class AppLocalizations {
   /// No description provided for @downloadCta.
   ///
   /// In en, this message translates to:
-  /// **'Tải xuống'**
+  /// **'Download'**
   String get downloadCta;
 
   /// No description provided for @queueStatusQueued.
@@ -523,6 +523,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} tracks to other devices'**
   String serveBannerSubtitle(int count);
+
+  /// No description provided for @albumTrackCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} tracks'**
+  String albumTrackCount(int count);
 
   /// No description provided for @verifiedLossless.
   ///

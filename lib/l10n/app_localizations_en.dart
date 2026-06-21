@@ -200,7 +200,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadSheetQuality => 'Quality';
 
   @override
-  String get downloadCta => 'Tải xuống';
+  String get downloadCta => 'Download';
 
   @override
   String get queueStatusQueued => 'In queue';
@@ -226,6 +226,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String serveBannerSubtitle(int count) {
     return '$count tracks to other devices';
+  }
+
+  @override
+  String albumTrackCount(int count) {
+    return '$count tracks';
   }
 
   @override

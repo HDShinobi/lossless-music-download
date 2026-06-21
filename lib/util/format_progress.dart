@@ -16,8 +16,8 @@ String formatProgressLine({
 
   final segments = <String>[];
 
-  // First segment: done MB (and total MB if available)
-  if (totalBytes != null) {
+  // First segment: done MB (and total MB if available and non-zero)
+  if (totalBytes != null && totalBytes > 0) {
     final totalMb = totalBytes / mb;
     segments.add('${doneMb.toStringAsFixed(1)} MB / ${totalMb.toStringAsFixed(1)} MB');
     final pct = ((doneBytes / totalBytes) * 100).round();

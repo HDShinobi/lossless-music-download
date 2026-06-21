@@ -229,26 +229,31 @@ class AppLocalizationsVi extends AppLocalizations {
   }
 
   @override
+  String albumTrackCount(int count) {
+    return '$count bài';
+  }
+
+  @override
   String get verifiedLossless => 'Lossless thật';
 
   @override
-  String get verifiedUnknown => 'Chua xac minh';
+  String get verifiedUnknown => 'Chưa xác minh';
 
   @override
-  String get verifiedSpectrumNote => 'Pho minh hoa. Phan tich day du sap co.';
+  String get verifiedSpectrumNote => 'Phổ minh hoạ. Phân tích đầy đủ sắp có.';
 
   @override
-  String get statFormat => 'Dinh dang';
+  String get statFormat => 'Định dạng';
 
   @override
-  String get statSize => 'Dung luong';
+  String get statSize => 'Dung lượng';
 
   @override
-  String get statBitDepth => 'Do sau bit';
+  String get statBitDepth => 'Độ sâu bit';
 
   @override
-  String get statSampleRate => 'Tan so lay mau';
+  String get statSampleRate => 'Tần số lấy mẫu';
 
   @override
-  String get verifiedServeTitle => 'Phat cho thiet bi khac';
+  String get verifiedServeTitle => 'Phát cho thiết bị khác';
 }

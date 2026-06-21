@@ -92,12 +92,20 @@
       }
     }
   },
+  "albumTrackCount": "{count} bài",
+  "@albumTrackCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "verifiedLossless": "Lossless thật",
-  "verifiedUnknown": "Chua xac minh",
-  "verifiedSpectrumNote": "Pho minh hoa. Phan tich day du sap co.",
-  "statFormat": "Dinh dang",
-  "statSize": "Dung luong",
-  "statBitDepth": "Do sau bit",
-  "statSampleRate": "Tan so lay mau",
-  "verifiedServeTitle": "Phat cho thiet bi khac"
+  "verifiedUnknown": "Chưa xác minh",
+  "verifiedSpectrumNote": "Phổ minh hoạ. Phân tích đầy đủ sắp có.",
+  "statFormat": "Định dạng",
+  "statSize": "Dung lượng",
+  "statBitDepth": "Độ sâu bit",
+  "statSampleRate": "Tần số lấy mẫu",
+  "verifiedServeTitle": "Phát cho thiết bị khác"
 }

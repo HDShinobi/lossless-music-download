@@ -29,5 +29,15 @@ void main() {
       );
       expect(result, '187.0 MB / 312.0 MB · 60%');
     });
+
+    test('totalBytes == 0 does not throw and shows only MB segment', () {
+      final result = formatProgressLine(doneBytes: 0, totalBytes: 0);
+      expect(result, '0.0 MB');
+    });
+
+    test('doneBytes > 0 with totalBytes == 0 shows only done MB segment', () {
+      final result = formatProgressLine(doneBytes: 5242880, totalBytes: 0);
+      expect(result, '5.0 MB');
+    });
   });
 }
