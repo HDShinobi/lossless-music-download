@@ -7,17 +7,32 @@ import '../theme/app_tokens.dart';
 ///
 /// [qualityHint] is optional: `null` renders no badge; non-null renders a pill
 /// badge. `'HI-RES'` uses accent colours; any other value uses muted colours.
+///
+/// Multi-select support:
+/// - [selectionMode] when true, shows a checkbox instead of cover art and hides
+///   the download button. The whole row tap calls [onSelectToggle].
+/// - [selected] the checked state of the checkbox (only used when [selectionMode]).
+/// - [onLongPress] called when the user long-presses the tile in normal mode.
+/// - [onSelectToggle] called when the user taps the tile in selection mode.
 class TrackTile extends StatelessWidget {
   const TrackTile({
     super.key,
     required this.track,
     required this.onDownload,
     this.qualityHint,
+    this.selectionMode = false,
+    this.selected = false,
+    this.onLongPress,
+    this.onSelectToggle,
   });
 
   final Track track;
   final VoidCallback onDownload;
   final String? qualityHint;
+  final bool selectionMode;
+  final bool selected;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onSelectToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -25,12 +40,18 @@ class TrackTile extends StatelessWidget {
     final tokens = context.tokens;
     final tt = Theme.of(context).textTheme;
 
-    return Padding(
+    final rowContent = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         children: [
-          // Cover art
-          _CoverArt(track: track),
+          // Leading: checkbox in selection mode, cover art otherwise
+          if (selectionMode)
+            Checkbox(
+              value: selected,
+              onChanged: (_) => onSelectToggle?.call(),
+            )
+          else
+            _CoverArt(track: track),
           const SizedBox(width: 12),
           // Title / artists / badge
           Expanded(
@@ -71,28 +92,35 @@ class TrackTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // Download button
-          Material(
-            color: cs.primaryContainer,
-            borderRadius: BorderRadius.circular(10),
-            child: InkWell(
+          // Download button — hidden in selection mode
+          if (!selectionMode)
+            Material(
+              color: cs.primaryContainer,
               borderRadius: BorderRadius.circular(10),
-              onTap: onDownload,
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Tooltip(
-                  message: AppLocalizations.of(context).download,
-                  child: Icon(
-                    Icons.download_outlined,
-                    size: 20,
-                    color: cs.onPrimaryContainer,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: onDownload,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Tooltip(
+                    message: AppLocalizations.of(context).download,
+                    child: Icon(
+                      Icons.download_outlined,
+                      size: 20,
+                      color: cs.onPrimaryContainer,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       ),
+    );
+
+    return InkWell(
+      onTap: selectionMode ? onSelectToggle : null,
+      onLongPress: selectionMode ? null : onLongPress,
+      child: rowContent,
     );
   }
 

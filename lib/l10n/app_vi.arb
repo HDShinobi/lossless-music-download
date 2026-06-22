@@ -118,5 +118,22 @@
   "serverAddress": "Địa chỉ",
   "serverFolder": "Thư mục phát",
   "serverHint": "Tìm thiết bị này trong app phát nhạc DLNA (PureBit, UAPP, Poweramp).",
-  "serverCopied": "Đã sao chép địa chỉ"
+  "serverCopied": "Đã sao chép địa chỉ",
+  "selectionCount": "{count} đã chọn",
+  "@selectionCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "batchAddedToQueue": "Đã thêm {count} bài vào hàng đợi",
+  "@batchAddedToQueue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selectionClear": "Bỏ chọn"
 }

@@ -291,4 +291,17 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get serverCopied => 'Đã sao chép địa chỉ';
+
+  @override
+  String selectionCount(int count) {
+    return '$count đã chọn';
+  }
+
+  @override
+  String batchAddedToQueue(int count) {
+    return 'Đã thêm $count bài vào hàng đợi';
+  }
+
+  @override
+  String get selectionClear => 'Bỏ chọn';
 }

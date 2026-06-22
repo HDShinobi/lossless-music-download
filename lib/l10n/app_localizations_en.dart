@@ -292,4 +292,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverCopied => 'Address copied';
+
+  @override
+  String selectionCount(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String batchAddedToQueue(int count) {
+    return 'Added $count tracks to the queue';
+  }
+
+  @override
+  String get selectionClear => 'Clear';
 }

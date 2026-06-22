@@ -643,6 +643,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Address copied'**
   String get serverCopied;
+
+  /// No description provided for @selectionCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} selected'**
+  String selectionCount(int count);
+
+  /// No description provided for @batchAddedToQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Added {count} tracks to the queue'**
+  String batchAddedToQueue(int count);
+
+  /// No description provided for @selectionClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get selectionClear;
 }
 
 class _AppLocalizationsDelegate

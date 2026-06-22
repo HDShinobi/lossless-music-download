@@ -118,5 +118,22 @@
   "serverAddress": "Address",
   "serverFolder": "Served folder",
   "serverHint": "Find this device in your DLNA player (PureBit, UAPP, Poweramp).",
-  "serverCopied": "Address copied"
+  "serverCopied": "Address copied",
+  "selectionCount": "{count} selected",
+  "@selectionCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "batchAddedToQueue": "Added {count} tracks to the queue",
+  "@batchAddedToQueue": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "selectionClear": "Clear"
 }

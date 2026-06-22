@@ -13,6 +13,10 @@ Future<void> pumpTrackTile(
   required Track track,
   String? qualityHint,
   required VoidCallback onDownload,
+  bool selectionMode = false,
+  bool selected = false,
+  VoidCallback? onLongPress,
+  VoidCallback? onSelectToggle,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -25,6 +29,10 @@ Future<void> pumpTrackTile(
           track: track,
           qualityHint: qualityHint,
           onDownload: onDownload,
+          selectionMode: selectionMode,
+          selected: selected,
+          onLongPress: onLongPress,
+          onSelectToggle: onSelectToggle,
         ),
       ),
     ),
@@ -116,6 +124,78 @@ void main() {
       );
 
       expect(find.byIcon(Icons.download_outlined), findsOneWidget);
+    });
+
+    testWidgets('normal mode shows no Checkbox', (tester) async {
+      await pumpTrackTile(
+        tester,
+        track: track,
+        onDownload: () {},
+      );
+
+      expect(find.byType(Checkbox), findsNothing);
+    });
+  });
+
+  group('TrackTile selection mode', () {
+    testWidgets(
+        'selectionMode:true selected:true shows checked checkbox and no download button',
+        (tester) async {
+      await pumpTrackTile(
+        tester,
+        track: track,
+        onDownload: () {},
+        selectionMode: true,
+        selected: true,
+        onSelectToggle: () {},
+      );
+
+      expect(find.byType(Checkbox), findsOneWidget);
+      expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isTrue);
+      expect(find.byIcon(Icons.download_outlined), findsNothing);
+    });
+
+    testWidgets('selectionMode:true selected:false shows unchecked checkbox',
+        (tester) async {
+      await pumpTrackTile(
+        tester,
+        track: track,
+        onDownload: () {},
+        selectionMode: true,
+        selected: false,
+        onSelectToggle: () {},
+      );
+
+      expect(find.byType(Checkbox), findsOneWidget);
+      expect(tester.widget<Checkbox>(find.byType(Checkbox)).value, isFalse);
+    });
+
+    testWidgets('tapping in selection mode calls onSelectToggle',
+        (tester) async {
+      var called = false;
+      await pumpTrackTile(
+        tester,
+        track: track,
+        onDownload: () {},
+        selectionMode: true,
+        onSelectToggle: () => called = true,
+      );
+
+      await tester.tap(find.text(track.name));
+      expect(called, isTrue);
+    });
+
+    testWidgets('long-press in normal mode calls onLongPress', (tester) async {
+      var called = false;
+      await pumpTrackTile(
+        tester,
+        track: track,
+        onDownload: () {},
+        onLongPress: () => called = true,
+      );
+
+      await tester.longPress(find.text(track.name));
+      expect(called, isTrue);
     });
   });
 }

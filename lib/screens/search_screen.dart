@@ -13,10 +13,50 @@ import '../theme/app_tokens.dart';
 import '../widgets/download_sheet.dart';
 import '../widgets/track_tile.dart';
 
-class SearchScreen extends ConsumerWidget {
+class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
-  Future<void> _onDownload(BuildContext context, WidgetRef ref, Track track) async {
+  @override
+  ConsumerState<SearchScreen> createState() => _SearchScreenState();
+}
+
+class _SearchScreenState extends ConsumerState<SearchScreen> {
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+
+  // -------------------------------------------------------------------------
+  // Selection helpers
+  // -------------------------------------------------------------------------
+
+  void _enterSelectionMode(String trackId) {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.add(trackId);
+    });
+  }
+
+  void _toggleSelection(String trackId) {
+    setState(() {
+      if (_selectedIds.contains(trackId)) {
+        _selectedIds.remove(trackId);
+      } else {
+        _selectedIds.add(trackId);
+      }
+    });
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Single-track download (normal mode)
+  // -------------------------------------------------------------------------
+
+  Future<void> _onDownload(BuildContext context, Track track) async {
     final t = AppLocalizations.of(context);
     final controller = ref.read(downloadControllerProvider);
     final askBefore = ref.read(askBeforeDownloadProvider);
@@ -70,8 +110,34 @@ class SearchScreen extends ConsumerWidget {
     );
   }
 
+  // -------------------------------------------------------------------------
+  // Batch download (selection mode)
+  // -------------------------------------------------------------------------
+
+  void _batchDownload(List<Track> allTracks) {
+    final t = AppLocalizations.of(context);
+    final controller = ref.read(downloadControllerProvider);
+    final count = _selectedIds.length;
+
+    for (final track in allTracks) {
+      if (_selectedIds.contains(track.id)) {
+        unawaited(controller.start(track));
+      }
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(t.batchAddedToQueue(count))),
+    );
+
+    _exitSelectionMode();
+  }
+
+  // -------------------------------------------------------------------------
+  // Build
+  // -------------------------------------------------------------------------
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
     final asyncExts = ref.watch(extensionsProvider);
     final enabledCount = asyncExts.when(
@@ -80,11 +146,47 @@ class SearchScreen extends ConsumerWidget {
       error: (e, st) => 0,
     );
 
+    final AppBar appBar;
+    if (_selectionMode && _selectedIds.isNotEmpty) {
+      appBar = AppBar(
+        automaticallyImplyLeading: false,
+        title: Text(t.selectionCount(_selectedIds.length)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download_outlined),
+            tooltip: t.downloadCta,
+            onPressed: () {
+              final tracks = ref.read(searchProvider).value ?? [];
+              _batchDownload(tracks);
+            },
+          ),
+          IconButton(
+            key: const Key('selectionClear'),
+            icon: const Icon(Icons.close),
+            tooltip: t.selectionClear,
+            onPressed: _exitSelectionMode,
+          ),
+        ],
+      );
+    } else {
+      appBar = AppBar(
+        title: Text(t.tabSearch),
+        // If we somehow ended up in selection mode with 0 selected, show close
+        leading: _selectionMode
+            ? IconButton(
+                key: const Key('selectionClear'),
+                icon: const Icon(Icons.close),
+                onPressed: _exitSelectionMode,
+              )
+            : null,
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(title: Text(t.tabSearch)),
+      appBar: appBar,
       body: Column(
         children: [
-          // Banner: "dang dung N nguon" -- accent-soft card with accent-line border
+          // Banner: "using N sources" — accent-soft card with accent-line border
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: GestureDetector(
@@ -136,7 +238,12 @@ class SearchScreen extends ConsumerWidget {
           // Results body
           Expanded(
             child: _SearchBody(
-              onDownload: (ctx, track) => unawaited(_onDownload(ctx, ref, track)),
+              selectionMode: _selectionMode,
+              selectedIds: _selectedIds,
+              onDownload: (ctx, track) =>
+                  unawaited(_onDownload(ctx, track)),
+              onLongPress: (trackId) => _enterSelectionMode(trackId),
+              onSelectToggle: (trackId) => _toggleSelection(trackId),
             ),
           ),
         ],
@@ -146,8 +253,19 @@ class SearchScreen extends ConsumerWidget {
 }
 
 class _SearchBody extends ConsumerWidget {
+  final bool selectionMode;
+  final Set<String> selectedIds;
   final void Function(BuildContext context, Track track) onDownload;
-  const _SearchBody({required this.onDownload});
+  final void Function(String trackId) onLongPress;
+  final void Function(String trackId) onSelectToggle;
+
+  const _SearchBody({
+    required this.selectionMode,
+    required this.selectedIds,
+    required this.onDownload,
+    required this.onLongPress,
+    required this.onSelectToggle,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -174,7 +292,11 @@ class _SearchBody extends ConsumerWidget {
             return TrackTile(
               track: track,
               qualityHint: null,
+              selectionMode: selectionMode,
+              selected: selectedIds.contains(track.id),
               onDownload: () => onDownload(context, track),
+              onLongPress: () => onLongPress(track.id),
+              onSelectToggle: () => onSelectToggle(track.id),
             );
           },
         );
