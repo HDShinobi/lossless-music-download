@@ -16,6 +16,7 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell> {
   StreamSubscription<String>? _shareSub;
+  String? _handledInitialUrl;
 
   @override
   void initState() {
@@ -25,24 +26,34 @@ class _MainShellState extends ConsumerState<MainShell> {
       if (!mounted) return;
       final pending = svc.consumePendingUrl();
       if (pending != null) {
+        _handledInitialUrl = pending;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _handleSharedUrl(pending);
         });
       }
     });
-    _shareSub = ShareIntentService().sharedUrlStream.listen((url) {
-      if (mounted) _handleSharedUrl(url);
+    _shareSub = svc.sharedUrlStream.listen((url) {
+      if (!mounted) return;
+      if (url == _handledInitialUrl) {
+        _handledInitialUrl = null;
+        return; // skip: already handled as pending URL
+      }
+      _handleSharedUrl(url);
     });
   }
 
-  void _handleSharedUrl(String url) {
+  Future<void> _handleSharedUrl(String url) async {
     widget.shell.goBranch(0, initialLocation: widget.shell.currentIndex == 0);
-    ref.read(searchProvider.notifier).resolveFromUrl(url);
     if (!context.mounted) return;
     final t = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(t.loadingSharedLink)),
-    );
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(SnackBar(content: Text(t.loadingSharedLink)));
+    await ref.read(searchProvider.notifier).resolveFromUrl(url);
+    if (!mounted) return;
+    final tracks = ref.read(searchProvider).value;
+    if (tracks != null && tracks.isEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(t.shareUrlNotRecognized)));
+    }
   }
 
   @override
