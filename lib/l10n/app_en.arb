@@ -80,6 +80,7 @@
   "queueStatusQueued": "In queue",
   "queueStatusFailed": "Failed · tap to retry",
   "queueStatusDone": "Verified · in Library",
+  "queueStatusFinalizing": "Writing metadata...",
   "libraryAll": "All",
   "libraryAlbums": "Albums",
   "librarySingles": "Singles",

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/app_localizations.dart';
+import '../providers/downloads_provider.dart';
 import '../providers/extensions_provider.dart';
 import '../theme/app_tokens.dart';
 import '../util/format_progress.dart';
@@ -33,6 +34,8 @@ class QueueItem extends ConsumerWidget {
     switch (state) {
       case _ItemState.downloading:
         statusColor = scheme.primary;
+      case _ItemState.finalizing:
+        statusColor = scheme.primary;
       case _ItemState.done:
         statusColor = scheme.primary;
       case _ItemState.failed:
@@ -53,6 +56,8 @@ class QueueItem extends ConsumerWidget {
           speedBytesPerSec: view.speedBytesPerSec,
           eta: view.eta,
         );
+      case _ItemState.finalizing:
+        statusLine = t.queueStatusFinalizing;
       case _ItemState.queued:
         statusLine = t.queueStatusQueued;
       case _ItemState.failed:
@@ -74,15 +79,31 @@ class QueueItem extends ConsumerWidget {
             bridge.cancelDownload(item.itemId).catchError((_) {}),
           ),
         );
+      case _ItemState.finalizing:
+        trailing = const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        );
       case _ItemState.failed:
-        // TODO(carry-over): true retry needs re-enqueue support from backend.
-        // For now, cancel is the best-effort "clear" action.
+        // Real retry: re-enqueue the same track (known via the queue label map),
+        // best-effort clearing the failed entry first. Falls back to cancel when
+        // the track is unknown.
         trailing = IconButton(
           icon: Icon(Icons.refresh, color: tokens.down),
           tooltip: t.queueStatusFailed,
-          onPressed: () => unawaited(
-            bridge.cancelDownload(item.itemId).catchError((_) {}),
-          ),
+          onPressed: () {
+            final track = view.track;
+            unawaited(bridge.cancelDownload(item.itemId).catchError((_) {}));
+            if (track != null) {
+              unawaited(
+                ref
+                    .read(downloadControllerProvider)
+                    .start(track)
+                    .catchError((_) {}),
+              );
+            }
+          },
         );
       case _ItemState.done:
         trailing = Icon(Icons.check_circle_outline, color: scheme.primary);
@@ -212,11 +233,18 @@ Widget _coverPlaceholder(AppTokens tokens) => Container(
       child: Icon(Icons.music_note, size: 22, color: tokens.muted2),
     );
 
-enum _ItemState { downloading, done, failed, queued, unknown }
+enum _ItemState { downloading, finalizing, done, failed, queued, unknown }
 
 _ItemState _resolveState(String status) {
   final s = status.toLowerCase();
   if (s.contains('download')) return _ItemState.downloading;
+  // Backend reports "metadata" while writing tags/cover after the bytes land.
+  if (s.contains('metadata') ||
+      s.contains('finaliz') ||
+      s.contains('process') ||
+      s.contains('writ')) {
+    return _ItemState.finalizing;
+  }
   if (s.contains('complet') || s.contains('done') || s.contains('success')) {
     return _ItemState.done;
   }

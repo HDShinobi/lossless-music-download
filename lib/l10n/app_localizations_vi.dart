@@ -212,6 +212,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get queueStatusDone => 'Verified · đã vào Thư viện';
 
   @override
+  String get queueStatusFinalizing => 'Đang ghi metadata...';
+
+  @override
   String get libraryAll => 'Tất cả';
 
   @override

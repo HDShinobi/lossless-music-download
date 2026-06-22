@@ -80,6 +80,7 @@
   "queueStatusQueued": "Trong hàng đợi",
   "queueStatusFailed": "Lỗi · chạm để thử lại",
   "queueStatusDone": "Verified · đã vào Thư viện",
+  "queueStatusFinalizing": "Đang ghi metadata...",
   "libraryAll": "Tất cả",
   "libraryAlbums": "Album",
   "librarySingles": "Single",

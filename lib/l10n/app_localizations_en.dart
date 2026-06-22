@@ -212,6 +212,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get queueStatusDone => 'Verified · in Library';
 
   @override
+  String get queueStatusFinalizing => 'Writing metadata...';
+
+  @override
   String get libraryAll => 'All';
 
   @override

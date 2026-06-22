@@ -69,6 +69,33 @@ Future<void> _pumpView(
   await tester.pumpAndSettle();
 }
 
+/// Single-pump variant for states with an indefinite animation (the finalizing
+/// spinner never settles, so pumpAndSettle would time out).
+Future<void> _pumpViewOnce(
+  WidgetTester tester,
+  QueueItemView view,
+  _FakeBridge bridge,
+) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        backendBridgeProvider.overrideWithValue(bridge),
+        appDirsProvider.overrideWithValue(
+          Future.value(('/fake/ext', '/fake/data')),
+        ),
+      ],
+      child: MaterialApp(
+        theme: appTheme(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: Scaffold(body: QueueItem(view: view)),
+      ),
+    ),
+  );
+  await tester.pump();
+}
+
 void main() {
   const track = Track(id: 'tid1', name: 'My Song', artists: 'Artist Name');
 
@@ -190,6 +217,25 @@ void main() {
                 w.icon == Icons.verified)),
         findsOneWidget,
       );
+    });
+
+    testWidgets('finalizing (metadata) item shows finalizing text + spinner',
+        (tester) async {
+      final bridge = _FakeBridge();
+      final view = QueueItemView(
+        progress: const DownloadProgress(
+          itemId: 'track-finalizing-1',
+          status: 'metadata',
+          progress: 1.0,
+          bytesReceived: 327155712,
+        ),
+        track: track,
+      );
+
+      await _pumpViewOnce(tester, view, bridge);
+
+      expect(find.textContaining('metadata'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
     testWidgets('queued item shows queued text', (tester) async {

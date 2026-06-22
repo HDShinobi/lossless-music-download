@@ -494,6 +494,12 @@ abstract class AppLocalizations {
   /// **'Verified · in Library'**
   String get queueStatusDone;
 
+  /// No description provided for @queueStatusFinalizing.
+  ///
+  /// In en, this message translates to:
+  /// **'Writing metadata...'**
+  String get queueStatusFinalizing;
+
   /// No description provided for @libraryAll.
   ///
   /// In en, this message translates to:
