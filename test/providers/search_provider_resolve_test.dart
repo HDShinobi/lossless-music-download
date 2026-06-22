@@ -3,8 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/providers/search_provider.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
-import 'package:mocktail/mocktail.dart';
-
 class FakeBackendBridge extends Fake implements BackendBridge {
   final Map<String, dynamic>? Function(String url) handler;
   FakeBackendBridge(this.handler);
