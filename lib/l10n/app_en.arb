@@ -127,7 +127,7 @@
       }
     }
   },
-  "batchAddedToQueue": "Added {count} tracks to the queue",
+  "batchAddedToQueue": "Queued {count} for download",
   "@batchAddedToQueue": {
     "placeholders": {
       "count": {

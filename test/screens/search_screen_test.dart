@@ -207,7 +207,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Added 1 tracks to the queue'),
+        find.text('Queued 1 for download'),
         findsOneWidget,
       );
     });

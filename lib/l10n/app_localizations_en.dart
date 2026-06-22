@@ -300,7 +300,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String batchAddedToQueue(int count) {
-    return 'Added $count tracks to the queue';
+    return 'Queued $count for download';
   }
 
   @override
