@@ -6,7 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import '../models/track.dart';
 import '../providers/download_options_provider.dart';
-import '../providers/downloads_provider.dart';
+import '../providers/download_queue_provider.dart';
 import '../providers/extensions_provider.dart';
 import '../providers/search_provider.dart';
 import '../theme/app_tokens.dart';
@@ -58,12 +58,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   Future<void> _onDownload(BuildContext context, Track track) async {
     final t = AppLocalizations.of(context);
-    final controller = ref.read(downloadControllerProvider);
+    final queue = ref.read(downloadQueueProvider.notifier);
     final askBefore = ref.read(askBeforeDownloadProvider);
 
     if (!askBefore) {
       unawaited(
-        controller.start(track).catchError((Object _) {
+        queue.enqueue(track).catchError((Object _) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(t.downloadFailed)),
@@ -95,8 +95,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     if (choice == null) return; // cancelled
 
     unawaited(
-      controller
-          .start(track, source: choice.sourceId, quality: choice.quality)
+      queue
+          .enqueue(track, source: choice.sourceId, quality: choice.quality)
           .catchError((Object _) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -116,12 +116,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   void _batchDownload(List<Track> allTracks) {
     final t = AppLocalizations.of(context);
-    final controller = ref.read(downloadControllerProvider);
+    final queue = ref.read(downloadQueueProvider.notifier);
     final count = _selectedIds.length;
 
     for (final track in allTracks) {
       if (_selectedIds.contains(track.id)) {
-        unawaited(controller.start(track));
+        unawaited(queue.enqueue(track));
       }
     }
 

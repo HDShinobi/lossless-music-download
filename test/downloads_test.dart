@@ -7,6 +7,7 @@ import 'package:lossless_music_download/models/download_request.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/models/track.dart';
 import 'package:lossless_music_download/providers/download_dir_provider.dart';
+import 'package:lossless_music_download/providers/download_queue_provider.dart';
 import 'package:lossless_music_download/providers/downloads_provider.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/screens/queue_screen.dart';
@@ -40,7 +41,7 @@ class _FakeBackendBridge extends BackendBridge {
 const _kTestDir = '/test/downloads';
 
 // ---------------------------------------------------------------------------
-// Unit tests: DownloadController.start
+// Unit tests: DownloadController.start (legacy — controller kept for compat)
 // ---------------------------------------------------------------------------
 void main() {
   group('DownloadController.start', () {
@@ -76,18 +77,27 @@ void main() {
   });
 
   // ---------------------------------------------------------------------------
-  // Widget tests: QueueScreen
+  // Widget tests: QueueScreen — now driven by downloadQueueProvider
   // ---------------------------------------------------------------------------
   group('QueueScreen', () {
-    Widget buildQueue({required List<DownloadProgress> items}) {
+    const downloading = DownloadEntry(
+      track: Track(id: 'x', name: 'Test Track', artists: 'Artist'),
+      itemId: 'x',
+      status: 'downloading',
+      progress: 0.5,
+      bytesReceived: 104857600, // 100 MB
+    );
+
+    Widget buildQueue({required List<DownloadEntry> entries}) {
       return ProviderScope(
         overrides: [
-          downloadsProvider.overrideWith(
-            (ref) => Stream.value(items),
-          ),
-          // Provide a no-op bridge so cancel button doesn't crash
+          // Override the persistent queue with a fixed list.
+          downloadQueueProvider.overrideWith(() => _FixedQueueController(entries)),
+          // Keep the poll alive but return nothing (entries drive display).
+          downloadsProvider.overrideWith((ref) => Stream.value([])),
+          // Provide a no-op bridge so cancel/dismiss buttons don't crash.
           backendBridgeProvider.overrideWithValue(_FakeBackendBridge()),
-          // extensionsProvider needs a bridge too — override with empty list
+          // extensionsProvider needs a bridge too.
           extensionsProvider.overrideWith(
             () => _FakeExtensionsController([]),
           ),
@@ -103,32 +113,35 @@ void main() {
 
     testWidgets('shows progress card with cancel button for active download',
         (tester) async {
-      await tester.pumpWidget(
-        buildQueue(items: [
-          const DownloadProgress(
-            itemId: 'x',
-            status: 'downloading',
-            progress: 0.5,
-            bytesReceived: 104857600, // 100 MB
-          ),
-        ]),
-      );
+      await tester.pumpWidget(buildQueue(entries: [downloading]));
       await tester.pumpAndSettle();
 
-      // New QueueItem uses a brand card with FractionallySizedBox progress fill
-      // (not a LinearProgressIndicator) — verify the cancel icon is present
-      // and that the mono status line contains 'MB'.
+      // QueueItem uses a brand card with a cancel icon for 'downloading' state.
       expect(find.byIcon(Icons.cancel_outlined), findsOneWidget);
       expect(find.textContaining('MB'), findsWidgets);
     });
 
     testWidgets('shows queueEmpty text when list is empty', (tester) async {
-      await tester.pumpWidget(buildQueue(items: []));
+      await tester.pumpWidget(buildQueue(entries: []));
       await tester.pumpAndSettle();
 
       expect(find.text('No downloads yet.'), findsOneWidget);
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Fixed-state queue controller — always returns the provided entries list
+// ---------------------------------------------------------------------------
+class _FixedQueueController extends DownloadQueueController {
+  final List<DownloadEntry> _entries;
+  _FixedQueueController(this._entries);
+
+  @override
+  List<DownloadEntry> build() {
+    // Do not call super.build() — we don't want the listener wired up.
+    return _entries;
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/app_localizations.dart';
-import '../providers/downloads_provider.dart';
+import '../providers/download_queue_provider.dart';
 import '../providers/extensions_provider.dart';
 import '../theme/app_tokens.dart';
 import '../util/format_progress.dart';
@@ -86,24 +86,14 @@ class QueueItem extends ConsumerWidget {
           child: CircularProgressIndicator(strokeWidth: 2),
         );
       case _ItemState.failed:
-        // Real retry: re-enqueue the same track (known via the queue label map),
-        // best-effort clearing the failed entry first. Falls back to cancel when
-        // the track is unknown.
+        // Retry via the persistent queue controller (removes old entry,
+        // re-enqueues the track from scratch).
         trailing = IconButton(
           icon: Icon(Icons.refresh, color: tokens.down),
           tooltip: t.queueStatusFailed,
-          onPressed: () async {
-            final track = view.track;
-            await bridge.cancelDownload(item.itemId).catchError((_) {});
-            if (track != null) {
-              unawaited(
-                ref
-                    .read(downloadControllerProvider)
-                    .start(track)
-                    .catchError((_) {}),
-              );
-            }
-          },
+          onPressed: () => ref
+              .read(downloadQueueProvider.notifier)
+              .retry(item.itemId),
         );
       case _ItemState.done:
         trailing = Icon(Icons.check_circle_outline, color: scheme.primary);
@@ -215,9 +205,8 @@ class QueueItem extends ConsumerWidget {
         ),
         child: Icon(Icons.delete_sweep_outlined, color: tokens.down),
       ),
-      onDismissed: (_) => unawaited(
-        bridge.cancelDownload(item.itemId).catchError((_) {}),
-      ),
+      onDismissed: (_) =>
+          ref.read(downloadQueueProvider.notifier).remove(item.itemId),
       child: card,
     );
   }
