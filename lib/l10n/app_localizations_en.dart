@@ -305,4 +305,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get selectionClear => 'Clear';
+
+  @override
+  String get loadingSharedLink => 'Loading shared link...';
+
+  @override
+  String get shareUrlNotRecognized => 'Link not recognized';
 }

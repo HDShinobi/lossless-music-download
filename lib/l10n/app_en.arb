@@ -135,5 +135,9 @@
       }
     }
   },
-  "selectionClear": "Clear"
+  "selectionClear": "Clear",
+  "loadingSharedLink": "Loading shared link...",
+  "@loadingSharedLink": {"description": "Snackbar shown when resolving a shared music URL"},
+  "shareUrlNotRecognized": "Link not recognized",
+  "@shareUrlNotRecognized": {"description": "Shown when a shared URL cannot be resolved to tracks"}
 }

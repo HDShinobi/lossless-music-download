@@ -51,3 +51,4 @@ package:spotiflac_android/services/platform_bridge.dart    -> compat_platform_br
    corresponding compat shim (`compat_l10n.dart` or `compat_platform_bridge.dart`).
 7. Update the commit hash in this file and in the header comment.
 8. Commit with `chore(vendor): re-sync SpotiFLAC @ <new-commit>`.
+- share_intent_service.dart @ 7b22bbf2 (import only: spotiflac_android/utils/logger.dart → compat_logger.dart)

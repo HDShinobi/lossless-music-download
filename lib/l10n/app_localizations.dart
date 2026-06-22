@@ -661,6 +661,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear'**
   String get selectionClear;
+
+  /// Snackbar shown when resolving a shared music URL
+  ///
+  /// In en, this message translates to:
+  /// **'Loading shared link...'**
+  String get loadingSharedLink;
+
+  /// Shown when a shared URL cannot be resolved to tracks
+  ///
+  /// In en, this message translates to:
+  /// **'Link not recognized'**
+  String get shareUrlNotRecognized;
 }
 
 class _AppLocalizationsDelegate

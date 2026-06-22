@@ -135,5 +135,9 @@
       }
     }
   },
-  "selectionClear": "Bỏ chọn"
+  "selectionClear": "Bỏ chọn",
+  "loadingSharedLink": "Đang tải link đã chia sẻ...",
+  "@loadingSharedLink": {"description": "Thanh thông báo khi đang xử lý URL nhạc đã chia sẻ"},
+  "shareUrlNotRecognized": "Không nhận ra link này",
+  "@shareUrlNotRecognized": {"description": "Hiển thị khi URL đã chia sẻ không thể phân giải thành bài hát"}
 }

@@ -43,6 +43,7 @@ dependencies:
   path_provider: ^2.1.0
   http: ^1.2.0
   ffmpeg_kit_flutter_new_audio: ^2.0.0
+  receive_sharing_intent: ^1.8.1
 
 dev_dependencies:
   flutter_test:

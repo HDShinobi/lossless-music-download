@@ -304,4 +304,10 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get selectionClear => 'Bỏ chọn';
+
+  @override
+  String get loadingSharedLink => 'Đang tải link đã chia sẻ...';
+
+  @override
+  String get shareUrlNotRecognized => 'Không nhận ra link này';
 }
