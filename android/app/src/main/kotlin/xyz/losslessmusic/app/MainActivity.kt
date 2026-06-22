@@ -1,5 +1,7 @@
 package xyz.losslessmusic.app
 
+import android.content.Context
+import android.net.wifi.WifiManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -7,6 +9,9 @@ import xyz.losslessmusic.backend.bridge.Bridge
 
 class MainActivity : FlutterActivity() {
     private val channel = "xyz.losslessmusic/native"
+
+    // Held while the DLNA MediaServer runs so SSDP multicast can be received.
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -93,11 +98,45 @@ class MainActivity : FlutterActivity() {
                             Bridge.setMetadataProviderPriorityJSON(call.argument<String>("priorityJson")!!)
                             result.success(null)
                         }
+                        "startMediaServer" -> {
+                            val status = Bridge.startMediaServer(
+                                call.argument<String>("rootDir")!!,
+                                call.argument<String>("name")!!
+                            )
+                            acquireMulticastLock()
+                            result.success(status)
+                        }
+                        "stopMediaServer" -> {
+                            Bridge.stopMediaServer()
+                            releaseMulticastLock()
+                            result.success(null)
+                        }
+                        "getMediaServerStatus" -> result.success(Bridge.getMediaServerStatus())
                         else -> result.notImplemented()
                     }
                 } catch (e: Exception) {
                     result.error("BACKEND_ERROR", e.message, null)
                 }
             }
+    }
+
+    private fun acquireMulticastLock() {
+        if (multicastLock == null) {
+            val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            multicastLock = wifi.createMulticastLock("lossless-dlna").apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        }
+    }
+
+    private fun releaseMulticastLock() {
+        multicastLock?.let { if (it.isHeld) it.release() }
+        multicastLock = null
+    }
+
+    override fun onDestroy() {
+        releaseMulticastLock()
+        super.onDestroy()
     }
 }

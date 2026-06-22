@@ -4,6 +4,8 @@ go 1.25.0
 
 require github.com/zarz/spotiflac_android/go_backend v0.0.0
 
+require xyz.losslessmusic/server v0.0.0
+
 require (
 	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
@@ -26,3 +28,5 @@ require (
 )
 
 replace github.com/zarz/spotiflac_android/go_backend => ../../go_backend
+
+replace xyz.losslessmusic/server => ../server

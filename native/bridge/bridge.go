@@ -6,9 +6,70 @@ package bridge
 
 import (
 	"encoding/json"
+	"sync"
 
 	"github.com/zarz/spotiflac_android/go_backend"
+	"xyz.losslessmusic/server"
 )
+
+// --- DLNA MediaServer (Serve) ---------------------------------------------
+
+var (
+	mediaServerMu sync.Mutex
+	mediaServer   *server.MediaServer
+)
+
+func mediaServerStatusJSON(running bool, url, name string) string {
+	b, _ := json.Marshal(map[string]any{
+		"running": running,
+		"url":     url,
+		"name":    name,
+	})
+	return string(b)
+}
+
+// StartMediaServer starts the DLNA MediaServer exposing rootDir on the LAN.
+// Idempotent: returns the current status JSON if already running.
+func StartMediaServer(rootDir, friendlyName string) (string, error) {
+	mediaServerMu.Lock()
+	defer mediaServerMu.Unlock()
+	if mediaServer != nil {
+		if running, url, name := mediaServer.Status(); running {
+			return mediaServerStatusJSON(true, url, name), nil
+		}
+	}
+	ms := server.NewMediaServer(rootDir, friendlyName)
+	if _, err := ms.Start(); err != nil {
+		return "", err
+	}
+	mediaServer = ms
+	running, url, name := ms.Status()
+	return mediaServerStatusJSON(running, url, name), nil
+}
+
+// StopMediaServer stops the DLNA MediaServer if running.
+func StopMediaServer() error {
+	mediaServerMu.Lock()
+	defer mediaServerMu.Unlock()
+	if mediaServer == nil {
+		return nil
+	}
+	err := mediaServer.Stop()
+	mediaServer = nil
+	return err
+}
+
+// GetMediaServerStatus returns the server status as JSON
+// {"running":bool,"url":string,"name":string}.
+func GetMediaServerStatus() string {
+	mediaServerMu.Lock()
+	defer mediaServerMu.Unlock()
+	if mediaServer == nil {
+		return mediaServerStatusJSON(false, "", "")
+	}
+	running, url, name := mediaServer.Status()
+	return mediaServerStatusJSON(running, url, name)
+}
 
 // Ping returns a fixed string to prove the gomobile bridge works.
 func Ping() string {
