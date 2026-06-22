@@ -1,14 +1,16 @@
 class DownloadRequest {
   final String trackName, artistName, outputDir;
-  final String? itemId, albumName, isrc, spotifyId, qobuzId, tidalId, coverUrl,
-      quality, source, filenameFormat;
-  final int? durationMs;
+  final String? itemId, albumName, albumArtist, isrc, spotifyId, qobuzId,
+      tidalId, coverUrl, releaseDate, composer, quality, source, filenameFormat;
+  final int? durationMs, trackNumber, discNumber, totalTracks, totalDiscs;
   final bool useExtensions, embedMetadata, embedMaxQualityCover, embedLyrics;
   const DownloadRequest({
     required this.trackName, required this.artistName, required this.outputDir,
     this.itemId,
-    this.albumName, this.isrc, this.spotifyId, this.qobuzId, this.tidalId,
-    this.coverUrl, this.durationMs, this.quality, this.source,
+    this.albumName, this.albumArtist, this.isrc, this.spotifyId, this.qobuzId,
+    this.tidalId, this.coverUrl, this.releaseDate, this.composer,
+    this.durationMs, this.trackNumber, this.discNumber, this.totalTracks,
+    this.totalDiscs, this.quality, this.source,
     this.filenameFormat = '{artist}/{album}/{track} {title}',
     this.useExtensions = true, this.embedMetadata = true,
     this.embedMaxQualityCover = true, this.embedLyrics = true,
@@ -19,7 +21,14 @@ class DownloadRequest {
         'output_dir': outputDir,
         if (itemId != null) 'item_id': itemId,
         if (albumName != null) 'album_name': albumName,
+        if (albumArtist != null) 'album_artist': albumArtist,
         if (isrc != null) 'isrc': isrc,
+        if (trackNumber != null) 'track_number': trackNumber,
+        if (discNumber != null) 'disc_number': discNumber,
+        if (totalTracks != null) 'total_tracks': totalTracks,
+        if (totalDiscs != null) 'total_discs': totalDiscs,
+        if (releaseDate != null) 'release_date': releaseDate,
+        if (composer != null) 'composer': composer,
         // Track identifiers — the backend resolves the exact track from these
         // (spotify_id, else qobuz_id/tidal_id). Without one, extensions cannot
         // locate the track to download.

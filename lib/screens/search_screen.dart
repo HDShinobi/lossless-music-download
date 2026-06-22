@@ -291,7 +291,7 @@ class _SearchBody extends ConsumerWidget {
             final track = tracks[index];
             return TrackTile(
               track: track,
-              qualityHint: null,
+              qualityHint: track.qualityBadge,
               selectionMode: selectionMode,
               selected: selectedIds.contains(track.id),
               onDownload: () => onDownload(context, track),
