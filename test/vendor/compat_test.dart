@@ -13,6 +13,20 @@ void main() {
         expect(l.audioAnalysisNyquist, isNotEmpty, reason: lang);
       }
     });
+
+    test('Vietnamese strings carry proper diacritics (no mojibake/stripping)',
+        () {
+      const vi = AnalysisL10n('vi');
+      // Exact expected accented forms — guards against the de-accented regression.
+      expect(vi.audioAnalysisTitle, 'Phân tích chất lượng âm thanh');
+      expect(vi.audioAnalysisSampleRate, 'Tần số lấy mẫu');
+      expect(vi.audioAnalysisBitDepth, 'Độ sâu bit');
+      expect(vi.audioAnalysisSpectralCutoff, 'Ngưỡng phổ');
+      expect(vi.audioAnalysisDynamicRange, 'Dải động');
+      expect(vi.audioAnalysisChannelStats, 'Thống kê theo kênh');
+      // No em-dash anywhere.
+      expect(vi.audioAnalysisDescription.contains('—'), isFalse);
+    });
   });
 
   group('PlatformBridge (compat stub)', () {

@@ -17,52 +17,50 @@ class AnalysisL10n {
   bool get _isVi => languageCode == 'vi';
 
   String get audioAnalysisTitle =>
-      _isVi ? 'Phan tich chat luong am thanh' : 'Audio Quality Analysis';
+      _isVi ? 'Phân tích chất lượng âm thanh' : 'Audio Quality Analysis';
 
-  String get audioAnalysisDescription =>
-      _isVi
-          ? 'Xac minh chat luong khong mat mat bang phan tich pho'
-          : 'Verify lossless quality with spectrum analysis';
+  String get audioAnalysisDescription => _isVi
+      ? 'Xác minh chất lượng không mất mát bằng phân tích phổ'
+      : 'Verify lossless quality with spectrum analysis';
 
   String get audioAnalysisAnalyzing =>
-      _isVi ? 'Dang phan tich am thanh...' : 'Analyzing audio...';
+      _isVi ? 'Đang phân tích âm thanh...' : 'Analyzing audio...';
 
-  String get audioAnalysisRescan => _isVi ? 'Phan tich lai' : 'Re-analyze';
+  String get audioAnalysisRescan => _isVi ? 'Phân tích lại' : 'Re-analyze';
 
   String get audioAnalysisRescanning =>
-      _isVi ? 'Dang phan tich lai am thanh...' : 'Re-analyzing audio...';
+      _isVi ? 'Đang phân tích lại âm thanh...' : 'Re-analyzing audio...';
 
-  String get audioAnalysisCodec => _isVi ? 'Codec' : 'Codec';
+  String get audioAnalysisCodec => 'Codec';
 
-  String get audioAnalysisContainer =>
-      _isVi ? 'Dinh dang chua' : 'Container';
+  String get audioAnalysisContainer => _isVi ? 'Định dạng chứa' : 'Container';
 
   String get audioAnalysisSampleRate =>
-      _isVi ? 'Tan so lay mau' : 'Sample Rate';
+      _isVi ? 'Tần số lấy mẫu' : 'Sample Rate';
 
-  String get audioAnalysisBitDepth => _isVi ? 'Do sau bit' : 'Bit Depth';
+  String get audioAnalysisBitDepth => _isVi ? 'Độ sâu bit' : 'Bit Depth';
 
   String get audioAnalysisDecodedFormat =>
-      _isVi ? 'Dinh dang giai ma' : 'Decoded Format';
+      _isVi ? 'Định dạng giải mã' : 'Decoded Format';
 
-  String get audioAnalysisChannels => _isVi ? 'Kenh' : 'Channels';
+  String get audioAnalysisChannels => _isVi ? 'Kênh' : 'Channels';
 
-  String get audioAnalysisMono => _isVi ? 'Mono' : 'Mono';
+  String get audioAnalysisMono => 'Mono';
 
-  String get audioAnalysisStereo => _isVi ? 'Stereo' : 'Stereo';
+  String get audioAnalysisStereo => 'Stereo';
 
-  String get audioAnalysisDuration => _isVi ? 'Thoi luong' : 'Duration';
+  String get audioAnalysisDuration => _isVi ? 'Thời lượng' : 'Duration';
 
-  String get audioAnalysisFileSize => _isVi ? 'Kich thuoc' : 'Size';
+  String get audioAnalysisFileSize => _isVi ? 'Kích thước' : 'Size';
 
-  String get audioAnalysisSamples => _isVi ? 'Mau' : 'Samples';
+  String get audioAnalysisSamples => _isVi ? 'Mẫu' : 'Samples';
 
   String get audioAnalysisNyquist => 'Nyquist';
 
   String get audioAnalysisSpectralCutoff =>
-      _isVi ? 'Nguong pho' : 'Spectral Cutoff';
+      _isVi ? 'Ngưỡng phổ' : 'Spectral Cutoff';
 
-  String get audioAnalysisPeak => _isVi ? 'Dinh (dBFS)' : 'Peak';
+  String get audioAnalysisPeak => _isVi ? 'Đỉnh (dBFS)' : 'Peak';
 
   String get audioAnalysisTruePeak => _isVi ? 'True Peak (dBTP)' : 'True Peak';
 
@@ -71,16 +69,14 @@ class AnalysisL10n {
   String get audioAnalysisLufs => 'LUFS';
 
   String get audioAnalysisDynamicRange =>
-      _isVi ? 'Dai dong' : 'Dynamic Range';
+      _isVi ? 'Dải động' : 'Dynamic Range';
 
-  String get audioAnalysisClipping =>
-      _isVi ? 'Cat clip' : 'Clipping';
+  String get audioAnalysisClipping => _isVi ? 'Cắt clip' : 'Clipping';
 
-  String get audioAnalysisNoClipping =>
-      _isVi ? 'Khong cat clip' : 'No clipping';
+  String get audioAnalysisNoClipping => _isVi ? 'Không cắt clip' : 'No clipping';
 
   String get audioAnalysisChannelStats =>
-      _isVi ? 'Thong ke theo kenh' : 'Per-channel Stats';
+      _isVi ? 'Thống kê theo kênh' : 'Per-channel Stats';
 
-  String get trackConvertBitrate => _isVi ? 'Bitrate' : 'Bitrate';
+  String get trackConvertBitrate => 'Bitrate';
 }
