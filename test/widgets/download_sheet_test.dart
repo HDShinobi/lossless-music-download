@@ -82,6 +82,21 @@ void main() {
       expect(find.text('Tidal'), findsOneWidget);
     });
 
+    testWidgets('empty sources: shows hint and disables the CTA',
+        (tester) async {
+      await _pumpAndShowSheet(tester, const []);
+
+      expect(
+        find.text('No download source yet. Install one in Discover.'),
+        findsOneWidget,
+      );
+      // CTA present but disabled (onPressed == null).
+      final cta = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Download'),
+      );
+      expect(cta.onPressed, isNull);
+    });
+
     testWidgets('renders quality radio options', (tester) async {
       final sources = [_fakeSource(id: 'deezer', displayName: 'Deezer')];
       await _pumpAndShowSheet(tester, sources);

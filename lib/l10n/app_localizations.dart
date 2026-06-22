@@ -476,6 +476,12 @@ abstract class AppLocalizations {
   /// **'Download'**
   String get downloadCta;
 
+  /// No description provided for @downloadSheetNoSources.
+  ///
+  /// In en, this message translates to:
+  /// **'No download source yet. Install one in Discover.'**
+  String get downloadSheetNoSources;
+
   /// No description provided for @queueStatusQueued.
   ///
   /// In en, this message translates to:

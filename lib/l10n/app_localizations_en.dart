@@ -203,6 +203,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadCta => 'Download';
 
   @override
+  String get downloadSheetNoSources =>
+      'No download source yet. Install one in Discover.';
+
+  @override
   String get queueStatusQueued => 'In queue';
 
   @override

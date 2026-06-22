@@ -149,18 +149,33 @@ class _DownloadSheetState extends State<_DownloadSheet> {
               style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: widget.sources.map((src) {
-                final isSelected = _selectedSourceId == src.id;
-                return _SourceChip(
-                  source: src,
-                  isSelected: isSelected,
-                  onTap: () => setState(() => _selectedSourceId = src.id),
-                );
-              }).toList(),
-            ),
+            if (widget.sources.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: tokens.warnSoft,
+                  border: Border.all(color: tokens.warnLine),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  t.downloadSheetNoSources,
+                  style: tt.bodySmall?.copyWith(color: tokens.warn),
+                ),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: widget.sources.map((src) {
+                  final isSelected = _selectedSourceId == src.id;
+                  return _SourceChip(
+                    source: src,
+                    isSelected: isSelected,
+                    onTap: () => setState(() => _selectedSourceId = src.id),
+                  );
+                }).toList(),
+              ),
             const SizedBox(height: 20),
 
             // "Chat luong" section
@@ -201,12 +216,15 @@ class _DownloadSheetState extends State<_DownloadSheet> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(
-                  DownloadChoice(
-                    sourceId: _selectedSourceId,
-                    quality: _selectedQuality,
-                  ),
-                ),
+                // No download source -> nothing to download from; disable.
+                onPressed: widget.sources.isEmpty
+                    ? null
+                    : () => Navigator.of(context).pop(
+                          DownloadChoice(
+                            sourceId: _selectedSourceId,
+                            quality: _selectedQuality,
+                          ),
+                        ),
                 child: Text(t.downloadCta),
               ),
             ),

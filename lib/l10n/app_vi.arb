@@ -77,6 +77,7 @@
   "downloadSheetSource": "Nguồn",
   "downloadSheetQuality": "Chất lượng",
   "downloadCta": "Tải xuống",
+  "downloadSheetNoSources": "Chưa có nguồn tải. Cài extension tải trong Khám phá.",
   "queueStatusQueued": "Trong hàng đợi",
   "queueStatusFailed": "Lỗi · chạm để thử lại",
   "queueStatusDone": "Verified · đã vào Thư viện",

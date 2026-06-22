@@ -77,6 +77,7 @@
   "downloadSheetSource": "Source",
   "downloadSheetQuality": "Quality",
   "downloadCta": "Download",
+  "downloadSheetNoSources": "No download source yet. Install one in Discover.",
   "queueStatusQueued": "In queue",
   "queueStatusFailed": "Failed · tap to retry",
   "queueStatusDone": "Verified · in Library",

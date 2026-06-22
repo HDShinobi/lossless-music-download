@@ -203,6 +203,10 @@ class AppLocalizationsVi extends AppLocalizations {
   String get downloadCta => 'Tải xuống';
 
   @override
+  String get downloadSheetNoSources =>
+      'Chưa có nguồn tải. Cài extension tải trong Khám phá.';
+
+  @override
   String get queueStatusQueued => 'Trong hàng đợi';
 
   @override
