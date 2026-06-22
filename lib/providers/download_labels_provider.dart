@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/download_progress.dart';
 import '../models/track.dart';
 import '../util/queue_view.dart';
 import 'downloads_provider.dart';
@@ -32,12 +33,12 @@ class _QueueViewNotifier extends Notifier<List<QueueItemView>> {
   @override
   List<QueueItemView> build() {
     // Listen to every new emission from the downloads stream provider.
-    ref.listen<AsyncValue<List<dynamic>>>(downloadsProvider, (_, next) {
+    ref.listen<AsyncValue<List<DownloadProgress>>>(downloadsProvider, (_, next) {
       next.whenData((items) {
         final labels = ref.read(downloadLabelsProvider);
         final nowMs = DateTime.now().millisecondsSinceEpoch;
         final result = computeQueueView(
-          items: List.from(items),
+          items: items,
           labels: labels,
           prev: _prev,
           nowMs: nowMs,

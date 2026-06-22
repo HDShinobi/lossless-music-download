@@ -13,15 +13,16 @@ class QueueScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context);
 
-    // Keep the stream polling alive
-    ref.watch(downloadsProvider);
+    // Watch the raw stream to surface loading / error states.
+    final downloadsAsync = ref.watch(downloadsProvider);
 
-    // Watch the enriched view list
+    // Watch the enriched view list (kept alive via downloadsProvider above).
     final views = ref.watch(queueViewProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: Text(t.tabQueue)),
-      body: views.isEmpty
+    Widget body = downloadsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => Center(child: Text('Error: $err')),
+      data: (_) => views.isEmpty
           ? Center(child: Text(t.queueEmpty))
           : ListView.builder(
               itemCount: views.length,
@@ -30,6 +31,11 @@ class QueueScreen extends ConsumerWidget {
                 return QueueItem(view: v);
               },
             ),
+    );
+
+    return Scaffold(
+      appBar: AppBar(title: Text(t.tabQueue)),
+      body: body,
     );
   }
 }
