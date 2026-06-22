@@ -3,18 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../l10n/app_localizations.dart';
-import '../models/audio_quality.dart';
-import '../providers/audio_quality_provider.dart';
 import '../providers/library_provider.dart';
 import '../theme/app_tokens.dart';
-import '../widgets/spectrogram_placeholder.dart';
+import '../vendor/spotiflac/audio_analysis_widget.dart';
 
 /// Detail screen for a single [LibraryEntry] showing a heuristic lossless
-/// badge, an illustrative spectrogram placeholder, and a stats grid.
-///
-/// Audio metrics (bit depth, sample rate, bitrate) are populated by probing
-/// the file via the backend. Values show '—' while the probe is loading or
-/// if it returns null.
+/// badge and the real audio analysis card (decode + FFT spectral cutoff,
+/// loudness, dynamic range, and spectrogram), vendored from SpotiFLAC.
 class VerifiedScreen extends ConsumerWidget {
   const VerifiedScreen({super.key, required this.entry});
 
@@ -28,19 +23,11 @@ class VerifiedScreen extends ConsumerWidget {
     return nameWithoutExt.replaceFirst(RegExp(r'^[0-9]+[\s.]\s*'), '');
   }
 
-  String get _sizeLabel {
-    final mb = entry.sizeBytes / (1024 * 1024);
-    return '${mb.toStringAsFixed(1)} MB';
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
     final tokens = context.tokens;
-
-    final qualityAsync = ref.watch(audioQualityProvider(entry.path));
-    final quality = qualityAsync.value;
 
     return Scaffold(
       appBar: AppBar(
@@ -58,25 +45,10 @@ class VerifiedScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           _VerifiedBadge(entry: entry, t: t, cs: cs, tokens: tokens),
           const SizedBox(height: 16),
-          const SpectrogramPlaceholder(),
-          const SizedBox(height: 6),
-          Text(
-            t.verifiedSpectrumNote,
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
-                ?.copyWith(color: tokens.muted2),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 16),
-          _StatsGrid(
-            entry: entry,
-            sizeLabel: _sizeLabel,
-            quality: quality,
-            t: t,
-            tokens: tokens,
-            cs: cs,
-          ),
+          // Real analysis: decode (FFmpeg) + FFT spectral cutoff + loudness +
+          // dynamic range + spectrogram. Vendored from SpotiFLAC (see
+          // lib/vendor/spotiflac/). Inherits our brand theme via Theme.of.
+          AudioAnalysisCard(filePath: entry.path),
           const SizedBox(height: 16),
           _ServeRow(t: t, cs: cs, tokens: tokens),
         ],
@@ -220,106 +192,6 @@ class _VerifiedBadge extends StatelessWidget {
                   ),
                 ],
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Stats Grid
-// ---------------------------------------------------------------------------
-
-class _StatsGrid extends StatelessWidget {
-  const _StatsGrid({
-    required this.entry,
-    required this.sizeLabel,
-    required this.quality,
-    required this.t,
-    required this.tokens,
-    required this.cs,
-  });
-
-  final LibraryEntry entry;
-  final String sizeLabel;
-  final AudioQuality? quality;
-  final AppLocalizations t;
-  final AppTokens tokens;
-  final ColorScheme cs;
-
-  @override
-  Widget build(BuildContext context) {
-    final bitDepth = quality != null ? (quality!.bitDepthLabel.isNotEmpty ? quality!.bitDepthLabel : '—') : '—';
-    final sampleRate = quality != null ? (quality!.sampleRateLabel.isNotEmpty ? quality!.sampleRateLabel : '—') : '—';
-    final bitrate = quality != null && quality!.bitrate > 0 ? '${quality!.bitrate} kbps' : '—';
-
-    final stats = [
-      (t.statFormat, entry.format),
-      (t.statSize, sizeLabel),
-      (t.statBitDepth, bitDepth),
-      (t.statSampleRate, sampleRate),
-      (t.statBitrate, bitrate),
-    ];
-
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 2.8,
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      children: stats
-          .map((s) => _StatCell(label: s.$1, value: s.$2, tokens: tokens, cs: cs))
-          .toList(),
-    );
-  }
-}
-
-class _StatCell extends StatelessWidget {
-  const _StatCell({
-    required this.label,
-    required this.value,
-    required this.tokens,
-    required this.cs,
-  });
-
-  final String label;
-  final String value;
-  final AppTokens tokens;
-  final ColorScheme cs;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: tokens.surface2,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: tokens.muted2,
-              letterSpacing: 0.4,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: tokens.mono.copyWith(
-              fontSize: 13,
-              color: cs.onSurface,
-              fontWeight: FontWeight.w600,
             ),
           ),
         ],
