@@ -1,9 +1,10 @@
 class DownloadRequest {
   final String trackName, artistName, outputDir;
-  final String? albumName, isrc, spotifyId, quality, source, filenameFormat;
+  final String? itemId, albumName, isrc, spotifyId, quality, source, filenameFormat;
   final bool useExtensions, embedMetadata, embedMaxQualityCover, embedLyrics;
   const DownloadRequest({
     required this.trackName, required this.artistName, required this.outputDir,
+    this.itemId,
     this.albumName, this.isrc, this.spotifyId, this.quality, this.source,
     this.filenameFormat = '{artist}/{album}/{track} {title}',
     this.useExtensions = true, this.embedMetadata = true,
@@ -13,6 +14,7 @@ class DownloadRequest {
         'track_name': trackName,
         'artist_name': artistName,
         'output_dir': outputDir,
+        if (itemId != null) 'item_id': itemId,
         if (albumName != null) 'album_name': albumName,
         if (isrc != null) 'isrc': isrc,
         if (spotifyId != null) 'spotify_id': spotifyId,

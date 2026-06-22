@@ -4,23 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/app_localizations.dart';
-import '../models/download_progress.dart';
 import '../providers/extensions_provider.dart';
 import '../theme/app_tokens.dart';
 import '../util/format_progress.dart';
+import '../util/queue_view.dart';
 
-// TODO(carry-over): The queue currently lacks track name and cover art —
-// only itemId is available as an identifier. A future backend progress
-// enrichment pass is needed to supply track metadata (name, artist, cover).
-// Speed and ETA are also not available from DownloadProgress; they require
-// a separate backend stream.
-
-/// Renders a single [DownloadProgress] item in the brand card style with a
-/// mono status line and a per-state progress fill + trailing action.
+/// Renders a single [QueueItemView] in the brand card style with a
+/// mono status line, optional cover art, and a per-state trailing action.
 class QueueItem extends ConsumerWidget {
-  const QueueItem({super.key, required this.item});
+  const QueueItem({super.key, required this.view});
 
-  final DownloadProgress item;
+  final QueueItemView view;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -28,6 +22,8 @@ class QueueItem extends ConsumerWidget {
     final tokens = context.tokens;
     final scheme = Theme.of(context).colorScheme;
     final bridge = ref.read(backendBridgeProvider);
+
+    final item = view.progress;
 
     // Map status string to a _ItemState enum for clean dispatch
     final state = _resolveState(item.status);
@@ -48,17 +44,14 @@ class QueueItem extends ConsumerWidget {
     }
 
     // Build the mono progress status line text
-    // TODO(carry-over): speed and ETA not available from DownloadProgress;
-    // omitted until backend exposes them.
     final String statusLine;
     switch (state) {
       case _ItemState.downloading:
-        final int? total = (item.progress > 0 && item.bytesReceived > 0)
-            ? (item.bytesReceived / item.progress).round()
-            : null;
         statusLine = formatProgressLine(
           doneBytes: item.bytesReceived,
-          totalBytes: total,
+          totalBytes: view.totalBytes,
+          speedBytesPerSec: view.speedBytesPerSec,
+          eta: view.eta,
         );
       case _ItemState.queued:
         statusLine = t.queueStatusQueued;
@@ -99,29 +92,41 @@ class QueueItem extends ConsumerWidget {
         trailing = Icon(Icons.help_outline, color: tokens.muted2);
     }
 
-    // Cover placeholder (46x46 rounded box with a music-note icon)
-    final coverPlaceholder = Container(
-      width: 46,
-      height: 46,
-      decoration: BoxDecoration(
-        color: tokens.surface3,
+    // Cover art: show network image if coverUrl available, else placeholder.
+    final coverUrl = view.track?.coverUrl;
+    final Widget cover;
+    if (coverUrl != null) {
+      cover = ClipRRect(
         borderRadius: BorderRadius.circular(8),
-      ),
-      child: Icon(Icons.music_note, size: 22, color: tokens.muted2),
-    );
+        child: SizedBox(
+          width: 46,
+          height: 46,
+          child: Image.network(
+            coverUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (ctx, err, trace) => _coverPlaceholder(tokens),
+          ),
+        ),
+      );
+    } else {
+      cover = _coverPlaceholder(tokens);
+    }
+
+    // Title: track name if known, itemId as fallback
+    final title = view.track?.name ?? item.itemId;
 
     final cardContent = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
-          coverPlaceholder,
+          cover,
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.itemId,
+                  title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -196,6 +201,16 @@ class QueueItem extends ConsumerWidget {
     );
   }
 }
+
+Widget _coverPlaceholder(AppTokens tokens) => Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: tokens.surface3,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(Icons.music_note, size: 22, color: tokens.muted2),
+    );
 
 enum _ItemState { downloading, done, failed, queued, unknown }
 

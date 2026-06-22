@@ -6,6 +6,7 @@ import '../models/download_progress.dart';
 import '../models/download_request.dart';
 import '../models/track.dart';
 import 'download_dir_provider.dart';
+import 'download_labels_provider.dart';
 import 'extensions_provider.dart';
 
 /// Polls [BackendBridge.getAllProgress] every second and emits the list.
@@ -29,6 +30,8 @@ class DownloadController {
   Future<void> start(Track track, {String? source, String? quality}) async {
     final dir = await _ref.read(downloadDirProvider.future);
     final bridge = _ref.read(backendBridgeProvider);
+    final itemId = 'dl_${DateTime.now().microsecondsSinceEpoch}_${track.id}';
+    _ref.read(downloadLabelsProvider.notifier).put(itemId, track);
     final req = DownloadRequest(
       trackName: track.name,
       artistName: track.artists,
@@ -38,6 +41,7 @@ class DownloadController {
       useExtensions: true,
       source: source,
       quality: quality,
+      itemId: itemId,
     );
     await bridge.downloadByStrategy(req);
   }
