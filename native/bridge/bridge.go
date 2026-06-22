@@ -123,6 +123,19 @@ func LoadExtensionsFromDir(dirPath string) (string, error) {
 	return gobackend.LoadExtensionsFromDir(dirPath)
 }
 
+// HandleURLWithExtensionJSON resolves a shared/deep-link URL (Spotify, Deezer,
+// Tidal, ...) via the installed extensions, returning the resolved
+// track/album/playlist as JSON ({"type":...,"track":{...}|"tracks":[...]}).
+func HandleURLWithExtensionJSON(url string) (string, error) {
+	return gobackend.HandleURLWithExtensionJSON(url)
+}
+
+// FindURLHandlerJSON returns JSON describing which installed extension (if any)
+// can handle the given URL.
+func FindURLHandlerJSON(url string) string {
+	return gobackend.FindURLHandlerJSON(url)
+}
+
 // SetExtensionEnabledByID enables or disables an extension by its ID.
 func SetExtensionEnabledByID(id string, enabled bool) error {
 	return gobackend.SetExtensionEnabledByID(id, enabled)

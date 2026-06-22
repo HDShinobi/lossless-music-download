@@ -82,6 +82,16 @@ class BackendBridge {
     return AudioQuality.fromJson(Map<String, dynamic>.from(jsonDecode(raw)));
   }
 
+  /// Resolves a shared/deep-link URL (Spotify, Deezer, ...) via the installed
+  /// extensions. Returns the decoded result map ({type, track|tracks, ...}) or
+  /// null if nothing handled it.
+  Future<Map<String, dynamic>?> handleUrl(String url) async {
+    final raw = await _c.invokeMethod<String>('handleUrl', {'url': url});
+    if (raw == null || raw.isEmpty) return null;
+    final decoded = jsonDecode(raw);
+    return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+  }
+
   Future<void> setDownloadDirectory(String path) =>
       _c.invokeMethod('setDownloadDirectory', {'path': path});
 

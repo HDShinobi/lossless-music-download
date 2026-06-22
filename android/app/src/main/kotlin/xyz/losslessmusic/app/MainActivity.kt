@@ -123,6 +123,8 @@ class MainActivity : FlutterActivity() {
             true to null
         }
         "getMediaServerStatus" -> true to Bridge.getMediaServerStatus()
+        "handleUrl" -> true to Bridge.handleURLWithExtensionJSON(call.argument<String>("url")!!)
+        "findUrlHandler" -> true to Bridge.findURLHandlerJSON(call.argument<String>("url")!!)
         else -> false to null
     }
 
