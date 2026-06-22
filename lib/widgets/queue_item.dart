@@ -92,9 +92,9 @@ class QueueItem extends ConsumerWidget {
         trailing = IconButton(
           icon: Icon(Icons.refresh, color: tokens.down),
           tooltip: t.queueStatusFailed,
-          onPressed: () {
+          onPressed: () async {
             final track = view.track;
-            unawaited(bridge.cancelDownload(item.itemId).catchError((_) {}));
+            await bridge.cancelDownload(item.itemId).catchError((_) {});
             if (track != null) {
               unawaited(
                 ref

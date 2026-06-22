@@ -9,6 +9,7 @@ import 'package:lossless_music_download/models/download_request.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/models/track.dart';
 import 'package:lossless_music_download/providers/download_dir_provider.dart';
+import 'package:lossless_music_download/providers/download_options_provider.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/providers/search_provider.dart';
 import 'package:lossless_music_download/screens/search_screen.dart';
@@ -86,6 +87,9 @@ Widget buildSearchScreen({
       ),
       extensionsProvider.overrideWith(() => _FakeExtensionsController([])),
       searchProvider.overrideWith(() => _FakeSearchNotifier(results)),
+      askBeforeDownloadProvider.overrideWith(
+        () => AskBeforeDownloadNotifier(),
+      ),
     ],
     child: MaterialApp(
       theme: appTheme(),

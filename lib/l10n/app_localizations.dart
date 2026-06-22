@@ -653,7 +653,7 @@ abstract class AppLocalizations {
   /// No description provided for @batchAddedToQueue.
   ///
   /// In en, this message translates to:
-  /// **'Added {count} tracks to the queue'**
+  /// **'Queued {count} for download'**
   String batchAddedToQueue(int count);
 
   /// No description provided for @selectionClear.
