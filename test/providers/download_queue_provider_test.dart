@@ -189,6 +189,41 @@ void main() {
       expect(json['quality'], 'lossless');
     });
 
+    test('enqueue maps the track id to the right backend identifier', () async {
+      // qobuz-prefixed id -> qobuz_id, no spotify_id
+      final b1 = _FakeBridge()..downloadResult = {};
+      final c1 = _makeContainer(b1);
+      addTearDown(c1.dispose);
+      await c1
+          .read(downloadQueueProvider.notifier)
+          .enqueue(const Track(id: 'qobuz:12345', name: 'S', artists: 'A'));
+      final j1 = b1.downloadCalls.first.toJson();
+      expect(j1['qobuz_id'], '12345');
+      expect(j1.containsKey('spotify_id'), isFalse);
+
+      // tidal-prefixed id -> tidal_id, no spotify_id
+      final b2 = _FakeBridge()..downloadResult = {};
+      final c2 = _makeContainer(b2);
+      addTearDown(c2.dispose);
+      await c2
+          .read(downloadQueueProvider.notifier)
+          .enqueue(const Track(id: 'tidal:999', name: 'S', artists: 'A'));
+      final j2 = b2.downloadCalls.first.toJson();
+      expect(j2['tidal_id'], '999');
+      expect(j2.containsKey('spotify_id'), isFalse);
+
+      // plain id -> spotify_id
+      final b3 = _FakeBridge()..downloadResult = {};
+      final c3 = _makeContainer(b3);
+      addTearDown(c3.dispose);
+      await c3
+          .read(downloadQueueProvider.notifier)
+          .enqueue(const Track(id: 'abc123', name: 'S', artists: 'A'));
+      final j3 = b3.downloadCalls.first.toJson();
+      expect(j3['spotify_id'], 'abc123');
+      expect(j3.containsKey('qobuz_id'), isFalse);
+    });
+
     // retry removes old entry and re-enqueues
     test('retry removes old entry and re-enqueues the track', () async {
       final bridge = _FakeBridge()

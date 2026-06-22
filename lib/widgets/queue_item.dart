@@ -61,7 +61,11 @@ class QueueItem extends ConsumerWidget {
       case _ItemState.queued:
         statusLine = t.queueStatusQueued;
       case _ItemState.failed:
-        statusLine = t.queueStatusFailed;
+        // Show the backend failure reason when available so issues
+        // (auth/token, not found, network) are diagnosable, not opaque.
+        statusLine = (view.error != null && view.error!.isNotEmpty)
+            ? '${t.queueStatusFailed} · ${view.error}'
+            : t.queueStatusFailed;
       case _ItemState.done:
         statusLine = t.queueStatusDone;
       case _ItemState.unknown:
@@ -147,7 +151,8 @@ class QueueItem extends ConsumerWidget {
                 const SizedBox(height: 3),
                 Text(
                   statusLine,
-                  maxLines: 1,
+                  // Allow a couple of lines so a failure reason is readable.
+                  maxLines: state == _ItemState.failed ? 3 : 1,
                   overflow: TextOverflow.ellipsis,
                   style: tokens.mono.copyWith(
                     fontSize: 11,

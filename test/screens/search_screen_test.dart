@@ -39,6 +39,14 @@ class _FakeBackendBridge extends BackendBridge {
 
   @override
   Future<void> cancelDownload(String itemId) async {}
+
+  // enqueue seeds the download priority (reads then maybe sets it) before
+  // downloading; stub both so the seed doesn't hit the real platform channel.
+  @override
+  Future<List<String>> getDownloadPriority() async => const [];
+
+  @override
+  Future<void> setDownloadPriority(List<String> ids) async {}
 }
 
 // ---------------------------------------------------------------------------

@@ -52,6 +52,7 @@ class QueueScreen extends ConsumerWidget {
       totalBytes: e.totalBytes,
       speedBytesPerSec: e.speedBytesPerSec,
       eta: e.eta,
+      error: e.error,
     );
   }
 }

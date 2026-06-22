@@ -9,6 +9,7 @@ class QueueItemView {
   final int? totalBytes;
   final double? speedBytesPerSec;
   final Duration? eta;
+  final String? error;
 
   const QueueItemView({
     required this.progress,
@@ -16,6 +17,7 @@ class QueueItemView {
     this.totalBytes,
     this.speedBytesPerSec,
     this.eta,
+    this.error,
   });
 }
 

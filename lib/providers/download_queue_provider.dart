@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/download_progress.dart';
 import '../models/download_request.dart';
+import '../models/installed_extension.dart';
 import '../models/track.dart';
 import '../util/queue_view.dart';
 import 'download_dir_provider.dart';
@@ -23,6 +24,9 @@ class DownloadEntry {
   final double? speedBytesPerSec;
   final Duration? eta;
 
+  /// Failure reason from the backend (shown on a failed item). Null otherwise.
+  final String? error;
+
   const DownloadEntry({
     required this.track,
     required this.itemId,
@@ -32,6 +36,7 @@ class DownloadEntry {
     this.totalBytes,
     this.speedBytesPerSec,
     this.eta,
+    this.error,
   });
 
   DownloadEntry copyWith({
@@ -41,6 +46,7 @@ class DownloadEntry {
     int? totalBytes,
     double? speedBytesPerSec,
     Duration? eta,
+    String? error,
   }) {
     return DownloadEntry(
       track: track,
@@ -51,6 +57,7 @@ class DownloadEntry {
       totalBytes: totalBytes ?? this.totalBytes,
       speedBytesPerSec: speedBytesPerSec ?? this.speedBytesPerSec,
       eta: eta ?? this.eta,
+      error: error ?? this.error,
     );
   }
 }
@@ -97,12 +104,54 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     // Now resolve the output directory (async).
     final dir = await ref.read(downloadDirProvider.future);
 
+    // Ensure the backend has download providers to try. The Uu tien (priority)
+    // screen only persists on a manual reorder, so a normal install -> search
+    // -> download flow leaves the backend priority EMPTY, and the strategy then
+    // reports "No extension download providers available". Seed it (only when
+    // empty, so a user-set order is preserved) with the installed, enabled,
+    // download-capable extensions.
+    final bridge = ref.read(backendBridgeProvider);
+    try {
+      final current = await bridge.getDownloadPriority();
+      if (current.isEmpty) {
+        final exts = ref.read(extensionsProvider).value ??
+            const <InstalledExtension>[];
+        final dlProviders = exts
+            .where((e) => e.enabled && e.hasDownloadProvider)
+            .map((e) => e.id)
+            .toList();
+        if (dlProviders.isNotEmpty) {
+          await bridge.setDownloadPriority(dlProviders);
+        }
+      }
+    } catch (_) {}
+
+    // Forward the track identifier so the backend can locate the exact track
+    // to download (matches SpotiFLAC): a `qobuz:`/`tidal:` prefixed id maps to
+    // qobuz_id/tidal_id; otherwise it is treated as the spotify_id. Without an
+    // id the extension has nothing to fetch and the download fails.
+    String? spotifyId = track.id.isEmpty ? null : track.id;
+    String? qobuzId;
+    String? tidalId;
+    if (track.id.startsWith('qobuz:')) {
+      qobuzId = track.id.substring(6);
+      spotifyId = null;
+    } else if (track.id.startsWith('tidal:')) {
+      tidalId = track.id.substring(6);
+      spotifyId = null;
+    }
+
     final req = DownloadRequest(
       trackName: track.name,
       artistName: track.artists,
       outputDir: dir,
       albumName: track.albumName,
       isrc: track.isrc,
+      spotifyId: spotifyId,
+      qobuzId: qobuzId,
+      tidalId: tidalId,
+      coverUrl: track.coverUrl,
+      durationMs: track.durationMs,
       useExtensions: true,
       source: source,
       quality: quality,
@@ -110,16 +159,18 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     );
 
     try {
-      final res = await ref.read(backendBridgeProvider).downloadByStrategy(req);
+      final res = await bridge.downloadByStrategy(req);
       final failed = res['success'] == false ||
           (res['error'] != null && '${res['error']}'.isNotEmpty) ||
           (res['status']?.toString().toLowerCase().contains('error') ?? false) ||
           (res['status']?.toString().toLowerCase().contains('fail') ?? false) ||
           (res['status']?.toString().toLowerCase().contains('cancel') ?? false);
+      final err = res['error']?.toString() ?? res['error_type']?.toString();
       _setStatus(itemId, failed ? 'failed' : 'done',
-          progressIfDone: failed ? null : 1.0);
-    } catch (_) {
-      _setStatus(itemId, 'failed');
+          progressIfDone: failed ? null : 1.0,
+          error: failed ? (err?.isNotEmpty == true ? err : 'unknown') : null);
+    } catch (e) {
+      _setStatus(itemId, 'failed', error: e.toString());
     }
   }
 
@@ -216,13 +267,15 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     return fallback;
   }
 
-  void _setStatus(String itemId, String status, {double? progressIfDone}) {
+  void _setStatus(String itemId, String status,
+      {double? progressIfDone, String? error}) {
     state = [
       for (final e in state)
         if (e.itemId == itemId)
           e.copyWith(
             status: status,
             progress: progressIfDone ?? e.progress,
+            error: error,
           )
         else
           e,
