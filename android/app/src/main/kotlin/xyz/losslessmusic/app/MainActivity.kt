@@ -16,6 +16,9 @@ class MainActivity : FlutterActivity() {
                     when (call.method) {
                         "ping" -> result.success(Bridge.ping())
                         "getDownloadProgress" -> result.success(Bridge.getDownloadProgress())
+                        "getAudioQuality" -> result.success(
+                            Bridge.getAudioQualityJSON(call.argument<String>("path")!!)
+                        )
                         "initExtensionSystem" -> {
                             Bridge.initExtensionSystem(
                                 call.argument<String>("extDir")!!,

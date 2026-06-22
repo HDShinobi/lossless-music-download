@@ -5,12 +5,29 @@
 package bridge
 
 import (
+	"encoding/json"
+
 	"github.com/zarz/spotiflac_android/go_backend"
 )
 
 // Ping returns a fixed string to prove the gomobile bridge works.
 func Ping() string {
 	return "pong"
+}
+
+// GetAudioQualityJSON probes a local audio file and returns its measured
+// quality (bit_depth, sample_rate, bitrate, codec, duration) as JSON. Used by
+// the Library + Verified screens to show real quality instead of placeholders.
+func GetAudioQualityJSON(filePath string) (string, error) {
+	q, err := gobackend.GetAudioQuality(filePath)
+	if err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(q)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // GetDownloadProgress delegates to the SpotiFLAC backend and returns

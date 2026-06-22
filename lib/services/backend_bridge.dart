@@ -4,6 +4,7 @@ import '../models/track.dart';
 import '../models/installed_extension.dart';
 import '../models/download_request.dart';
 import '../models/download_progress.dart';
+import '../models/audio_quality.dart';
 
 class BackendBridge {
   BackendBridge([MethodChannel? channel])
@@ -71,6 +72,14 @@ class BackendBridge {
 
   Future<void> cancelDownload(String itemId) =>
       _c.invokeMethod('cancelDownload', {'itemId': itemId});
+
+  /// Probes a local audio file's measured quality (bit depth, sample rate,
+  /// bitrate, codec). Returns null if the path cannot be probed.
+  Future<AudioQuality?> getAudioQuality(String path) async {
+    final raw = await _c.invokeMethod<String>('getAudioQuality', {'path': path});
+    if (raw == null || raw.isEmpty) return null;
+    return AudioQuality.fromJson(Map<String, dynamic>.from(jsonDecode(raw)));
+  }
 
   Future<void> setDownloadDirectory(String path) =>
       _c.invokeMethod('setDownloadDirectory', {'path': path});
