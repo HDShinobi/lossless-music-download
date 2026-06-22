@@ -12,6 +12,9 @@ import 'package:lossless_music_download/services/backend_bridge.dart';
 class _FakeBridge extends BackendBridge {
   ServerStatus _statusToReturn = ServerStatus.stopped;
   bool stopCalled = false;
+  bool startCalled = false;
+  String? lastRootDir;
+  String? lastServerName;
 
   void setStatus(ServerStatus s) => _statusToReturn = s;
 
@@ -19,13 +22,38 @@ class _FakeBridge extends BackendBridge {
   Future<ServerStatus> getMediaServerStatus() async => _statusToReturn;
 
   @override
-  Future<ServerStatus> startMediaServer(String rootDir, String name) async =>
-      _statusToReturn;
+  Future<ServerStatus> startMediaServer(String rootDir, String name) async {
+    startCalled = true;
+    lastRootDir = rootDir;
+    lastServerName = name;
+    return _statusToReturn;
+  }
 
   @override
   Future<void> stopMediaServer() async => stopCalled = true;
 
   // downloadDirProvider calls these — provide no-op overrides
+  @override
+  Future<void> setDownloadDirectory(String path) async {}
+
+  @override
+  Future<void> allowDownloadDir(String path) async {}
+}
+
+// ---------------------------------------------------------------------------
+// Throwing bridge — startMediaServer always throws to simulate errors.
+// ---------------------------------------------------------------------------
+class _ThrowingBridge extends BackendBridge {
+  @override
+  Future<ServerStatus> getMediaServerStatus() async => ServerStatus.stopped;
+
+  @override
+  Future<ServerStatus> startMediaServer(String rootDir, String name) async =>
+      throw Exception('network error');
+
+  @override
+  Future<void> stopMediaServer() async {}
+
   @override
   Future<void> setDownloadDirectory(String path) async {}
 
@@ -76,6 +104,28 @@ void main() {
       expect(status, isNotNull);
       expect(status!.running, isTrue);
       expect(status.url, 'http://10.0.0.5:8200/');
+      expect(fake.startCalled, isTrue);
+      expect(fake.lastRootDir, '/test/downloads');
+      expect(fake.lastServerName, 'Lossless Music');
+    });
+
+    test('start() → AsyncError when bridge throws', () async {
+      final throwingBridge = _ThrowingBridge();
+      final container = ProviderContainer(
+        overrides: [
+          backendBridgeProvider.overrideWithValue(throwingBridge),
+          downloadDirPathProvider.overrideWithValue(Future.value('/test/downloads')),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      // Ensure build is done first (build uses getMediaServerStatus which returns stopped)
+      await container.read(serverProvider.future);
+
+      // start() calls startMediaServer which throws
+      await container.read(serverProvider.notifier).start();
+
+      expect(container.read(serverProvider).hasError, isTrue);
     });
 
     test('stop() → running=false', () async {
