@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -22,6 +23,7 @@ type MediaServer struct {
 	udn          string
 	httpSrv      *http.Server
 	baseURL      string
+	ssdp         *ssdpResponder
 	mu           sync.Mutex
 	running      bool
 }
@@ -93,6 +95,14 @@ func (s *MediaServer) Start() (string, error) {
 		_ = s.httpSrv.Serve(ln)
 	}()
 
+	// Start SSDP advertisement (best-effort: failure does not abort the server).
+	s.ssdp = &ssdpResponder{}
+	location := s.baseURL + "/description.xml"
+	if err := s.ssdp.start(location, s.udn); err != nil {
+		log.Printf("MediaServer: SSDP unavailable (best-effort): %v", err)
+		s.ssdp = nil
+	}
+
 	s.running = true
 	return s.baseURL, nil
 }
@@ -105,6 +115,13 @@ func (s *MediaServer) Stop() error {
 	if !s.running {
 		return nil
 	}
+
+	// Stop SSDP before shutting down HTTP so byebye goes out while still alive.
+	if s.ssdp != nil {
+		s.ssdp.stop(s.udn)
+		s.ssdp = nil
+	}
+
 	err := s.httpSrv.Shutdown(context.Background())
 	s.running = false
 	return err
@@ -151,13 +168,19 @@ func (s *MediaServer) handleControl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	objectID, _, err := parseBrowse(body)
+	objectID, browseFlag, err := parseBrowse(body)
 	if err != nil {
 		http.Error(w, "Bad Request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	didl, numReturned, totalMatches, err := s.browse(objectID)
+	var didl []byte
+	var numReturned, totalMatches int
+	if browseFlag == "BrowseMetadata" {
+		didl, numReturned, totalMatches, err = s.browseMetadata(objectID)
+	} else {
+		didl, numReturned, totalMatches, err = s.browse(objectID)
+	}
 	if err != nil {
 		http.Error(w, "Internal Server Error: "+err.Error(), http.StatusInternalServerError)
 		return

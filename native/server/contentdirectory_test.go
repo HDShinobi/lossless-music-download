@@ -160,6 +160,86 @@ func TestEncodeDecodeObjectID(t *testing.T) {
 	}
 }
 
+func TestBrowseMetadataRoot(t *testing.T) {
+	dir := t.TempDir()
+	// Add one child so childCount is known.
+	albumDir := filepath.Join(dir, "Artist")
+	if err := os.MkdirAll(albumDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := NewMediaServer(dir, "My Music Server")
+	srv.baseURL = "http://127.0.0.1:8200"
+
+	didl, num, total, err := srv.browseMetadata("0")
+	if err != nil {
+		t.Fatalf("browseMetadata(0) error: %v", err)
+	}
+	if num != 1 {
+		t.Errorf("NumberReturned = %d, want 1", num)
+	}
+	if total != 1 {
+		t.Errorf("TotalMatches = %d, want 1", total)
+	}
+	s := string(didl)
+	if !strings.Contains(s, `<container id="0"`) {
+		t.Errorf("DIDL missing root container id=0, got:\n%s", s)
+	}
+	if !strings.Contains(s, "My Music Server") {
+		t.Errorf("DIDL missing friendlyName title, got:\n%s", s)
+	}
+	if !strings.Contains(s, "storageFolder") {
+		t.Errorf("DIDL missing storageFolder class, got:\n%s", s)
+	}
+}
+
+func TestBrowseMetadataViaControl(t *testing.T) {
+	dir := t.TempDir()
+	srv := NewMediaServer(dir, "Test")
+	srv.baseURL = "http://127.0.0.1:8200"
+
+	const metadataEnvelope = `<?xml version="1.0" encoding="utf-8"?>
+<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"
+            s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+  <s:Body>
+    <u:Browse xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1">
+      <ObjectID>0</ObjectID>
+      <BrowseFlag>BrowseMetadata</BrowseFlag>
+      <Filter>*</Filter>
+      <StartingIndex>0</StartingIndex>
+      <RequestedCount>0</RequestedCount>
+      <SortCriteria></SortCriteria>
+    </u:Browse>
+  </s:Body>
+</s:Envelope>`
+
+	id, flag, err := parseBrowse([]byte(metadataEnvelope))
+	if err != nil {
+		t.Fatalf("parseBrowse error: %v", err)
+	}
+	if flag != "BrowseMetadata" {
+		t.Errorf("BrowseFlag = %q, want BrowseMetadata", flag)
+	}
+
+	var didl []byte
+	var num, total int
+	if flag == "BrowseMetadata" {
+		didl, num, total, err = srv.browseMetadata(id)
+	} else {
+		didl, num, total, err = srv.browse(id)
+	}
+	if err != nil {
+		t.Fatalf("browseMetadata error: %v", err)
+	}
+	if num != 1 || total != 1 {
+		t.Errorf("expected NumberReturned=1 TotalMatches=1, got %d %d", num, total)
+	}
+	s := string(didl)
+	if !strings.Contains(s, `<container id="0"`) {
+		t.Errorf("DIDL missing root container, got:\n%s", s)
+	}
+}
+
 func TestMimeForExt(t *testing.T) {
 	cases := []struct{ ext, mime string }{
 		{".flac", "audio/flac"},

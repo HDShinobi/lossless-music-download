@@ -161,10 +161,35 @@ func (s *MediaServer) browse(objectID string) (didl []byte, numReturned, totalMa
 		}
 	}
 
-	_ = parentID // used only in metadata browse (BrowseMetadata); kept for future use
+	_ = parentID // used only in metadata browse (BrowseMetadata); see browseMetadata
 
 	total := len(containers) + len(items)
 	return didlLite(containers, items), total, total, nil
+}
+
+// browseMetadata returns a single-item DIDL-Lite describing the metadata of
+// the object identified by objectID. Only objectID "0" (root container) is
+// currently supported; all other IDs return an error.
+func (s *MediaServer) browseMetadata(objectID string) (didl []byte, numReturned, totalMatches int, err error) {
+	s.mu.Lock()
+	rootDir := s.rootDir
+	friendlyName := s.friendlyName
+	s.mu.Unlock()
+
+	if objectID != "0" {
+		return nil, 0, 0, fmt.Errorf("browseMetadata: unsupported objectID %q", objectID)
+	}
+
+	// Count direct children of root for childCount.
+	childCount := countChildren(rootDir)
+
+	container := cdObject{
+		id:         "0",
+		parentID:   "-1",
+		title:      friendlyName,
+		childCount: childCount,
+	}
+	return didlLite([]cdObject{container}, nil), 1, 1, nil
 }
 
 // validateRelPath rejects relative paths containing ".." components.
