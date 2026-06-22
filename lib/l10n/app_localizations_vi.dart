@@ -259,4 +259,29 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get verifiedServeTitle => 'Phát cho thiết bị khác';
+
+  @override
+  String get serverRunning => 'Đang phát';
+
+  @override
+  String get serverStopped => 'Đã tắt';
+
+  @override
+  String get serverStart => 'Bật máy chủ';
+
+  @override
+  String get serverStop => 'Tắt máy chủ';
+
+  @override
+  String get serverAddress => 'Địa chỉ';
+
+  @override
+  String get serverFolder => 'Thư mục phát';
+
+  @override
+  String get serverHint =>
+      'Tìm thiết bị này trong app phát nhạc DLNA (PureBit, UAPP, Poweramp).';
+
+  @override
+  String get serverCopied => 'Đã sao chép địa chỉ';
 }

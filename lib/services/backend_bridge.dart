@@ -5,6 +5,7 @@ import '../models/installed_extension.dart';
 import '../models/download_request.dart';
 import '../models/download_progress.dart';
 import '../models/audio_quality.dart';
+import '../models/server_status.dart';
 
 class BackendBridge {
   BackendBridge([MethodChannel? channel])
@@ -119,4 +120,21 @@ class BackendBridge {
 
   Future<void> setMetadataPriority(List<String> ids) =>
       _c.invokeMethod('setMetadataPriority', {'priorityJson': jsonEncode(ids)});
+
+  Future<ServerStatus> startMediaServer(String rootDir, String name) async {
+    final raw = await _c.invokeMethod<String>(
+      'startMediaServer',
+      {'rootDir': rootDir, 'name': name},
+    );
+    if (raw == null || raw.isEmpty) return ServerStatus.stopped;
+    return ServerStatus.fromJson(Map<String, dynamic>.from(jsonDecode(raw)));
+  }
+
+  Future<void> stopMediaServer() => _c.invokeMethod('stopMediaServer');
+
+  Future<ServerStatus> getMediaServerStatus() async {
+    final raw = await _c.invokeMethod<String>('getMediaServerStatus');
+    if (raw == null || raw.isEmpty) return ServerStatus.stopped;
+    return ServerStatus.fromJson(Map<String, dynamic>.from(jsonDecode(raw)));
+  }
 }

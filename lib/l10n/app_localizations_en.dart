@@ -260,4 +260,29 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get verifiedServeTitle => 'Serve to other devices';
+
+  @override
+  String get serverRunning => 'Running';
+
+  @override
+  String get serverStopped => 'Stopped';
+
+  @override
+  String get serverStart => 'Start server';
+
+  @override
+  String get serverStop => 'Stop server';
+
+  @override
+  String get serverAddress => 'Address';
+
+  @override
+  String get serverFolder => 'Served folder';
+
+  @override
+  String get serverHint =>
+      'Find this device in your DLNA player (PureBit, UAPP, Poweramp).';
+
+  @override
+  String get serverCopied => 'Address copied';
 }

@@ -108,5 +108,13 @@
   "statBitDepth": "Độ sâu bit",
   "statSampleRate": "Tần số lấy mẫu",
   "statBitrate": "Bitrate",
-  "verifiedServeTitle": "Phát cho thiết bị khác"
+  "verifiedServeTitle": "Phát cho thiết bị khác",
+  "serverRunning": "Đang phát",
+  "serverStopped": "Đã tắt",
+  "serverStart": "Bật máy chủ",
+  "serverStop": "Tắt máy chủ",
+  "serverAddress": "Địa chỉ",
+  "serverFolder": "Thư mục phát",
+  "serverHint": "Tìm thiết bị này trong app phát nhạc DLNA (PureBit, UAPP, Poweramp).",
+  "serverCopied": "Đã sao chép địa chỉ"
 }

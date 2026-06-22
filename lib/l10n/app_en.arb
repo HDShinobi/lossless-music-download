@@ -108,5 +108,13 @@
   "statBitDepth": "Bit depth",
   "statSampleRate": "Sample rate",
   "statBitrate": "Bitrate",
-  "verifiedServeTitle": "Serve to other devices"
+  "verifiedServeTitle": "Serve to other devices",
+  "serverRunning": "Running",
+  "serverStopped": "Stopped",
+  "serverStart": "Start server",
+  "serverStop": "Stop server",
+  "serverAddress": "Address",
+  "serverFolder": "Served folder",
+  "serverHint": "Find this device in your DLNA player (PureBit, UAPP, Poweramp).",
+  "serverCopied": "Address copied"
 }

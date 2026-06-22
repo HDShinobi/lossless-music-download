@@ -583,6 +583,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Serve to other devices'**
   String get verifiedServeTitle;
+
+  /// No description provided for @serverRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get serverRunning;
+
+  /// No description provided for @serverStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get serverStopped;
+
+  /// No description provided for @serverStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start server'**
+  String get serverStart;
+
+  /// No description provided for @serverStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop server'**
+  String get serverStop;
+
+  /// No description provided for @serverAddress.
+  ///
+  /// In en, this message translates to:
+  /// **'Address'**
+  String get serverAddress;
+
+  /// No description provided for @serverFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Served folder'**
+  String get serverFolder;
+
+  /// No description provided for @serverHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Find this device in your DLNA player (PureBit, UAPP, Poweramp).'**
+  String get serverHint;
+
+  /// No description provided for @serverCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Address copied'**
+  String get serverCopied;
 }
 
 class _AppLocalizationsDelegate
