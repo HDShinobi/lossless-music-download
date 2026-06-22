@@ -21,7 +21,7 @@ class QueueScreen extends ConsumerWidget {
 
     Widget body = downloadsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(child: Text('Error: $err')),
+      error: (_, _) => Center(child: Text(t.queueError)),
       data: (_) => views.isEmpty
           ? Center(child: Text(t.queueEmpty))
           : ListView.builder(
