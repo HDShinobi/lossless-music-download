@@ -572,6 +572,12 @@ abstract class AppLocalizations {
   /// **'Sample rate'**
   String get statSampleRate;
 
+  /// No description provided for @statBitrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Bitrate'**
+  String get statBitrate;
+
   /// No description provided for @verifiedServeTitle.
   ///
   /// In en, this message translates to:

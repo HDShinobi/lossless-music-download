@@ -107,5 +107,6 @@
   "statSize": "Dung lượng",
   "statBitDepth": "Độ sâu bit",
   "statSampleRate": "Tần số lấy mẫu",
+  "statBitrate": "Bitrate",
   "verifiedServeTitle": "Phát cho thiết bị khác"
 }

@@ -255,5 +255,8 @@ class AppLocalizationsVi extends AppLocalizations {
   String get statSampleRate => 'Tần số lấy mẫu';
 
   @override
+  String get statBitrate => 'Bitrate';
+
+  @override
   String get verifiedServeTitle => 'Phát cho thiết bị khác';
 }

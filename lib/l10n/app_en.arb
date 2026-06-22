@@ -107,5 +107,6 @@
   "statSize": "Size",
   "statBitDepth": "Bit depth",
   "statSampleRate": "Sample rate",
+  "statBitrate": "Bitrate",
   "verifiedServeTitle": "Serve to other devices"
 }

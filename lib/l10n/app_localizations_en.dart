@@ -256,5 +256,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statSampleRate => 'Sample rate';
 
   @override
+  String get statBitrate => 'Bitrate';
+
+  @override
   String get verifiedServeTitle => 'Serve to other devices';
 }

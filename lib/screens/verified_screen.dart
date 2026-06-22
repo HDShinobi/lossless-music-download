@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../l10n/app_localizations.dart';
+import '../models/audio_quality.dart';
+import '../providers/audio_quality_provider.dart';
 import '../providers/library_provider.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/spectrogram_placeholder.dart';
@@ -9,9 +12,10 @@ import '../widgets/spectrogram_placeholder.dart';
 /// Detail screen for a single [LibraryEntry] showing a heuristic lossless
 /// badge, an illustrative spectrogram placeholder, and a stats grid.
 ///
-/// All audio metrics (bit depth, sample rate) are shown as '—' because a
-/// real backend audio-probe does not exist yet.
-class VerifiedScreen extends StatelessWidget {
+/// Audio metrics (bit depth, sample rate, bitrate) are populated by probing
+/// the file via the backend. Values show '—' while the probe is loading or
+/// if it returns null.
+class VerifiedScreen extends ConsumerWidget {
   const VerifiedScreen({super.key, required this.entry});
 
   final LibraryEntry entry;
@@ -30,10 +34,13 @@ class VerifiedScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
     final tokens = context.tokens;
+
+    final qualityAsync = ref.watch(audioQualityProvider(entry.path));
+    final quality = qualityAsync.value;
 
     return Scaffold(
       appBar: AppBar(
@@ -62,7 +69,14 @@ class VerifiedScreen extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          _StatsGrid(entry: entry, sizeLabel: _sizeLabel, t: t, tokens: tokens, cs: cs),
+          _StatsGrid(
+            entry: entry,
+            sizeLabel: _sizeLabel,
+            quality: quality,
+            t: t,
+            tokens: tokens,
+            cs: cs,
+          ),
           const SizedBox(height: 16),
           _ServeRow(t: t, cs: cs, tokens: tokens),
         ],
@@ -222,6 +236,7 @@ class _StatsGrid extends StatelessWidget {
   const _StatsGrid({
     required this.entry,
     required this.sizeLabel,
+    required this.quality,
     required this.t,
     required this.tokens,
     required this.cs,
@@ -229,17 +244,23 @@ class _StatsGrid extends StatelessWidget {
 
   final LibraryEntry entry;
   final String sizeLabel;
+  final AudioQuality? quality;
   final AppLocalizations t;
   final AppTokens tokens;
   final ColorScheme cs;
 
   @override
   Widget build(BuildContext context) {
+    final bitDepth = quality != null ? (quality!.bitDepthLabel.isNotEmpty ? quality!.bitDepthLabel : '—') : '—';
+    final sampleRate = quality != null ? (quality!.sampleRateLabel.isNotEmpty ? quality!.sampleRateLabel : '—') : '—';
+    final bitrate = quality != null && quality!.bitrate > 0 ? '${quality!.bitrate} kbps' : '—';
+
     final stats = [
       (t.statFormat, entry.format),
       (t.statSize, sizeLabel),
-      (t.statBitDepth, '—'),
-      (t.statSampleRate, '—'),
+      (t.statBitDepth, bitDepth),
+      (t.statSampleRate, sampleRate),
+      (t.statBitrate, bitrate),
     ];
 
     return GridView.count(

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/audio_quality.dart';
+import '../providers/audio_quality_provider.dart';
 import '../providers/library_provider.dart';
 import '../theme/app_tokens.dart';
 
 /// A branded list-row widget for a single library track entry.
-class LibraryTrackTile extends StatelessWidget {
+class LibraryTrackTile extends ConsumerWidget {
   const LibraryTrackTile({
     super.key,
     required this.entry,
@@ -23,9 +26,14 @@ class LibraryTrackTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final tokens = context.tokens;
+
+    // Watch the audio quality probe — non-blocking; tile renders immediately
+    // with the format badge and fills in the quality badge when resolved.
+    final qualityAsync = ref.watch(audioQualityProvider(entry.path));
+    final quality = qualityAsync.value;
 
     final row = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -63,6 +71,14 @@ class LibraryTrackTile extends StatelessWidget {
                 Row(
                   children: [
                     _FormatBadge(label: entry.format, tokens: tokens, cs: cs),
+                    if (quality != null && quality.hasData) ...[
+                      const SizedBox(width: 4),
+                      _QualityBadge(
+                        quality: quality,
+                        tokens: tokens,
+                        cs: cs,
+                      ),
+                    ],
                     if (entry.verified) ...[
                       const SizedBox(width: 4),
                       Icon(
@@ -121,6 +137,59 @@ class _FormatBadge extends StatelessWidget {
         label,
         style: TextStyle(
           color: textColor,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Quality badge pill — shows bit-depth/sample-rate (e.g. "24/96" or "44.1k")
+// ---------------------------------------------------------------------------
+class _QualityBadge extends StatelessWidget {
+  const _QualityBadge({
+    required this.quality,
+    required this.tokens,
+    required this.cs,
+  });
+
+  final AudioQuality quality;
+  final AppTokens tokens;
+  final ColorScheme cs;
+
+  /// Format: "24/96" when bit depth is known, "44.1k" for lossy (bitDepth==0).
+  String get _label {
+    final khz = quality.sampleRate / 1000;
+    if (quality.bitDepth > 0) {
+      final kStr = khz == khz.truncateToDouble()
+          ? khz.toInt().toString()
+          : khz.toStringAsFixed(1);
+      return '${quality.bitDepth}/$kStr';
+    }
+    // Lossy — show only kHz with 'k' suffix, trimming trailing zeros.
+    final kStr = khz == khz.truncateToDouble()
+        ? '${khz.toInt()}k'
+        : '${khz.toStringAsFixed(1)}k';
+    return kStr;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('qualityBadge'),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: tokens.surface2,
+        border: Border.all(color: cs.outline, width: 1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        _label,
+        style: tokens.mono.copyWith(
+          color: cs.onSurfaceVariant,
           fontSize: 10,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.4,
