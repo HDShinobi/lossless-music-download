@@ -13,6 +13,10 @@ import 'downloads_provider.dart';
 import 'extensions_provider.dart';
 import 'library_provider.dart';
 
+// Sentinel used to short-circuit _processQueue when a duplicate is detected,
+// allowing the finally block (_isProcessing = false) to still run.
+class _DuplicateSkipped implements Exception {}
+
 // ---------------------------------------------------------------------------
 // DownloadEntry — persistent client-side queue item
 // ---------------------------------------------------------------------------
@@ -144,6 +148,23 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         }
       } catch (_) {}
 
+      // Skip download if file already exists on disk (mirrors SpotiFLAC's
+      // checkDuplicate preflight). Only checked when ISRC is known.
+      if (next.track.isrc != null && next.track.isrc!.isNotEmpty) {
+        try {
+          final dup = await bridge.checkDuplicate(dir, next.track.isrc!);
+          if (dup['exists'] == true) {
+            _setStatus(next.itemId, 'done', progressIfDone: 1.0);
+            ref.invalidate(libraryProvider);
+            throw _DuplicateSkipped();
+          }
+        } on _DuplicateSkipped {
+          rethrow;
+        } catch (_) {
+          // checkDuplicate failure is non-fatal — proceed with download.
+        }
+      }
+
       final resolvedService =
           (next.service != null && next.service!.isNotEmpty)
               ? next.service
@@ -201,6 +222,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         error: failed ? (err?.isNotEmpty == true ? err : 'unknown') : null,
       );
       if (!failed) ref.invalidate(libraryProvider);
+    } on _DuplicateSkipped {
+      // Item skipped — status already set to done above.
     } catch (e) {
       _setStatus(next.itemId, 'failed', error: e.toString());
     } finally {

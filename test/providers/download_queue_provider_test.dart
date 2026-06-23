@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/models/download_progress.dart';
@@ -13,14 +15,23 @@ import 'package:lossless_music_download/services/backend_bridge.dart';
 // ---------------------------------------------------------------------------
 
 class _FakeBridge extends BackendBridge {
-  /// The result that downloadByStrategy will return.
   Map<String, dynamic> downloadResult = {};
-
-  /// Whether downloadByStrategy should throw.
   bool throwOnDownload = false;
 
   final List<String> cancelCalls = [];
   final List<DownloadRequest> downloadCalls = [];
+
+  // Returns exists:true when duplicateIsrc is set and matches.
+  String? duplicateIsrc;
+
+  @override
+  Future<Map<String, dynamic>> checkDuplicate(
+      String outputDir, String isrc) async {
+    if (duplicateIsrc != null && duplicateIsrc == isrc) {
+      return {'exists': true, 'path': '/fake/existing.flac'};
+    }
+    return {'exists': false};
+  }
 
   @override
   Future<void> setDownloadDirectory(String path) async {}
@@ -42,6 +53,14 @@ class _FakeBridge extends BackendBridge {
   Future<void> cancelDownload(String itemId) async {
     cancelCalls.add(itemId);
   }
+
+  // Needed by _processQueue() priority-seed logic; return empty so the seed
+  // branch is exercised without calling the MethodChannel in unit tests.
+  @override
+  Future<List<String>> getDownloadPriority() async => [];
+
+  @override
+  Future<void> setDownloadPriority(List<String> ids) async {}
 }
 
 // ---------------------------------------------------------------------------
@@ -49,7 +68,7 @@ class _FakeBridge extends BackendBridge {
 // ---------------------------------------------------------------------------
 
 ProviderContainer _makeContainer(_FakeBridge bridge) {
-  final container = ProviderContainer(
+  return ProviderContainer(
     overrides: [
       backendBridgeProvider.overrideWithValue(bridge),
       downloadDirPathProvider.overrideWithValue(
@@ -57,10 +76,12 @@ ProviderContainer _makeContainer(_FakeBridge bridge) {
       ),
     ],
   );
-  // The notifier references downloadsProvider inside build(); that provider
-  // will call backendBridgeProvider.getAllProgress() which returns [].
-  return container;
 }
+
+/// Pump the Dart event loop enough times for _processQueue() to run to
+/// completion (a few async hops: downloadDir, getDownloadPriority, bridge).
+Future<void> _pump() =>
+    Future<void>.delayed(const Duration(milliseconds: 100));
 
 // ---------------------------------------------------------------------------
 // Test track fixture
@@ -71,6 +92,7 @@ const _track = Track(
   name: 'Test Song',
   artists: 'Test Artist',
   albumName: 'Test Album',
+  isrc: 'USUM71400000',
 );
 
 // ---------------------------------------------------------------------------
@@ -79,27 +101,29 @@ const _track = Track(
 
 void main() {
   group('DownloadQueueController', () {
-    // (a) enqueue immediately adds entry; success map → 'done'
-    test('enqueue adds entry instantly with status downloading, then done on success',
-        () async {
+    // (a) enqueue immediately adds visible entry; sequential processor sets done
+    test(
+        'enqueue adds entry instantly (status downloading), '
+        'then done after processing', () async {
       final bridge = _FakeBridge()..downloadResult = {};
       final container = _makeContainer(bridge);
       addTearDown(container.dispose);
 
-      // Read the notifier to initialise it.
       final notifier = container.read(downloadQueueProvider.notifier);
 
-      // Snapshot state *right after* enqueue is called (before await resolves).
-      // Because enqueue is async we check state after awaiting.
+      // enqueue() has no internal awaits — returns immediately. But
+      // _processQueue() starts synchronously and sets status→downloading
+      // before its first internal await.
       final future = notifier.enqueue(_track);
 
-      // State should already have 1 entry (prepended before the await).
       final immediateState = container.read(downloadQueueProvider);
       expect(immediateState, hasLength(1));
       expect(immediateState.first.track, equals(_track));
       expect(immediateState.first.status, equals('downloading'));
 
+      // Wait for the sequential processor to finish.
       await future;
+      await _pump();
 
       final finalState = container.read(downloadQueueProvider);
       expect(finalState, hasLength(1));
@@ -115,6 +139,7 @@ void main() {
       addTearDown(container.dispose);
 
       await container.read(downloadQueueProvider.notifier).enqueue(_track);
+      await _pump();
 
       final state = container.read(downloadQueueProvider);
       expect(state.first.status, equals('failed'));
@@ -129,6 +154,7 @@ void main() {
       addTearDown(container.dispose);
 
       await container.read(downloadQueueProvider.notifier).enqueue(_track);
+      await _pump();
 
       final state = container.read(downloadQueueProvider);
       expect(state.first.status, equals('failed'));
@@ -141,6 +167,7 @@ void main() {
       addTearDown(container.dispose);
 
       await container.read(downloadQueueProvider.notifier).enqueue(_track);
+      await _pump();
 
       final state = container.read(downloadQueueProvider);
       expect(state.first.status, equals('failed'));
@@ -154,14 +181,12 @@ void main() {
 
       final notifier = container.read(downloadQueueProvider.notifier);
 
-      // Enqueue then capture itemId before awaiting (download completes fast).
       final future = notifier.enqueue(_track);
-      final itemId =
-          container.read(downloadQueueProvider).first.itemId;
+      final itemId = container.read(downloadQueueProvider).first.itemId;
 
       await future;
+      await _pump();
 
-      // Now remove it.
       notifier.remove(itemId);
 
       expect(container.read(downloadQueueProvider), isEmpty);
@@ -176,7 +201,8 @@ void main() {
 
       await container
           .read(downloadQueueProvider.notifier)
-          .enqueue(_track, source: 'mysource', quality: 'lossless');
+          .enqueue(_track, service: 'mysource', quality: 'lossless');
+      await _pump();
 
       expect(bridge.downloadCalls, hasLength(1));
       final req = bridge.downloadCalls.first;
@@ -185,7 +211,8 @@ void main() {
       expect(json['artist_name'], 'Test Artist');
       expect(json['output_dir'], '/fake/downloads');
       expect(json['use_extensions'], isTrue);
-      expect(json['source'], 'mysource');
+      expect(json['use_fallback'], isTrue);
+      expect(json['service'], 'mysource');
       expect(json['quality'], 'lossless');
     });
 
@@ -197,6 +224,7 @@ void main() {
       await c1
           .read(downloadQueueProvider.notifier)
           .enqueue(const Track(id: 'qobuz:12345', name: 'S', artists: 'A'));
+      await _pump();
       final j1 = b1.downloadCalls.first.toJson();
       expect(j1['qobuz_id'], '12345');
       expect(j1.containsKey('spotify_id'), isFalse);
@@ -208,6 +236,7 @@ void main() {
       await c2
           .read(downloadQueueProvider.notifier)
           .enqueue(const Track(id: 'tidal:999', name: 'S', artists: 'A'));
+      await _pump();
       final j2 = b2.downloadCalls.first.toJson();
       expect(j2['tidal_id'], '999');
       expect(j2.containsKey('spotify_id'), isFalse);
@@ -219,12 +248,36 @@ void main() {
       await c3
           .read(downloadQueueProvider.notifier)
           .enqueue(const Track(id: 'abc123', name: 'S', artists: 'A'));
+      await _pump();
       final j3 = b3.downloadCalls.first.toJson();
       expect(j3['spotify_id'], 'abc123');
       expect(j3.containsKey('qobuz_id'), isFalse);
     });
 
-    // retry removes old entry and re-enqueues
+    // Sequential: second enqueue waits until first download completes
+    test('second enqueue is processed after first completes', () async {
+      final bridge = _FakeBridge()..downloadResult = {};
+      final container = _makeContainer(bridge);
+      addTearDown(container.dispose);
+
+      final notifier = container.read(downloadQueueProvider.notifier);
+
+      const track2 = Track(id: 'track-2', name: 'Song 2', artists: 'Artist B');
+      unawaited(notifier.enqueue(_track));
+      unawaited(notifier.enqueue(track2));
+
+      // Allow both to complete sequentially.
+      await _pump();
+      await _pump();
+
+      final state = container.read(downloadQueueProvider);
+      expect(state, hasLength(2));
+      expect(state.every((e) => e.status == 'done'), isTrue);
+      // Both requests should have been sent to the bridge sequentially.
+      expect(bridge.downloadCalls, hasLength(2));
+    });
+
+    // retry removes old entry and re-enqueues with original service/quality
     test('retry removes old entry and re-enqueues the track', () async {
       final bridge = _FakeBridge()
         ..downloadResult = {'success': false}; // first call fails
@@ -233,8 +286,9 @@ void main() {
 
       final notifier = container.read(downloadQueueProvider.notifier);
 
-      // First enqueue — ends in 'failed'.
       await notifier.enqueue(_track);
+      await _pump();
+
       final failedId = container.read(downloadQueueProvider).first.itemId;
       expect(container.read(downloadQueueProvider).first.status, 'failed');
 
@@ -243,14 +297,58 @@ void main() {
       bridge.throwOnDownload = false;
 
       notifier.retry(failedId);
-      // retry calls enqueue internally; wait for it to settle.
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await _pump();
 
       final state = container.read(downloadQueueProvider);
-      // The failed entry should be gone; a new 'done' entry should exist.
       expect(state.where((e) => e.itemId == failedId), isEmpty);
       expect(state, hasLength(1));
       expect(state.first.status, equals('done'));
+    });
+
+    group('duplicate detection', () {
+      test('marks item done without calling download when ISRC matches',
+          () async {
+        final bridge = _FakeBridge();
+        bridge.duplicateIsrc = 'USUM71400101'; // matches trackWithIsrc.isrc
+        final c = _makeContainer(bridge);
+        addTearDown(c.dispose);
+
+        const trackWithIsrc = Track(
+          id: 'dup-track',
+          name: 'Already Downloaded',
+          artists: 'Artist',
+          isrc: 'USUM71400101',
+        );
+
+        c.read(downloadQueueProvider.notifier).enqueue(trackWithIsrc);
+        await _pump();
+        await _pump();
+
+        final entries = c.read(downloadQueueProvider);
+        expect(entries.first.status, 'done');
+        expect(bridge.downloadCalls, isEmpty);
+      });
+
+      test('proceeds with download when no ISRC', () async {
+        final bridge = _FakeBridge();
+        bridge.duplicateIsrc = 'USUM71400101';
+        bridge.downloadResult = {'success': true};
+        final c = _makeContainer(bridge);
+        addTearDown(c.dispose);
+
+        // Track without ISRC — cannot check duplicate, so download runs.
+        const trackNoIsrc = Track(
+          id: 'no-isrc-track',
+          name: 'No ISRC Song',
+          artists: 'Artist',
+        );
+
+        c.read(downloadQueueProvider.notifier).enqueue(trackNoIsrc);
+        await _pump();
+        await _pump();
+
+        expect(bridge.downloadCalls, hasLength(1));
+      });
     });
   });
 }
