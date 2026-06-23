@@ -15,6 +15,15 @@ class Track {
   final String? audioQuality; // e.g. "HiFi", "Lossless", "Hi-Res" (badge)
   final String? audioModes; // e.g. "DOLBY_ATMOS"
 
+  // Navigation IDs — used to open artist/album screens.
+  final String? artistId;
+  final String? albumId;
+
+  // Optional metadata for embedding into downloaded file tags.
+  final String? genre;
+  final String? label;
+  final String? copyright;
+
   const Track({
     required this.id,
     required this.name,
@@ -33,6 +42,11 @@ class Track {
     this.composer,
     this.audioQuality,
     this.audioModes,
+    this.artistId,
+    this.albumId,
+    this.genre,
+    this.label,
+    this.copyright,
   });
 
   factory Track.fromJson(Map<String, dynamic> j) {
@@ -60,6 +74,11 @@ class Track {
       composer: j['composer']?.toString(),
       audioQuality: j['audio_quality']?.toString(),
       audioModes: j['audio_modes']?.toString(),
+      artistId: j['artist_id']?.toString(),
+      albumId: j['album_id']?.toString(),
+      genre: j['genre']?.toString(),
+      label: j['label']?.toString(),
+      copyright: j['copyright']?.toString(),
     );
   }
 
