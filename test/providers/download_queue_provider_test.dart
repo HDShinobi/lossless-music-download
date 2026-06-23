@@ -61,6 +61,9 @@ class _FakeBridge extends BackendBridge {
 
   @override
   Future<void> setDownloadPriority(List<String> ids) async {}
+
+  @override
+  Stream<List<DownloadProgress>> progressStream() => Stream.value(const []);
 }
 
 // ---------------------------------------------------------------------------

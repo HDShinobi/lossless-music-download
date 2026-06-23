@@ -9,17 +9,11 @@ import 'download_dir_provider.dart';
 import 'download_labels_provider.dart';
 import 'extensions_provider.dart';
 
-/// Polls [BackendBridge.getAllProgress] every second and emits the list.
-final downloadsProvider = StreamProvider<List<DownloadProgress>>((ref) async* {
+/// Real-time download progress — uses EventChannel on Android, falls back to
+/// 1-second polling on other platforms. Backed by BackendBridge.progressStream().
+final downloadsProvider = StreamProvider<List<DownloadProgress>>((ref) {
   final bridge = ref.read(backendBridgeProvider);
-  while (true) {
-    try {
-      yield await bridge.getAllProgress();
-    } catch (_) {
-      yield const [];
-    }
-    await Future<void>.delayed(const Duration(seconds: 1));
-  }
+  return bridge.progressStream();
 });
 
 /// Drives download actions: resolves the output dir and calls the bridge.
