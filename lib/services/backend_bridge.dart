@@ -89,7 +89,10 @@ class BackendBridge {
             .map((e) => DownloadProgress.fromJson(
                 Map<String, dynamic>.from(e as Map)))
             .toList();
-      }).handleError((_) => const <DownloadProgress>[]);
+      // handleError suppresses stream errors silently — the callback return
+      // value is NOT emitted as an event; it only prevents the stream from
+      // closing on error so the consumer keeps receiving future updates.
+      }).handleError((_) {});
     }
     // Non-Android fallback: poll getAllProgress every second.
     return Stream.periodic(const Duration(seconds: 1)).asyncMap(

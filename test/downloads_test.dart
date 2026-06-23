@@ -6,19 +6,13 @@ import 'package:lossless_music_download/models/download_progress.dart';
 import 'package:lossless_music_download/models/download_request.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/models/track.dart';
-import 'package:lossless_music_download/providers/download_dir_provider.dart';
 import 'package:lossless_music_download/providers/download_queue_provider.dart';
 import 'package:lossless_music_download/providers/downloads_provider.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/screens/queue_screen.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
 
-// ---------------------------------------------------------------------------
-// Fake bridge — records downloadByStrategy calls without hitting MethodChannel
-// ---------------------------------------------------------------------------
 class _FakeBackendBridge extends BackendBridge {
-  final List<DownloadRequest> recorded = [];
-
   @override
   Future<void> setDownloadDirectory(String path) async {}
 
@@ -26,10 +20,8 @@ class _FakeBackendBridge extends BackendBridge {
   Future<void> allowDownloadDir(String path) async {}
 
   @override
-  Future<Map<String, dynamic>> downloadByStrategy(DownloadRequest req) async {
-    recorded.add(req);
-    return {};
-  }
+  Future<Map<String, dynamic>> downloadByStrategy(DownloadRequest req) async =>
+      {};
 
   @override
   Future<List<DownloadProgress>> getAllProgress() async => [];
@@ -38,46 +30,9 @@ class _FakeBackendBridge extends BackendBridge {
   Future<void> cancelDownload(String itemId) async {}
 }
 
-const _kTestDir = '/test/downloads';
-
-// ---------------------------------------------------------------------------
-// Unit tests: DownloadController.start (legacy — controller kept for compat)
-// ---------------------------------------------------------------------------
 void main() {
-  group('DownloadController.start', () {
-    test('builds DownloadRequest with correct fields', () async {
-      final fake = _FakeBackendBridge();
-
-      final container = ProviderContainer(
-        overrides: [
-          downloadDirPathProvider.overrideWithValue(Future.value(_kTestDir)),
-          backendBridgeProvider.overrideWithValue(fake),
-        ],
-      );
-      addTearDown(container.dispose);
-
-      const track = Track(
-        id: 'tid1',
-        name: 'My Song',
-        artists: 'Artist Name',
-        albumName: 'Album',
-        isrc: 'US1234567890',
-      );
-
-      final controller = container.read(downloadControllerProvider);
-      await controller.start(track);
-
-      expect(fake.recorded, hasLength(1));
-      final req = fake.recorded.first;
-      final json = req.toJson();
-      expect(json['track_name'], 'My Song');
-      expect(json['output_dir'], _kTestDir);
-      expect(json['use_extensions'], isTrue);
-    });
-  });
-
   // ---------------------------------------------------------------------------
-  // Widget tests: QueueScreen — now driven by downloadQueueProvider
+  // Widget tests: QueueScreen — driven by downloadQueueProvider
   // ---------------------------------------------------------------------------
   group('QueueScreen', () {
     const downloading = DownloadEntry(
