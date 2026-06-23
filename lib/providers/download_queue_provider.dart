@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/download_progress.dart';
@@ -9,6 +11,7 @@ import 'download_dir_provider.dart';
 import 'download_labels_provider.dart';
 import 'downloads_provider.dart';
 import 'extensions_provider.dart';
+import 'library_provider.dart';
 
 // ---------------------------------------------------------------------------
 // DownloadEntry — persistent client-side queue item
@@ -27,6 +30,10 @@ class DownloadEntry {
   /// Failure reason from the backend (shown on a failed item). Null otherwise.
   final String? error;
 
+  /// Download intent — preserved so retry can re-enqueue with the same params.
+  final String? service;
+  final String? quality;
+
   const DownloadEntry({
     required this.track,
     required this.itemId,
@@ -37,6 +44,8 @@ class DownloadEntry {
     this.speedBytesPerSec,
     this.eta,
     this.error,
+    this.service,
+    this.quality,
   });
 
   DownloadEntry copyWith({
@@ -58,6 +67,8 @@ class DownloadEntry {
       speedBytesPerSec: speedBytesPerSec ?? this.speedBytesPerSec,
       eta: eta ?? this.eta,
       error: error ?? this.error,
+      service: service,
+      quality: quality,
     );
   }
 }
@@ -68,6 +79,9 @@ class DownloadEntry {
 
 class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   final Map<String, Sample> _samples = {};
+
+  // Sequential download gate — mirrors SpotiFLAC's _processQueue() pattern.
+  bool _isProcessing = false;
 
   @override
   List<DownloadEntry> build() {
@@ -81,92 +95,98 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     return [];
   }
 
-  Future<void> enqueue(Track track, {String? source, String? quality}) async {
-    // Generate itemId synchronously so the entry can be prepended before any
-    // await (making it visible in the queue immediately on tap).
+  Future<void> enqueue(Track track, {String? service, String? quality}) async {
     final itemId = 'dl_${DateTime.now().microsecondsSinceEpoch}_${track.id}';
 
     // Register label so QueueItem can resolve track from itemId.
     ref.read(downloadLabelsProvider.notifier).put(itemId, track);
 
-    // Prepend entry — happens synchronously before the first await.
+    // Prepend synchronously — visible in the queue immediately on tap.
     state = [
       DownloadEntry(
         track: track,
         itemId: itemId,
-        status: 'downloading',
+        status: 'queued',
         progress: 0,
         bytesReceived: 0,
+        service: service,
+        quality: quality,
       ),
       ...state,
     ];
 
-    // Now resolve the output directory (async).
-    final dir = await ref.read(downloadDirProvider.future);
+    // Kick sequential processor (no-op if already running).
+    unawaited(_processQueue());
+  }
 
-    // Ensure the backend has download providers to try. The Uu tien (priority)
-    // screen only persists on a manual reorder, so a normal install -> search
-    // -> download flow leaves the backend priority EMPTY, and the strategy then
-    // reports "No extension download providers available". Seed it (only when
-    // empty, so a user-set order is preserved) with the installed, enabled,
-    // download-capable extensions.
-    final bridge = ref.read(backendBridgeProvider);
+  // Mirrors SpotiFLAC's _processQueue(): downloads one item at a time.
+  Future<void> _processQueue() async {
+    if (_isProcessing) return;
+    final next = state.where((e) => e.status == 'queued').firstOrNull;
+    if (next == null) return;
+
+    _isProcessing = true;
+    _setStatus(next.itemId, 'downloading');
+
     try {
-      final current = await bridge.getDownloadPriority();
-      if (current.isEmpty) {
-        final exts = ref.read(extensionsProvider).value ??
-            const <InstalledExtension>[];
-        final dlProviders = exts
-            .where((e) => e.enabled && e.hasDownloadProvider)
-            .map((e) => e.id)
-            .toList();
-        if (dlProviders.isNotEmpty) {
+      final dir = await ref.read(downloadDirProvider.future);
+      final bridge = ref.read(backendBridgeProvider);
+      final dlProviders = (ref.read(extensionsProvider).value ??
+              const <InstalledExtension>[])
+          .where((e) => e.enabled && e.hasDownloadProvider)
+          .map((e) => e.id)
+          .toList();
+
+      try {
+        final current = await bridge.getDownloadPriority();
+        if (current.isEmpty && dlProviders.isNotEmpty) {
           await bridge.setDownloadPriority(dlProviders);
         }
+      } catch (_) {}
+
+      final resolvedService =
+          (next.service != null && next.service!.isNotEmpty)
+              ? next.service
+              : (dlProviders.isNotEmpty ? dlProviders.first : null);
+
+      String? spotifyId = next.track.id.isEmpty ? null : next.track.id;
+      String? qobuzId;
+      String? tidalId;
+      if (next.track.id.startsWith('qobuz:')) {
+        qobuzId = next.track.id.substring(6);
+        spotifyId = null;
+      } else if (next.track.id.startsWith('tidal:')) {
+        tidalId = next.track.id.substring(6);
+        spotifyId = null;
       }
-    } catch (_) {}
 
-    // Forward the track identifier so the backend can locate the exact track
-    // to download (matches SpotiFLAC): a `qobuz:`/`tidal:` prefixed id maps to
-    // qobuz_id/tidal_id; otherwise it is treated as the spotify_id. Without an
-    // id the extension has nothing to fetch and the download fails.
-    String? spotifyId = track.id.isEmpty ? null : track.id;
-    String? qobuzId;
-    String? tidalId;
-    if (track.id.startsWith('qobuz:')) {
-      qobuzId = track.id.substring(6);
-      spotifyId = null;
-    } else if (track.id.startsWith('tidal:')) {
-      tidalId = track.id.substring(6);
-      spotifyId = null;
-    }
+      final req = DownloadRequest(
+        trackName: next.track.name,
+        artistName: next.track.artists,
+        outputDir: dir,
+        albumName: next.track.albumName,
+        albumArtist: next.track.albumArtist,
+        isrc: next.track.isrc,
+        spotifyId: spotifyId,
+        qobuzId: qobuzId,
+        tidalId: tidalId,
+        coverUrl: next.track.coverUrl,
+        durationMs: next.track.durationMs,
+        trackNumber: next.track.trackNumber,
+        discNumber: next.track.discNumber,
+        totalTracks: next.track.totalTracks,
+        totalDiscs: next.track.totalDiscs,
+        releaseDate: next.track.releaseDate,
+        composer: next.track.composer,
+        source: next.track.source,
+        genre: next.track.genre,
+        label: next.track.label,
+        copyright: next.track.copyright,
+        service: resolvedService,
+        quality: next.quality,
+        itemId: next.itemId,
+      );
 
-    final req = DownloadRequest(
-      trackName: track.name,
-      artistName: track.artists,
-      outputDir: dir,
-      albumName: track.albumName,
-      albumArtist: track.albumArtist,
-      isrc: track.isrc,
-      spotifyId: spotifyId,
-      qobuzId: qobuzId,
-      tidalId: tidalId,
-      coverUrl: track.coverUrl,
-      durationMs: track.durationMs,
-      trackNumber: track.trackNumber,
-      discNumber: track.discNumber,
-      totalTracks: track.totalTracks,
-      totalDiscs: track.totalDiscs,
-      releaseDate: track.releaseDate,
-      composer: track.composer,
-      // Prefer the explicit sheet choice; else the provider that returned the
-      // search result (so the download targets the right extension).
-      source: source ?? track.source,
-      quality: quality,
-      itemId: itemId,
-    );
-
-    try {
       final res = await bridge.downloadByStrategy(req);
       final failed = res['success'] == false ||
           (res['error'] != null && '${res['error']}'.isNotEmpty) ||
@@ -174,11 +194,19 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
           (res['status']?.toString().toLowerCase().contains('fail') ?? false) ||
           (res['status']?.toString().toLowerCase().contains('cancel') ?? false);
       final err = res['error']?.toString() ?? res['error_type']?.toString();
-      _setStatus(itemId, failed ? 'failed' : 'done',
-          progressIfDone: failed ? null : 1.0,
-          error: failed ? (err?.isNotEmpty == true ? err : 'unknown') : null);
+      _setStatus(
+        next.itemId,
+        failed ? 'failed' : 'done',
+        progressIfDone: failed ? null : 1.0,
+        error: failed ? (err?.isNotEmpty == true ? err : 'unknown') : null,
+      );
+      if (!failed) ref.invalidate(libraryProvider);
     } catch (e) {
-      _setStatus(itemId, 'failed', error: e.toString());
+      _setStatus(next.itemId, 'failed', error: e.toString());
+    } finally {
+      _isProcessing = false;
+      // Process the next queued item (if any).
+      unawaited(_processQueue());
     }
   }
 
@@ -186,7 +214,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     final entry = state.where((e) => e.itemId == itemId).firstOrNull;
     if (entry == null) return;
     _removeLocal(itemId);
-    enqueue(entry.track);
+    unawaited(enqueue(entry.track, service: entry.service, quality: entry.quality));
   }
 
   void remove(String itemId) {
