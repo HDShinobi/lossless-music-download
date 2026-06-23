@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
@@ -26,6 +27,14 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Set the app version so the Go backend sends the correct User-Agent
+        // ("SpotiFLAC-Mobile/<version>") to api.zarz.moe and extension HTTP
+        // calls that fall back to the app UA. Without this, api.zarz.moe
+        // rejects Spotify URL resolution requests (403 / no-version UA).
+        val versionName = try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+        } catch (_: Exception) { "" }
+        Bridge.setAppVersion(versionName)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
             .setMethodCallHandler { call, result ->
                 bridgeExecutor.execute {
@@ -39,6 +48,29 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             }
+
+        // Real-time download progress stream (~300 ms push interval).
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, "xyz.losslessmusic/progress")
+            .setStreamHandler(object : EventChannel.StreamHandler {
+                @Volatile private var active = false
+
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
+                    active = true
+                    bridgeExecutor.execute {
+                        while (active) {
+                            try {
+                                val json = Bridge.getAllDownloadProgress()
+                                mainHandler.post { if (active) events.success(json) }
+                            } catch (_: Exception) {}
+                            Thread.sleep(300)
+                        }
+                    }
+                }
+
+                override fun onCancel(arguments: Any?) {
+                    active = false
+                }
+            })
     }
 
     // Runs on a background thread. Returns (handled, value); the caller posts the
@@ -125,6 +157,18 @@ class MainActivity : FlutterActivity() {
         "getMediaServerStatus" -> true to Bridge.getMediaServerStatus()
         "handleUrl" -> true to Bridge.handleURLWithExtensionJSON(call.argument<String>("url")!!)
         "findUrlHandler" -> true to Bridge.findURLHandlerJSON(call.argument<String>("url")!!)
+        "getProviderMetadata" -> true to Bridge.getProviderMetadataJSON(
+            call.argument<String>("providerId")!!,
+            call.argument<String>("resourceType")!!,
+            call.argument<String>("resourceId")!!,
+        )
+        "setLibraryCoverCacheDir" -> {
+            Bridge.setLibraryCoverCacheDir(call.argument<String>("cacheDir")!!)
+            true to null
+        }
+        "scanLibraryFolder" -> true to Bridge.scanLibraryFolderJSON(
+            call.argument<String>("folderPath")!!
+        )
         else -> false to null
     }
 
