@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/services.dart';
 import '../models/track.dart';
 import '../models/installed_extension.dart';
@@ -11,6 +12,8 @@ class BackendBridge {
   BackendBridge([MethodChannel? channel])
       : _c = channel ?? const MethodChannel('xyz.losslessmusic/native');
   final MethodChannel _c;
+
+  static const _progressChannel = EventChannel('xyz.losslessmusic/progress');
 
   Future<void> initExtensionSystem(String extDir, String dataDir) =>
       _c.invokeMethod('initExtensionSystem', {'extDir': extDir, 'dataDir': dataDir});
@@ -71,6 +74,29 @@ class BackendBridge {
     return list.map((e) => DownloadProgress.fromJson(Map<String, dynamic>.from(e))).toList();
   }
 
+  /// Real-time progress stream — uses EventChannel on Android (pushed by
+  /// native at ~300 ms intervals), falls back to 1-second polling elsewhere.
+  Stream<List<DownloadProgress>> progressStream() {
+    if (Platform.isAndroid) {
+      return _progressChannel.receiveBroadcastStream().map((event) {
+        final raw = event as String? ?? '';
+        if (raw.isEmpty) return const <DownloadProgress>[];
+        final decoded = jsonDecode(raw);
+        final list = decoded is List
+            ? decoded
+            : (decoded as Map).values.toList();
+        return list
+            .map((e) => DownloadProgress.fromJson(
+                Map<String, dynamic>.from(e as Map)))
+            .toList();
+      }).handleError((_) => const <DownloadProgress>[]);
+    }
+    // Non-Android fallback: poll getAllProgress every second.
+    return Stream.periodic(const Duration(seconds: 1)).asyncMap(
+      (_) => getAllProgress().catchError((_) => const <DownloadProgress>[]),
+    );
+  }
+
   Future<void> cancelDownload(String itemId) =>
       _c.invokeMethod('cancelDownload', {'itemId': itemId});
 
@@ -87,6 +113,24 @@ class BackendBridge {
   /// null if nothing handled it.
   Future<Map<String, dynamic>?> handleUrl(String url) async {
     final raw = await _c.invokeMethod<String>('handleUrl', {'url': url});
+    if (raw == null || raw.isEmpty) return null;
+    final decoded = jsonDecode(raw);
+    return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
+  }
+
+  /// Fetches metadata for [resourceType] ("artist", "album", "track") with
+  /// [resourceId] (provider-native, no prefix) from [providerId] extension.
+  /// Returns the decoded map or null on error/empty.
+  Future<Map<String, dynamic>?> getProviderMetadata(
+    String providerId,
+    String resourceType,
+    String resourceId,
+  ) async {
+    final raw = await _c.invokeMethod<String>('getProviderMetadata', {
+      'providerId': providerId,
+      'resourceType': resourceType,
+      'resourceId': resourceId,
+    });
     if (raw == null || raw.isEmpty) return null;
     final decoded = jsonDecode(raw);
     return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
@@ -146,5 +190,26 @@ class BackendBridge {
     final raw = await _c.invokeMethod<String>('getMediaServerStatus');
     if (raw == null || raw.isEmpty) return ServerStatus.stopped;
     return ServerStatus.fromJson(Map<String, dynamic>.from(jsonDecode(raw)));
+  }
+
+  /// Sets the directory where the Go library scanner caches extracted cover
+  /// art. Must be called once before [scanLibraryFolder].
+  Future<void> setLibraryCoverCacheDir(String cacheDir) =>
+      _c.invokeMethod('setLibraryCoverCacheDir', {'cacheDir': cacheDir});
+
+  /// Scans [folderPath] for audio files, reads their embedded tags
+  /// (ID3/Vorbis/M4A), extracts cover art, and returns a list of metadata
+  /// maps matching SpotiFLAC's LibraryScanResult schema.
+  Future<List<Map<String, dynamic>>> scanLibraryFolder(String folderPath) async {
+    final raw = await _c.invokeMethod<String>(
+      'scanLibraryFolder',
+      {'folderPath': folderPath},
+    );
+    if (raw == null || raw.isEmpty) return [];
+    final decoded = jsonDecode(raw);
+    final list = decoded is List ? decoded : <dynamic>[];
+    return list
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
   }
 }
