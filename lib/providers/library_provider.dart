@@ -97,15 +97,13 @@ final libraryProvider = FutureProvider<List<LibraryEntry>>((ref) async {
       title: (item['trackName'] as String?)?.trim().isNotEmpty == true
           ? item['trackName'] as String
           : null,
-      sizeBytes: filePath.isNotEmpty
-          ? (File(filePath).existsSync() ? File(filePath).lengthSync() : 0)
-          : 0,
+      sizeBytes: 0,  // lengthSync removed — not rendered in UI, causes sync I/O
       artistName: artistName,
       albumName: albumName,
       coverPath: (coverPath != null && coverPath.isNotEmpty) ? coverPath : null,
       durationMs: durationSec != null ? durationSec * 1000 : null,
       format: ext,
-      verified: ext == 'FLAC',
+      verified: ext == 'FLAC' || ext == 'ALAC',
       tagsFromFallback: tagsFromFallback,
     );
   }).toList()

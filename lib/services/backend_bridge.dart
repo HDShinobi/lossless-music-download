@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../models/track.dart';
 import '../models/installed_extension.dart';
@@ -70,7 +71,7 @@ class BackendBridge {
     final decoded = jsonDecode(raw);
     final List<dynamic> list = decoded is List
         ? decoded
-        : (decoded['items'] as List? ?? (decoded as Map).values.toList());
+        : ((decoded['items'] as Map?)?.values.toList() ?? []);
     return list.map((e) => DownloadProgress.fromJson(Map<String, dynamic>.from(e))).toList();
   }
 
@@ -84,15 +85,15 @@ class BackendBridge {
         final decoded = jsonDecode(raw);
         final list = decoded is List
             ? decoded
-            : (decoded as Map).values.toList();
+            : ((decoded['items'] as Map?)?.values.toList() ?? []);
         return list
             .map((e) => DownloadProgress.fromJson(
                 Map<String, dynamic>.from(e as Map)))
             .toList();
-      // handleError suppresses stream errors silently — the callback return
-      // value is NOT emitted as an event; it only prevents the stream from
-      // closing on error so the consumer keeps receiving future updates.
-      }).handleError((_) {});
+      }).handleError((Object e, StackTrace st) {
+        // Log deserialization errors; do NOT close the stream.
+        debugPrint('[progressStream] error: $e');
+      });
     }
     // Non-Android fallback: poll getAllProgress every second.
     return Stream.periodic(const Duration(seconds: 1)).asyncMap(

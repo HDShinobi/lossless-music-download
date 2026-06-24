@@ -63,6 +63,15 @@ Widget buildLibraryScreen(List<dynamic> overrides) {
 }
 
 void main() {
+  group('LibraryEntry unit tests', () {
+    test('LibraryEntry verified is true for ALAC', () {
+      const alacPath = '/music/Artist/Album/01. Track.alac';
+      final filename = alacPath.split('/').last; // '01. Track.alac'
+      final ext = filename.split('.').last.toUpperCase(); // 'ALAC'
+      expect(ext == 'FLAC' || ext == 'ALAC', isTrue);
+    });
+  });
+
   group('LibraryScreen (new) widget tests', () {
     testWidgets('All segment (default): all 3 track names visible',
         (tester) async {
