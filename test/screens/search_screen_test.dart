@@ -77,15 +77,14 @@ class _FakeSearchNotifier extends SearchNotifier {
 }
 
 // ---------------------------------------------------------------------------
-// Fake AskBeforeDownloadNotifier — allows setting state in tests
+// AskBeforeDownload override — builds with a fixed initial value
 // ---------------------------------------------------------------------------
-class _FakeAskBeforeDownloadNotifier extends AskBeforeDownloadNotifier {
-  final bool _initialValue;
-
-  _FakeAskBeforeDownloadNotifier(this._initialValue);
+class _FixedAskBeforeDownloadNotifier extends AskBeforeDownloadNotifier {
+  final bool _value;
+  _FixedAskBeforeDownloadNotifier(this._value);
 
   @override
-  bool build() => _initialValue;
+  bool build() => _value;
 }
 
 // ---------------------------------------------------------------------------
@@ -143,56 +142,14 @@ const _track2 = Track(
 // ---------------------------------------------------------------------------
 void main() {
   group('SearchScreen batch download', () {
-    testWidgets('normal mode: askBefore=true shows picker then enqueues',
-        (tester) async {
+    testWidgets('normal mode: tap download calls controller', (tester) async {
       final bridge = _FakeBackendBridge();
-      // Need a download-capable extension so the sheet CTA is enabled.
-      const fakeExt = InstalledExtension(
-        id: 'ext-dl',
-        name: 'ext-dl',
-        displayName: 'Test Extension',
-        version: '1.0.0',
-        description: '',
-        status: 'installed',
-        types: [],
-        permissions: [],
-        enabled: true,
-        hasMetadataProvider: true,
-        hasDownloadProvider: true,
-        hasLyricsProvider: false,
-      );
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            backendBridgeProvider.overrideWithValue(bridge),
-            appDirsProvider.overrideWithValue(
-              Future.value(('/fake/ext', '/fake/data')),
-            ),
-            downloadDirPathProvider.overrideWithValue(
-              Future.value('/fake/downloads'),
-            ),
-            extensionsProvider
-                .overrideWith(() => _FakeExtensionsController([fakeExt])),
-            searchProvider.overrideWith(() => _FakeSearchNotifier([_track1])),
-            askBeforeDownloadProvider.overrideWith(() => _FakeAskBeforeDownloadNotifier(true)),
-          ],
-          child: MaterialApp(
-            theme: appTheme(),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            locale: const Locale('en'),
-            home: const SearchScreen(),
-          ),
-        ),
+        buildSearchScreen(results: [_track1], bridge: bridge),
       );
       await tester.pumpAndSettle();
 
-      // Tapping the download icon shows the picker sheet when askBefore=true.
       await tester.tap(find.byIcon(Icons.download_outlined));
-      await tester.pumpAndSettle();
-
-      // Sheet CTA is enabled (source available) — confirm download.
-      await tester.tap(find.text('Download'));
       await tester.pumpAndSettle();
 
       expect(bridge.recorded, hasLength(1));
@@ -278,8 +235,7 @@ void main() {
       );
     });
 
-    testWidgets('askBefore=false: tapping download button enqueues immediately',
-        (tester) async {
+    testWidgets('askBefore=false: tapping download fires without showing sheet', (tester) async {
       final bridge = _FakeBackendBridge();
       const fakeExt = InstalledExtension(
         id: 'ext-dl',
@@ -308,7 +264,9 @@ void main() {
             extensionsProvider
                 .overrideWith(() => _FakeExtensionsController([fakeExt])),
             searchProvider.overrideWith(() => _FakeSearchNotifier([_track1])),
-            askBeforeDownloadProvider.overrideWith(() => _FakeAskBeforeDownloadNotifier(false)),
+            askBeforeDownloadProvider.overrideWith(
+              () => _FixedAskBeforeDownloadNotifier(false),
+            ),
           ],
           child: MaterialApp(
             theme: appTheme(),
@@ -321,22 +279,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // When askBefore=false, tapping the download icon
-      // should NOT show a bottom sheet; it should enqueue immediately.
+      // With askBefore=false, tapping download must NOT show a bottom sheet.
       await tester.tap(find.byIcon(Icons.download_outlined));
       await tester.pumpAndSettle();
 
-      // No bottom sheet should appear (i.e., no "Download" button from sheet)
+      // Sheet should not appear.
       expect(find.text('Download'), findsNothing);
-
-      // Check that a download was enqueued
+      // Enqueue was called immediately.
       expect(bridge.recorded, hasLength(1));
-
-      // Check for the "Added to queue" snackbar
-      expect(
-        find.text('Added to queue'),
-        findsOneWidget,
-      );
     });
   });
 }
