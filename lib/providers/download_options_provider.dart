@@ -49,17 +49,20 @@ class _BoolPrefNotifier extends Notifier<bool> {
 
   final String _key;
   final bool _defaultValue;
+  bool _explicitlySet = false;
 
   @override
   bool build() {
+    _explicitlySet = false;
     Future.microtask(() async {
       final p = await SharedPreferences.getInstance();
-      state = p.getBool(_key) ?? _defaultValue;
+      if (ref.mounted && !_explicitlySet) state = p.getBool(_key) ?? _defaultValue;
     });
     return _defaultValue;
   }
 
   Future<void> set(bool value) async {
+    _explicitlySet = true;
     state = value;
     final p = await SharedPreferences.getInstance();
     await p.setBool(_key, value);
