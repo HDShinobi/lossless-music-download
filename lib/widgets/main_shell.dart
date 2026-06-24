@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../l10n/app_localizations.dart';
+import '../providers/download_queue_provider.dart';
 import '../providers/search_provider.dart';
+import '../theme/app_tokens.dart';
 import '../vendor/spotiflac/share_intent_service.dart';
 
 class MainShell extends ConsumerStatefulWidget {
@@ -67,17 +69,107 @@ class _MainShellState extends ConsumerState<MainShell> {
     final t = AppLocalizations.of(context);
     return Scaffold(
       body: widget.shell,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: widget.shell.currentIndex,
-        onDestinationSelected: (i) =>
-            widget.shell.goBranch(i, initialLocation: i == widget.shell.currentIndex),
-        destinations: [
-          NavigationDestination(icon: const Icon(Icons.search), label: t.tabSearch),
-          NavigationDestination(icon: const Icon(Icons.download_outlined), label: t.tabQueue),
-          NavigationDestination(icon: const Icon(Icons.wifi_tethering), label: t.tabServer),
-          NavigationDestination(icon: const Icon(Icons.library_music_outlined), label: t.tabLibrary),
-          NavigationDestination(icon: const Icon(Icons.settings_outlined), label: t.tabSettings),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _DownloadBar(onTap: () => widget.shell.goBranch(2)),
+          NavigationBar(
+            selectedIndex: widget.shell.currentIndex,
+            onDestinationSelected: (i) =>
+                widget.shell.goBranch(i, initialLocation: i == widget.shell.currentIndex),
+            destinations: [
+              NavigationDestination(icon: const Icon(Icons.search), label: t.tabSearch),
+              NavigationDestination(icon: const Icon(Icons.library_music_outlined), label: t.tabLibrary),
+              NavigationDestination(icon: const Icon(Icons.download_outlined), label: t.tabQueue),
+              NavigationDestination(icon: const Icon(Icons.wifi_tethering), label: t.tabServer),
+              NavigationDestination(icon: const Icon(Icons.settings_outlined), label: t.tabSettings),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Persistent download activity bar — shows above nav when a download is active
+// ---------------------------------------------------------------------------
+
+class _DownloadBar extends ConsumerWidget {
+  const _DownloadBar({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final entries = ref.watch(downloadQueueProvider);
+    final active = entries.where((e) =>
+        e.status == 'downloading' || e.status == 'finalizing').toList();
+    final queued = entries.where((e) => e.status == 'queued').length;
+
+    if (active.isEmpty && queued == 0) return const SizedBox.shrink();
+
+    final cs = Theme.of(context).colorScheme;
+    final tokens = context.tokens;
+    final current = active.isNotEmpty ? active.first : entries.first;
+    final progress = current.progress.clamp(0.0, 1.0);
+    final isDownloading = current.status == 'downloading';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        color: cs.surfaceContainerLow,
+        child: Stack(
+          children: [
+            // progress fill
+            if (progress > 0)
+              FractionallySizedBox(
+                widthFactor: progress,
+                child: Container(color: tokens.accentSoft),
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: isDownloading
+                        ? CircularProgressIndicator(
+                            strokeWidth: 1.5,
+                            value: progress > 0 ? progress : null,
+                            color: cs.primary,
+                          )
+                        : Icon(Icons.schedule,
+                            size: 14, color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      current.track.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
+                  ),
+                  if (queued > 0) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      '+$queued',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                  const SizedBox(width: 6),
+                  Icon(Icons.chevron_right, size: 16, color: tokens.muted2),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

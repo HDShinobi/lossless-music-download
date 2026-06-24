@@ -3,6 +3,8 @@ import 'package:flutter/widgets.dart';
 import 'providers/library_provider.dart';
 import 'widgets/main_shell.dart';
 import 'screens/search_screen.dart';
+import 'screens/artist_screen.dart';
+import 'screens/album_screen.dart';
 import 'screens/queue_screen.dart';
 import 'screens/server_screen.dart';
 import 'screens/library_screen.dart';
@@ -20,9 +22,34 @@ final appRouter = GoRouter(
     StatefulShellRoute.indexedStack(
       builder: (c, s, shell) => MainShell(shell: shell),
       branches: [
-        StatefulShellBranch(routes: [_r('/search', const SearchScreen())]),
-        StatefulShellBranch(routes: [_r('/queue', const QueueScreen())]),
-        StatefulShellBranch(routes: [_r('/server', const ServerScreen())]),
+        // 0 — Search
+        StatefulShellBranch(routes: [
+          GoRoute(
+            path: '/search',
+            builder: (c, s) => const SearchScreen(),
+            routes: [
+              GoRoute(
+                path: 'artist',
+                builder: (c, s) {
+                  final args = s.extra as ArtistRouteArgs;
+                  return ArtistScreen(
+                    id: args.id,
+                    name: args.name,
+                    coverUrl: args.coverUrl,
+                  );
+                },
+              ),
+              GoRoute(
+                path: 'album',
+                builder: (c, s) {
+                  final args = s.extra as AlbumRouteArgs;
+                  return AlbumScreen(args: args);
+                },
+              ),
+            ],
+          ),
+        ]),
+        // 1 — Library
         StatefulShellBranch(routes: [
           GoRoute(
             path: '/library',
@@ -36,6 +63,11 @@ final appRouter = GoRouter(
             ],
           ),
         ]),
+        // 2 — Queue
+        StatefulShellBranch(routes: [_r('/queue', const QueueScreen())]),
+        // 3 — Server
+        StatefulShellBranch(routes: [_r('/server', const ServerScreen())]),
+        // 4 — Settings
         StatefulShellBranch(routes: [
           GoRoute(
             path: '/settings',

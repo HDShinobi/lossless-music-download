@@ -141,6 +141,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           album: album,
           tracks: tracks,
           coverEntry: coverEntry,
+          onTap: () => context.go('/library/verified', extra: tracks.first),
         );
       },
     );
@@ -173,77 +174,80 @@ class _AlbumTile extends StatelessWidget {
     required this.album,
     required this.tracks,
     required this.coverEntry,
+    required this.onTap,
   });
 
   final String artist;
   final String album;
   final List<LibraryEntry> tracks;
   final LibraryEntry coverEntry;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-
     final coverPath = coverEntry.coverPath;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Square cover art — fills the top portion of the tile
-          Expanded(
-            child: coverPath != null
-                ? Image.file(
-                    File(coverPath),
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _coverPlaceholder(cs),
-                  )
-                : _coverPlaceholder(cs),
-          ),
-          // Album info below the art
-          Padding(
-            padding: const EdgeInsets.fromLTRB(9, 8, 9, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  album,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: tt.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: cs.onSurface,
-                  ),
-                ),
-                if (artist.isNotEmpty) ...[
-                  const SizedBox(height: 1),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: coverPath != null
+                  ? Image.file(
+                      File(coverPath),
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _coverPlaceholder(cs),
+                    )
+                  : _coverPlaceholder(cs),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(9, 8, 9, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    artist,
+                    album,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                    style: tt.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                  if (artist.isNotEmpty) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                  const SizedBox(height: 2),
+                  Text(
+                    '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'}',
+                    style: tt.labelSmall?.copyWith(
+                      color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                      fontSize: 10,
+                    ),
                   ),
                 ],
-                const SizedBox(height: 2),
-                Text(
-                  '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'}',
-                  style: tt.labelSmall?.copyWith(
-                    color: cs.onSurfaceVariant.withValues(alpha: 0.6),
-                    fontSize: 10,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
