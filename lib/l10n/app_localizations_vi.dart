@@ -164,6 +164,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get downloadFailed => 'Tải thất bại';
 
   @override
+  String get queueViewQueue => 'Xem Queue';
+
+  @override
   String get queueEmpty => 'Chưa có tải nào.';
 
   @override
@@ -310,4 +313,71 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get shareUrlNotRecognized => 'Không nhận ra link này';
+
+  @override
+  String get recentSearches => 'Tìm kiếm gần đây';
+
+  @override
+  String get recentSearchesClear => 'Xóa tất cả';
+
+  @override
+  String get searchSourceAll => 'Tất cả';
+
+  @override
+  String get downloadAll => 'Tải tất cả';
+
+  @override
+  String get noTracksFound => 'Không tìm thấy bài hát';
+
+  @override
+  String get viewArtist => 'Xem nghệ sĩ';
+
+  @override
+  String get viewAlbum => 'Xem album';
+
+  @override
+  String get artistPopular => 'Phổ biến';
+
+  @override
+  String get artistAlbums => 'Album';
+
+  @override
+  String get artistSingles => 'Single & EP';
+
+  @override
+  String artistMonthlyListeners(String count) {
+    return '$count người nghe mỗi tháng';
+  }
+
+  @override
+  String get artistReleases => 'Mới phát hành';
+
+  @override
+  String get artistCompilations => 'Tuyển tập';
+
+  @override
+  String artistSectionCount(String title, int count) {
+    return '$title ($count)';
+  }
+
+  @override
+  String get inLibrary => 'Đã tải';
+
+  @override
+  String get downloadOptionsAll => 'Tải tất cả';
+
+  @override
+  String get downloadOptionsAlbumsOnly => 'Chỉ album';
+
+  @override
+  String get downloadOptionsSinglesOnly => 'Chỉ single & EP';
+
+  @override
+  String get downloadOptionsSelect => 'Chọn album';
+
+  @override
+  String get librarySearchHint => 'Tìm trong thư viện…';
+
+  @override
+  String get libraryNoResults => 'Không có kết quả';
 }

@@ -164,6 +164,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadFailed => 'Download failed';
 
   @override
+  String get queueViewQueue => 'View Queue';
+
+  @override
   String get queueEmpty => 'No downloads yet.';
 
   @override
@@ -311,4 +314,71 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shareUrlNotRecognized => 'Link not recognized';
+
+  @override
+  String get recentSearches => 'Recent searches';
+
+  @override
+  String get recentSearchesClear => 'Clear all';
+
+  @override
+  String get searchSourceAll => 'All';
+
+  @override
+  String get downloadAll => 'Download all';
+
+  @override
+  String get noTracksFound => 'No tracks found';
+
+  @override
+  String get viewArtist => 'View artist';
+
+  @override
+  String get viewAlbum => 'View album';
+
+  @override
+  String get artistPopular => 'Popular';
+
+  @override
+  String get artistAlbums => 'Albums';
+
+  @override
+  String get artistSingles => 'Singles & EPs';
+
+  @override
+  String artistMonthlyListeners(String count) {
+    return '$count monthly listeners';
+  }
+
+  @override
+  String get artistReleases => 'Releases';
+
+  @override
+  String get artistCompilations => 'Compilations';
+
+  @override
+  String artistSectionCount(String title, int count) {
+    return '$title ($count)';
+  }
+
+  @override
+  String get inLibrary => 'In Library';
+
+  @override
+  String get downloadOptionsAll => 'Download everything';
+
+  @override
+  String get downloadOptionsAlbumsOnly => 'Albums only';
+
+  @override
+  String get downloadOptionsSinglesOnly => 'Singles & EPs only';
+
+  @override
+  String get downloadOptionsSelect => 'Select albums';
+
+  @override
+  String get librarySearchHint => 'Search library…';
+
+  @override
+  String get libraryNoResults => 'No tracks match';
 }

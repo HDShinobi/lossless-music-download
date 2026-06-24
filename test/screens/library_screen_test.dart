@@ -11,6 +11,7 @@ import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/providers/library_provider.dart';
 import 'package:lossless_music_download/screens/library_screen.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
+import 'package:lossless_music_download/widgets/library_track_tile.dart';
 
 // Fake bridge that returns one ALAC entry for the ALAC integration test.
 class _AlacFakeBridge extends BackendBridge {
@@ -182,6 +183,30 @@ void main() {
       expect(find.text('Single Track'), findsOneWidget);
       expect(find.text('AlbumOne'), findsNothing);
       expect(find.text('AlbumTwo'), findsNothing);
+    });
+
+    testWidgets('library search filters by title', (tester) async {
+      await tester.pumpWidget(
+        buildLibraryScreen([
+          libraryProvider.overrideWith(
+            (_) async => [albumEntry1, albumEntry2, singleEntry],
+          ),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      // Search for 'Track One' - should find only albumEntry1
+      final searchField = find.byType(TextField);
+      expect(searchField, findsOneWidget);
+
+      await tester.enterText(searchField, 'Track One');
+      await tester.pumpAndSettle();
+
+      // Should find Track One in results (only in the tile, not in the input field)
+      // Note: TextField will contain 'Track One' too, so check for the tile text
+      expect(find.byType(LibraryTrackTile), findsOneWidget);
+      expect(find.text('Track Two'), findsNothing);
+      expect(find.text('Single Track'), findsNothing);
     });
   });
 }

@@ -58,6 +58,7 @@
   "download": "Tải",
   "downloadStarted": "Đã thêm vào hàng đợi",
   "downloadFailed": "Tải thất bại",
+  "queueViewQueue": "Xem Queue",
   "queueEmpty": "Chưa có tải nào.",
   "libraryEmpty": "Chưa tải bài nào.",
   "libraryCount": "{count} file",
@@ -139,5 +140,39 @@
   "loadingSharedLink": "Đang tải link đã chia sẻ...",
   "@loadingSharedLink": {"description": "Thanh thông báo khi đang xử lý URL nhạc đã chia sẻ"},
   "shareUrlNotRecognized": "Không nhận ra link này",
-  "@shareUrlNotRecognized": {"description": "Hiển thị khi URL đã chia sẻ không thể phân giải thành bài hát"}
+  "@shareUrlNotRecognized": {"description": "Hiển thị khi URL đã chia sẻ không thể phân giải thành bài hát"},
+  "recentSearches": "Tìm kiếm gần đây",
+  "recentSearchesClear": "Xóa tất cả",
+  "searchSourceAll": "Tất cả",
+  "downloadAll": "Tải tất cả",
+  "noTracksFound": "Không tìm thấy bài hát",
+  "viewArtist": "Xem nghệ sĩ",
+  "viewAlbum": "Xem album",
+  "artistPopular": "Phổ biến",
+  "artistAlbums": "Album",
+  "artistSingles": "Single & EP",
+  "artistMonthlyListeners": "{count} người nghe mỗi tháng",
+  "@artistMonthlyListeners": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "artistReleases": "Mới phát hành",
+  "artistCompilations": "Tuyển tập",
+  "artistSectionCount": "{title} ({count})",
+  "@artistSectionCount": {
+    "placeholders": {
+      "title": {"type": "String"},
+      "count": {"type": "int"}
+    }
+  },
+  "inLibrary": "Đã tải",
+  "downloadOptionsAll": "Tải tất cả",
+  "downloadOptionsAlbumsOnly": "Chỉ album",
+  "downloadOptionsSinglesOnly": "Chỉ single & EP",
+  "downloadOptionsSelect": "Chọn album",
+  "librarySearchHint": "Tìm trong thư viện…",
+  "libraryNoResults": "Không có kết quả"
 }

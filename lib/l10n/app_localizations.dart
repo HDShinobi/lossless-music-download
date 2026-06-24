@@ -404,6 +404,12 @@ abstract class AppLocalizations {
   /// **'Download failed'**
   String get downloadFailed;
 
+  /// No description provided for @queueViewQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'View Queue'**
+  String get queueViewQueue;
+
   /// No description provided for @queueEmpty.
   ///
   /// In en, this message translates to:
@@ -673,6 +679,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Link not recognized'**
   String get shareUrlNotRecognized;
+
+  /// No description provided for @recentSearches.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent searches'**
+  String get recentSearches;
+
+  /// No description provided for @recentSearchesClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all'**
+  String get recentSearchesClear;
+
+  /// No description provided for @searchSourceAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get searchSourceAll;
+
+  /// No description provided for @downloadAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Download all'**
+  String get downloadAll;
+
+  /// No description provided for @noTracksFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No tracks found'**
+  String get noTracksFound;
+
+  /// No description provided for @viewArtist.
+  ///
+  /// In en, this message translates to:
+  /// **'View artist'**
+  String get viewArtist;
+
+  /// No description provided for @viewAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'View album'**
+  String get viewAlbum;
+
+  /// No description provided for @artistPopular.
+  ///
+  /// In en, this message translates to:
+  /// **'Popular'**
+  String get artistPopular;
+
+  /// No description provided for @artistAlbums.
+  ///
+  /// In en, this message translates to:
+  /// **'Albums'**
+  String get artistAlbums;
+
+  /// No description provided for @artistSingles.
+  ///
+  /// In en, this message translates to:
+  /// **'Singles & EPs'**
+  String get artistSingles;
+
+  /// No description provided for @artistMonthlyListeners.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} monthly listeners'**
+  String artistMonthlyListeners(String count);
+
+  /// No description provided for @artistReleases.
+  ///
+  /// In en, this message translates to:
+  /// **'Releases'**
+  String get artistReleases;
+
+  /// No description provided for @artistCompilations.
+  ///
+  /// In en, this message translates to:
+  /// **'Compilations'**
+  String get artistCompilations;
+
+  /// No description provided for @artistSectionCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{title} ({count})'**
+  String artistSectionCount(String title, int count);
+
+  /// No description provided for @inLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'In Library'**
+  String get inLibrary;
+
+  /// No description provided for @downloadOptionsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Download everything'**
+  String get downloadOptionsAll;
+
+  /// No description provided for @downloadOptionsAlbumsOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Albums only'**
+  String get downloadOptionsAlbumsOnly;
+
+  /// No description provided for @downloadOptionsSinglesOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Singles & EPs only'**
+  String get downloadOptionsSinglesOnly;
+
+  /// No description provided for @downloadOptionsSelect.
+  ///
+  /// In en, this message translates to:
+  /// **'Select albums'**
+  String get downloadOptionsSelect;
+
+  /// No description provided for @librarySearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search library…'**
+  String get librarySearchHint;
+
+  /// No description provided for @libraryNoResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No tracks match'**
+  String get libraryNoResults;
 }
 
 class _AppLocalizationsDelegate

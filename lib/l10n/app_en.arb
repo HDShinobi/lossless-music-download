@@ -58,6 +58,7 @@
   "download": "Download",
   "downloadStarted": "Added to queue",
   "downloadFailed": "Download failed",
+  "queueViewQueue": "View Queue",
   "queueEmpty": "No downloads yet.",
   "libraryEmpty": "No downloads yet.",
   "libraryCount": "{count} files",
@@ -139,5 +140,39 @@
   "loadingSharedLink": "Loading shared link...",
   "@loadingSharedLink": {"description": "Snackbar shown when resolving a shared music URL"},
   "shareUrlNotRecognized": "Link not recognized",
-  "@shareUrlNotRecognized": {"description": "Shown when a shared URL cannot be resolved to tracks"}
+  "@shareUrlNotRecognized": {"description": "Shown when a shared URL cannot be resolved to tracks"},
+  "recentSearches": "Recent searches",
+  "recentSearchesClear": "Clear all",
+  "searchSourceAll": "All",
+  "downloadAll": "Download all",
+  "noTracksFound": "No tracks found",
+  "viewArtist": "View artist",
+  "viewAlbum": "View album",
+  "artistPopular": "Popular",
+  "artistAlbums": "Albums",
+  "artistSingles": "Singles & EPs",
+  "artistMonthlyListeners": "{count} monthly listeners",
+  "@artistMonthlyListeners": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "artistReleases": "Releases",
+  "artistCompilations": "Compilations",
+  "artistSectionCount": "{title} ({count})",
+  "@artistSectionCount": {
+    "placeholders": {
+      "title": {"type": "String"},
+      "count": {"type": "int"}
+    }
+  },
+  "inLibrary": "In Library",
+  "downloadOptionsAll": "Download everything",
+  "downloadOptionsAlbumsOnly": "Albums only",
+  "downloadOptionsSinglesOnly": "Singles & EPs only",
+  "downloadOptionsSelect": "Select albums",
+  "librarySearchHint": "Search library…",
+  "libraryNoResults": "No tracks match"
 }

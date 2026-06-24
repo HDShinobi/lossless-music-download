@@ -17,6 +17,34 @@ class LibraryScreen extends ConsumerStatefulWidget {
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   int _segment = 0; // 0=All, 1=Albums, 2=Singles
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(() {
+      setState(() => _searchQuery = _searchCtrl.text.toLowerCase().trim());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<LibraryEntry> _filter(List<LibraryEntry> all) {
+    if (_searchQuery.isEmpty) return all;
+    return all.where((e) {
+      final title = (e.title ?? e.name).toLowerCase();
+      final artist = e.artistName?.toLowerCase() ?? '';
+      final album = e.albumName?.toLowerCase() ?? '';
+      return title.contains(_searchQuery) ||
+          artist.contains(_searchQuery) ||
+          album.contains(_searchQuery);
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +98,27 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   ],
                 ),
               ),
+              // Search field
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: t.librarySearchHint,
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () => _searchCtrl.clear(),
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(
+                        vertical: 8, horizontal: 12),
+                    isDense: true,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ),
               // List area
               Expanded(
                 child: _buildList(context, entries),
@@ -84,13 +133,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   }
 
   Widget _buildList(BuildContext context, List<LibraryEntry> entries) {
+    final t = AppLocalizations.of(context);
+    final filtered = _filter(entries);
+    if (filtered.isEmpty && _searchQuery.isNotEmpty) {
+      return Center(child: Text(t.libraryNoResults));
+    }
     switch (_segment) {
-      case 1:
-        return _buildAlbumsView(context, entries);
-      case 2:
-        return _buildSinglesView(entries);
-      default:
-        return _buildAllView(entries);
+      case 1: return _buildAlbumsView(context, filtered);
+      case 2: return _buildSinglesView(filtered);
+      default: return _buildAllView(filtered);
     }
   }
 
