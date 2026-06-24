@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -17,8 +19,8 @@ class LibraryTrackTile extends ConsumerWidget {
   final LibraryEntry entry;
   final VoidCallback? onTap;
 
-  /// Strip leading track number like "01 " or "01. " from the display name.
   String get _displayName {
+    if (entry.title != null && entry.title!.isNotEmpty) return entry.title!;
     final nameWithoutExt = entry.name.contains('.')
         ? entry.name.substring(0, entry.name.lastIndexOf('.'))
         : entry.name;
@@ -29,30 +31,23 @@ class LibraryTrackTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final tokens = context.tokens;
+    final tt = Theme.of(context).textTheme;
 
-    // Watch the audio quality probe — non-blocking; tile renders immediately
-    // with the format badge and fills in the quality badge when resolved.
     final qualityAsync = ref.watch(audioQualityProvider(entry.path));
     final quality = qualityAsync.value;
+
+    final subtitle = [
+      if (entry.artistName != null) entry.artistName!,
+      if (entry.albumName != null) entry.albumName!,
+    ].join(' · ');
+    final subtitleIsInferred = entry.tagsFromFallback && subtitle.isNotEmpty;
 
     final row = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         children: [
-          // Cover placeholder
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: tokens.surface3,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Icon(Icons.music_note, size: 20, color: cs.onSurfaceVariant),
-            ),
-          ),
+          _CoverArt(entry: entry, tokens: tokens, cs: cs),
           const SizedBox(width: 12),
-          // Title + badges
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,22 +57,35 @@ class LibraryTrackTile extends ConsumerWidget {
                   _displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: cs.onSurface),
+                  style: tt.bodyMedium?.copyWith(color: cs.onSurface),
                 ),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontStyle: subtitleIsInferred
+                          ? FontStyle.italic
+                          : FontStyle.normal,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    _FormatBadge(label: entry.format, tokens: tokens, cs: cs),
+                    _FormatBadge(
+                        label: entry.format, tokens: tokens, cs: cs),
                     if (quality != null && quality.hasData) ...[
                       const SizedBox(width: 4),
                       _QualityBadge(
-                        quality: quality,
-                        tokens: tokens,
-                        cs: cs,
-                      ),
+                          quality: quality, tokens: tokens, cs: cs),
+                    ],
+                    if (entry.tagsFromFallback) ...[
+                      const SizedBox(width: 4),
+                      _TagsMissingBadge(tokens: tokens, cs: cs),
                     ],
                     if (entry.verified) ...[
                       const SizedBox(width: 4),
@@ -105,14 +113,49 @@ class LibraryTrackTile extends ConsumerWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Format badge pill — matches _QualityBadge visual from track_tile.dart
+// Cover art — local file extracted by Go scanner, fallback to placeholder
+// ---------------------------------------------------------------------------
+class _CoverArt extends StatelessWidget {
+  const _CoverArt(
+      {required this.entry, required this.tokens, required this.cs});
+
+  final LibraryEntry entry;
+  final AppTokens tokens;
+  final ColorScheme cs;
+
+  @override
+  Widget build(BuildContext context) {
+    final coverPath = entry.coverPath;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: coverPath != null
+            ? Image.file(
+                File(coverPath),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _placeholder(),
+              )
+            : _placeholder(),
+      ),
+    );
+  }
+
+  Widget _placeholder() => Container(
+        color: tokens.surface3,
+        child: Center(
+          child: Icon(Icons.music_note, size: 22, color: cs.onSurfaceVariant),
+        ),
+      );
+}
+
+// ---------------------------------------------------------------------------
+// Format badge pill
 // ---------------------------------------------------------------------------
 class _FormatBadge extends StatelessWidget {
-  const _FormatBadge({
-    required this.label,
-    required this.tokens,
-    required this.cs,
-  });
+  const _FormatBadge(
+      {required this.label, required this.tokens, required this.cs});
 
   final String label;
   final AppTokens tokens;
@@ -121,22 +164,19 @@ class _FormatBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isFlac = label == 'FLAC';
-    final bg = isFlac ? tokens.accentSoft : tokens.surface2;
-    final textColor = isFlac ? cs.primary : cs.onSurfaceVariant;
-    final borderColor = isFlac ? tokens.accentLine : cs.outline;
-
     return Container(
       key: const Key('formatBadge'),
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
-        color: bg,
-        border: Border.all(color: borderColor, width: 1),
+        color: isFlac ? tokens.accentSoft : tokens.surface2,
+        border: Border.all(
+            color: isFlac ? tokens.accentLine : cs.outline, width: 1),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: textColor,
+          color: isFlac ? cs.primary : cs.onSurfaceVariant,
           fontSize: 10,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.4,
@@ -147,33 +187,55 @@ class _FormatBadge extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Quality badge pill — shows bit-depth/sample-rate (e.g. "24/96" or "44.1k")
+// Tags-missing badge — shown when metadata was inferred from folder path
+// ---------------------------------------------------------------------------
+class _TagsMissingBadge extends StatelessWidget {
+  const _TagsMissingBadge({required this.tokens, required this.cs});
+
+  final AppTokens tokens;
+  final ColorScheme cs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('tagsMissingBadge'),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: tokens.downSoft,
+        border: Border.all(color: tokens.down.withValues(alpha: 0.3), width: 1),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        'tags missing',
+        style: TextStyle(
+          color: tokens.down,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Quality badge pill — "24/96" for lossless, "44.1k" for lossy
 // ---------------------------------------------------------------------------
 class _QualityBadge extends StatelessWidget {
-  const _QualityBadge({
-    required this.quality,
-    required this.tokens,
-    required this.cs,
-  });
+  const _QualityBadge(
+      {required this.quality, required this.tokens, required this.cs});
 
   final AudioQuality quality;
   final AppTokens tokens;
   final ColorScheme cs;
 
-  /// Format: "24/96" when bit depth is known, "44.1k" for lossy (bitDepth==0).
   String get _label {
     final khz = quality.sampleRate / 1000;
-    if (quality.bitDepth > 0) {
-      final kStr = khz == khz.truncateToDouble()
-          ? khz.toInt().toString()
-          : khz.toStringAsFixed(1);
-      return '${quality.bitDepth}/$kStr';
-    }
-    // Lossy — show only kHz with 'k' suffix, trimming trailing zeros.
     final kStr = khz == khz.truncateToDouble()
-        ? '${khz.toInt()}k'
-        : '${khz.toStringAsFixed(1)}k';
-    return kStr;
+        ? khz.toInt().toString()
+        : khz.toStringAsFixed(1);
+    if (quality.bitDepth > 0) return '${quality.bitDepth}/$kStr';
+    return '${kStr}k';
   }
 
   @override

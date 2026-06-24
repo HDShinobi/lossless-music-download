@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -115,27 +117,33 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       return const Center(child: SizedBox.shrink());
     }
 
-    // Flatten into a list of widgets: header + tiles
-    final widgets = <Widget>[];
-    for (final kv in grouped.entries) {
-      final artist = kv.key.$1;
-      final album = kv.key.$2;
-      final tracks = kv.value;
-      widgets.add(
-        ListTile(
-          title: Text(album),
-          subtitle: Text('$artist · ${AppLocalizations.of(context).albumTrackCount(tracks.length)}'),
-        ),
-      );
-      for (final track in tracks) {
-        widgets.add(LibraryTrackTile(
-          entry: track,
-          onTap: () => context.go('/library/verified', extra: track),
-        ));
-      }
-    }
+    final albums = grouped.entries.toList();
 
-    return ListView(children: widgets);
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 0.72,
+      ),
+      itemCount: albums.length,
+      itemBuilder: (context, index) {
+        final kv = albums[index];
+        final artist = kv.key.$1;
+        final album = kv.key.$2;
+        final tracks = kv.value;
+        // Pick the first track that has a local cover extracted.
+        final coverEntry =
+            tracks.firstWhere((e) => e.coverPath != null, orElse: () => tracks.first);
+        return _AlbumTile(
+          artist: artist,
+          album: album,
+          tracks: tracks,
+          coverEntry: coverEntry,
+        );
+      },
+    );
   }
 
   Widget _buildSinglesView(List<LibraryEntry> entries) {
@@ -153,4 +161,97 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       ),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Album cover grid tile
+// ---------------------------------------------------------------------------
+
+class _AlbumTile extends StatelessWidget {
+  const _AlbumTile({
+    required this.artist,
+    required this.album,
+    required this.tracks,
+    required this.coverEntry,
+  });
+
+  final String artist;
+  final String album;
+  final List<LibraryEntry> tracks;
+  final LibraryEntry coverEntry;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    final coverPath = coverEntry.coverPath;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Square cover art — fills the top portion of the tile
+          Expanded(
+            child: coverPath != null
+                ? Image.file(
+                    File(coverPath),
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _coverPlaceholder(cs),
+                  )
+                : _coverPlaceholder(cs),
+          ),
+          // Album info below the art
+          Padding(
+            padding: const EdgeInsets.fromLTRB(9, 8, 9, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  album,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tt.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
+                ),
+                if (artist.isNotEmpty) ...[
+                  const SizedBox(height: 1),
+                  Text(
+                    artist,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                ],
+                const SizedBox(height: 2),
+                Text(
+                  '${tracks.length} ${tracks.length == 1 ? 'track' : 'tracks'}',
+                  style: tt.labelSmall?.copyWith(
+                    color: cs.onSurfaceVariant.withValues(alpha: 0.6),
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _coverPlaceholder(ColorScheme cs) => Container(
+        color: cs.surfaceContainerHigh,
+        child: Center(
+          child: Icon(Icons.album_outlined, size: 36, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+        ),
+      );
 }

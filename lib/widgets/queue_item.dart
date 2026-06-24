@@ -168,6 +168,14 @@ class QueueItem extends ConsumerWidget {
       ),
     );
 
+    // Bottom progress strip: indeterminate while bytes=0, determinate once
+    // progress is non-zero. Only shown for active download/finalizing states.
+    final showStrip =
+        state == _ItemState.downloading || state == _ItemState.finalizing;
+    final stripValue = (state == _ItemState.downloading && item.progress > 0)
+        ? item.progress.clamp(0.0, 1.0)
+        : null; // null → indeterminate
+
     // Card with brand styling: surface + accentLine border, radius 14
     final card = Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -177,22 +185,34 @@ class QueueItem extends ConsumerWidget {
         border: Border.all(color: tokens.accentLine.withValues(alpha: 0.35)),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Stack(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Progress fill — soft accent bar behind content
-          if (item.progress > 0)
-            Positioned.fill(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FractionallySizedBox(
-                  widthFactor: item.progress.clamp(0.0, 1.0),
-                  child: Container(
-                    color: tokens.accentSoft,
+          Stack(
+            children: [
+              // Progress fill — soft accent bar behind content
+              if (item.progress > 0)
+                Positioned.fill(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: item.progress.clamp(0.0, 1.0),
+                      child: Container(
+                        color: tokens.accentSoft,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              cardContent,
+            ],
+          ),
+          if (showStrip)
+            LinearProgressIndicator(
+              value: stripValue,
+              minHeight: 3,
+              backgroundColor: tokens.surface3,
+              valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
             ),
-          cardContent,
         ],
       ),
     );
