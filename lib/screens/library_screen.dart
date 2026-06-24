@@ -39,10 +39,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     return all.where((e) {
       final title = (e.title ?? e.name).toLowerCase();
       final artist = e.artistName?.toLowerCase() ?? '';
-      final album = e.albumName?.toLowerCase() ?? '';
-      return title.contains(_searchQuery) ||
-          artist.contains(_searchQuery) ||
-          album.contains(_searchQuery);
+      return title.contains(_searchQuery) || artist.contains(_searchQuery);
     }).toList();
   }
 
