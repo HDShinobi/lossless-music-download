@@ -1,10 +1,40 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
+import 'package:lossless_music_download/providers/download_dir_provider.dart';
+import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/providers/library_provider.dart';
 import 'package:lossless_music_download/screens/library_screen.dart';
+import 'package:lossless_music_download/services/backend_bridge.dart';
+
+// Fake bridge that returns one ALAC entry for the ALAC integration test.
+class _AlacFakeBridge extends BackendBridge {
+  _AlacFakeBridge(this._dir) : super(const MethodChannel('_fake'));
+  final String _dir;
+
+  @override
+  Future<void> setLibraryCoverCacheDir(String cacheDir) async {}
+
+  @override
+  Future<List<Map<String, dynamic>>> scanLibraryFolder(String folderPath) async {
+    final alacFile = File('$_dir/01. Track.alac');
+    return [
+      <String, dynamic>{
+        'filePath': alacFile.path,
+        'trackName': '01. Track',
+        'artistName': '',
+        'albumName': '',
+        'coverPath': '',
+        'duration': 0,
+      },
+    ];
+  }
+}
 
 const albumEntry1 = LibraryEntry(
   path: '/downloads/ArtistA/AlbumOne/01 Track One.flac',
@@ -63,12 +93,37 @@ Widget buildLibraryScreen(List<dynamic> overrides) {
 }
 
 void main() {
-  group('LibraryEntry unit tests', () {
-    test('LibraryEntry verified is true for ALAC', () {
-      const alacPath = '/music/Artist/Album/01. Track.alac';
-      final filename = alacPath.split('/').last; // '01. Track.alac'
-      final ext = filename.split('.').last.toUpperCase(); // 'ALAC'
-      expect(ext == 'FLAC' || ext == 'ALAC', isTrue);
+  group('libraryProvider ALAC integration', () {
+    test('LibraryEntry.verified is true and format is ALAC for .alac file',
+        () async {
+      final tempDir =
+          Directory.systemTemp.createTempSync('library_alac_test_');
+      addTearDown(() => tempDir.deleteSync(recursive: true));
+
+      // Create a single .alac file so the scanner returns exactly one entry.
+      File('${tempDir.path}/01. Track.alac').writeAsBytesSync([0, 1, 2]);
+
+      // Minimal fake bridge: returns one ALAC entry and no-ops cover cache.
+      final fakeBridge = _AlacFakeBridge(tempDir.path);
+
+      final coverCacheDir =
+          Directory.systemTemp.createTempSync('cover_cache_alac_');
+      addTearDown(() => coverCacheDir.deleteSync(recursive: true));
+
+      final container = ProviderContainer(
+        overrides: [
+          downloadDirProvider.overrideWith((_) async => tempDir.path),
+          backendBridgeProvider.overrideWithValue(fakeBridge),
+          libraryCoverCacheDirProvider
+              .overrideWithValue(Future.value(coverCacheDir.path)),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final entries = await container.read(libraryProvider.future);
+      expect(entries.length, 1);
+      expect(entries.first.format, 'ALAC');
+      expect(entries.first.verified, isTrue);
     });
   });
 

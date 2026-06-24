@@ -19,6 +19,9 @@ class AskBeforeDownloadNotifier extends Notifier<bool> {
     return false;
   }
 
+  /// Deprecated: `build()` now auto-loads the persisted value via a microtask
+  /// on first initialization. Call [set] to update the value; there is no need
+  /// to call [load] manually.
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
     state = p.getBool(_key) ?? false;
