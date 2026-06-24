@@ -174,8 +174,45 @@ void main() {
         'selecting 2 tracks then tapping Download calls controller for both',
         (tester) async {
       final bridge = _FakeBackendBridge();
+      const fakeExt = InstalledExtension(
+        id: 'ext-dl',
+        name: 'ext-dl',
+        displayName: 'Test Extension',
+        version: '1.0.0',
+        description: '',
+        status: 'installed',
+        types: [],
+        permissions: [],
+        enabled: true,
+        hasMetadataProvider: true,
+        hasDownloadProvider: true,
+        hasLyricsProvider: false,
+      );
       await tester.pumpWidget(
-        buildSearchScreen(results: [_track1, _track2], bridge: bridge),
+        ProviderScope(
+          overrides: [
+            backendBridgeProvider.overrideWithValue(bridge),
+            appDirsProvider.overrideWithValue(
+              Future.value(('/fake/ext', '/fake/data')),
+            ),
+            downloadDirPathProvider.overrideWithValue(
+              Future.value('/fake/downloads'),
+            ),
+            extensionsProvider
+                .overrideWith(() => _FakeExtensionsController([fakeExt])),
+            searchProvider.overrideWith(() => _FakeSearchNotifier([_track1, _track2])),
+            askBeforeDownloadProvider.overrideWith(
+              () => AskBeforeDownloadNotifier(),
+            ),
+          ],
+          child: MaterialApp(
+            theme: appTheme(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            home: const SearchScreen(),
+          ),
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -189,6 +226,10 @@ void main() {
 
       // Tap the Download action button
       await tester.tap(find.byIcon(Icons.download_outlined));
+      await tester.pumpAndSettle();
+
+      // Tap the Download button in the picker sheet
+      await tester.tap(find.byType(FilledButton).first);
       await tester.pumpAndSettle();
 
       expect(bridge.recorded, hasLength(2));
@@ -216,8 +257,45 @@ void main() {
     });
 
     testWidgets('batch download shows snackbar', (tester) async {
+      const fakeExt = InstalledExtension(
+        id: 'ext-dl',
+        name: 'ext-dl',
+        displayName: 'Test Extension',
+        version: '1.0.0',
+        description: '',
+        status: 'installed',
+        types: [],
+        permissions: [],
+        enabled: true,
+        hasMetadataProvider: true,
+        hasDownloadProvider: true,
+        hasLyricsProvider: false,
+      );
       await tester.pumpWidget(
-        buildSearchScreen(results: [_track1]),
+        ProviderScope(
+          overrides: [
+            backendBridgeProvider.overrideWithValue(_FakeBackendBridge()),
+            appDirsProvider.overrideWithValue(
+              Future.value(('/fake/ext', '/fake/data')),
+            ),
+            downloadDirPathProvider.overrideWithValue(
+              Future.value('/fake/downloads'),
+            ),
+            extensionsProvider
+                .overrideWith(() => _FakeExtensionsController([fakeExt])),
+            searchProvider.overrideWith(() => _FakeSearchNotifier([_track1])),
+            askBeforeDownloadProvider.overrideWith(
+              () => AskBeforeDownloadNotifier(),
+            ),
+          ],
+          child: MaterialApp(
+            theme: appTheme(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            home: const SearchScreen(),
+          ),
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -227,6 +305,10 @@ void main() {
 
       // Tap Download
       await tester.tap(find.byIcon(Icons.download_outlined));
+      await tester.pumpAndSettle();
+
+      // The picker sheet should appear; tap the Download button in the sheet
+      await tester.tap(find.byType(FilledButton).first);
       await tester.pumpAndSettle();
 
       expect(
@@ -287,6 +369,76 @@ void main() {
       expect(find.text('Download'), findsNothing);
       // Enqueue was called immediately.
       expect(bridge.recorded, hasLength(1));
+    });
+
+    testWidgets('batch download shows picker and records service for all tracks',
+        (tester) async {
+      final bridge = _FakeBackendBridge();
+      const fakeExt = InstalledExtension(
+        id: 'ext-batch',
+        name: 'ext-batch',
+        displayName: 'Test Extension',
+        version: '1.0.0',
+        description: '',
+        status: 'installed',
+        types: [],
+        permissions: [],
+        enabled: true,
+        hasMetadataProvider: true,
+        hasDownloadProvider: true,
+        hasLyricsProvider: false,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            backendBridgeProvider.overrideWithValue(bridge),
+            appDirsProvider.overrideWithValue(
+              Future.value(('/fake/ext', '/fake/data')),
+            ),
+            downloadDirPathProvider.overrideWithValue(
+              Future.value('/fake/downloads'),
+            ),
+            extensionsProvider
+                .overrideWith(() => _FakeExtensionsController([fakeExt])),
+            searchProvider.overrideWith(() => _FakeSearchNotifier([_track1, _track2])),
+            askBeforeDownloadProvider.overrideWith(
+              () => AskBeforeDownloadNotifier(),
+            ),
+          ],
+          child: MaterialApp(
+            theme: appTheme(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            home: const SearchScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Long-press track 1 to enter selection mode
+      await tester.longPress(find.text('Song One'));
+      await tester.pumpAndSettle();
+
+      // Toggle track 2 to select it as well
+      await tester.tap(find.text('Song Two'));
+      await tester.pumpAndSettle();
+
+      // Tap the batch Download button
+      await tester.tap(find.byIcon(Icons.download_outlined));
+      await tester.pumpAndSettle();
+
+      // The picker sheet should appear (look for Download text in sheet)
+      expect(find.text('Download'), findsWidgets);
+
+      // Tap the Download button in the sheet to confirm
+      await tester.tap(find.byType(FilledButton).first);
+      await tester.pumpAndSettle();
+
+      // Verify 2 tracks were recorded with non-null service
+      expect(bridge.recorded, hasLength(2));
+      expect(bridge.recorded[0].service, isNotNull);
+      expect(bridge.recorded[1].service, isNotNull);
     });
   });
 }

@@ -132,21 +132,40 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   // Batch download (selection mode)
   // -------------------------------------------------------------------------
 
-  void _batchDownload(List<Track> allTracks) {
+  Future<void> _batchDownload(List<Track> allTracks) async {
     final t = AppLocalizations.of(context);
-    final queue = ref.read(downloadQueueProvider.notifier);
-    final count = _selectedIds.length;
+    final selected =
+        allTracks.where((tr) => _selectedIds.contains(tr.id)).toList();
+    if (selected.isEmpty) return;
 
-    for (final track in allTracks) {
-      if (_selectedIds.contains(track.id)) {
-        unawaited(queue.enqueue(track));
-      }
+    final sources = ref
+            .read(extensionsProvider)
+            .value
+            ?.where((e) => e.enabled && e.hasDownloadProvider)
+            .toList() ??
+        [];
+    if (!context.mounted) return;
+
+    final choice = await showDownloadSheet(
+      context,
+      track: selected.first,
+      sources: sources,
+    );
+    if (!context.mounted) return;
+    if (choice == null) return; // user cancelled — nothing enqueued
+
+    final queue = ref.read(downloadQueueProvider.notifier);
+    for (final track in selected) {
+      unawaited(queue.enqueue(
+        track,
+        service: choice.sourceId,
+        quality: choice.quality,
+      ));
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(t.batchAddedToQueue(count))),
+      SnackBar(content: Text(t.batchAddedToQueue(selected.length))),
     );
-
     _exitSelectionMode();
   }
 
@@ -175,7 +194,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             tooltip: t.downloadCta,
             onPressed: () {
               final tracks = ref.read(searchProvider).value ?? [];
-              _batchDownload(tracks);
+              unawaited(_batchDownload(tracks));
             },
           ),
           IconButton(
