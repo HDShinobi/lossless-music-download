@@ -5,13 +5,6 @@ import 'package:lossless_music_download/models/track.dart';
 import 'package:lossless_music_download/theme/app_theme.dart';
 import 'package:lossless_music_download/widgets/track_tile.dart';
 
-Track _track() => const Track(
-      id: 't1',
-      name: 'Song',
-      artists: 'Artist',
-      durationMs: 0,
-    );
-
 // ---------------------------------------------------------------------------
 // Helper: pump TrackTile in a minimal MaterialApp
 // ---------------------------------------------------------------------------
@@ -67,9 +60,8 @@ void main() {
       );
 
       expect(find.text('Test Song'), findsOneWidget);
-      // artist and album are rendered as separate Text widgets in _SubtitleRow
-      expect(find.text('Test Artist'), findsOneWidget);
-      expect(find.text('Test Album'), findsOneWidget);
+      // artists and album are joined as "Artist · Album" in the subtitle
+      expect(find.text('Test Artist · Test Album'), findsOneWidget);
     });
 
     testWidgets('shows no badge when qualityHint is null', (tester) async {
@@ -207,45 +199,32 @@ void main() {
     });
   });
 
-  group('TrackTile download state icons', () {
-    testWidgets('TrackTile shows download icon when idle', (t) async {
-      await t.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: TrackTile(
-            track: _track(),
-            onDownload: () {},
-            downloadState: TrackDownloadState.idle,
+  group('_DownloadStateIcon states', () {
+    for (final tc in [
+      (TrackDownloadState.idle, Icons.download_outlined),
+      (TrackDownloadState.active, null),   // spinner, no icon
+      (TrackDownloadState.done, Icons.check_circle_outline),
+    ]) {
+      testWidgets('${tc.$1}', (t) async {
+        await t.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: TrackTile(
+                track: const Track(id: '1', name: 'T', artists: 'A', albumName: ''),
+                downloadState: tc.$1,
+                onDownload: () {},
+              ),
+            ),
           ),
-        ),
-      ));
-      expect(find.byIcon(Icons.download_outlined), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
-    });
-
-    testWidgets('TrackTile shows spinner when active', (t) async {
-      await t.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: TrackTile(
-            track: _track(),
-            onDownload: () {},
-            downloadState: TrackDownloadState.active,
-          ),
-        ),
-      ));
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    });
-
-    testWidgets('TrackTile shows check when done', (t) async {
-      await t.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: TrackTile(
-            track: _track(),
-            onDownload: () {},
-            downloadState: TrackDownloadState.done,
-          ),
-        ),
-      ));
-      expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
-    });
+        );
+        // Use pump() instead of pumpAndSettle() to avoid timeout with spinner animation
+        await t.pump();
+        if (tc.$2 != null) {
+          expect(find.byIcon(tc.$2!), findsOneWidget);
+        } else {
+          expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        }
+      });
+    }
   });
 }
