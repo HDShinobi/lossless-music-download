@@ -7,6 +7,7 @@ import '../models/download_request.dart';
 import '../models/installed_extension.dart';
 import '../models/track.dart';
 import '../util/queue_view.dart';
+import '../widgets/track_tile.dart'; // TrackDownloadState
 import 'download_dir_provider.dart';
 import 'download_labels_provider.dart';
 import 'downloads_provider.dart';
@@ -247,6 +248,28 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         .read(backendBridgeProvider)
         .cancelDownload(itemId)
         .catchError((_) {});
+  }
+
+  /// Returns the download state for a track by its [trackId].
+  /// If the track has multiple entries, active/queued entries take priority
+  /// over terminal (done/failed) entries.
+  TrackDownloadState stateForTrack(String trackId) {
+    final matches = state.where((e) => e.track.id == trackId);
+    if (matches.isEmpty) return TrackDownloadState.idle;
+    // Prefer the active entry if any.
+    final active = matches.firstWhere(
+      (e) => e.status == 'queued' ||
+          e.status == 'downloading' ||
+          e.status == 'finalizing',
+      orElse: () => matches.first,
+    );
+    return switch (active.status) {
+      'queued' => TrackDownloadState.queued,
+      'downloading' || 'finalizing' => TrackDownloadState.active,
+      'done' => TrackDownloadState.done,
+      'failed' => TrackDownloadState.failed,
+      _ => TrackDownloadState.idle,
+    };
   }
 
   void _merge(List<DownloadProgress> items) {

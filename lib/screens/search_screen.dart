@@ -287,6 +287,7 @@ class _SearchBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.watch(downloadQueueProvider); // rebuild tiles when queue changes
     final t = AppLocalizations.of(context);
     return ref.watch(searchProvider).when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -315,6 +316,9 @@ class _SearchBody extends ConsumerWidget {
               onDownload: () => onDownload(context, track),
               onLongPress: () => onLongPress(track.id),
               onSelectToggle: () => onSelectToggle(track.id),
+              downloadState: ref
+                  .read(downloadQueueProvider.notifier)
+                  .stateForTrack(track.id),
             );
           },
         );
