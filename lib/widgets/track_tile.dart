@@ -215,7 +215,7 @@ class _DownloadStateIcon extends StatelessWidget {
       TrackDownloadState.idle => IconButton(
           icon: const Icon(Icons.download_outlined),
           onPressed: onDownload,
-          tooltip: null,
+          tooltip: Localizations.of<AppLocalizations>(context, AppLocalizations)?.download,
         ),
       TrackDownloadState.queued => Padding(
           padding: const EdgeInsets.all(12),
