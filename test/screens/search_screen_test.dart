@@ -121,6 +121,40 @@ Widget buildSearchScreen({
 }
 
 // ---------------------------------------------------------------------------
+// Helper: build SearchScreen with extensions and provider overrides
+// ---------------------------------------------------------------------------
+Widget buildSearchScreenWithExt({
+  List<Track> results = const [],
+  _FakeBackendBridge? bridge,
+  List<InstalledExtension> extensions = const [],
+}) {
+  final fakeBridge = bridge ?? _FakeBackendBridge();
+  return ProviderScope(
+    overrides: [
+      backendBridgeProvider.overrideWithValue(fakeBridge),
+      appDirsProvider.overrideWithValue(
+        Future.value(('/fake/ext', '/fake/data')),
+      ),
+      downloadDirPathProvider.overrideWithValue(
+        Future.value('/fake/downloads'),
+      ),
+      extensionsProvider.overrideWith(() => _FakeExtensionsController(extensions)),
+      searchProvider.overrideWith(() => _FakeSearchNotifier(results)),
+      askBeforeDownloadProvider.overrideWith(
+        () => AskBeforeDownloadNotifier(),
+      ),
+    ],
+    child: MaterialApp(
+      theme: appTheme(),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      locale: const Locale('en'),
+      home: const SearchScreen(),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Test tracks
 // ---------------------------------------------------------------------------
 const _track1 = Track(
@@ -135,6 +169,21 @@ const _track2 = Track(
   name: 'Song Two',
   artists: 'Artist B',
   albumName: 'Album Y',
+);
+
+const _fakeExt = InstalledExtension(
+  id: 'ext-dl',
+  name: 'ext-dl',
+  displayName: 'Test Extension',
+  version: '1.0.0',
+  description: '',
+  status: 'installed',
+  types: [],
+  permissions: [],
+  enabled: true,
+  hasMetadataProvider: true,
+  hasDownloadProvider: true,
+  hasLyricsProvider: false,
 );
 
 // ---------------------------------------------------------------------------
@@ -174,44 +223,11 @@ void main() {
         'selecting 2 tracks then tapping Download calls controller for both',
         (tester) async {
       final bridge = _FakeBackendBridge();
-      const fakeExt = InstalledExtension(
-        id: 'ext-dl',
-        name: 'ext-dl',
-        displayName: 'Test Extension',
-        version: '1.0.0',
-        description: '',
-        status: 'installed',
-        types: [],
-        permissions: [],
-        enabled: true,
-        hasMetadataProvider: true,
-        hasDownloadProvider: true,
-        hasLyricsProvider: false,
-      );
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            backendBridgeProvider.overrideWithValue(bridge),
-            appDirsProvider.overrideWithValue(
-              Future.value(('/fake/ext', '/fake/data')),
-            ),
-            downloadDirPathProvider.overrideWithValue(
-              Future.value('/fake/downloads'),
-            ),
-            extensionsProvider
-                .overrideWith(() => _FakeExtensionsController([fakeExt])),
-            searchProvider.overrideWith(() => _FakeSearchNotifier([_track1, _track2])),
-            askBeforeDownloadProvider.overrideWith(
-              () => AskBeforeDownloadNotifier(),
-            ),
-          ],
-          child: MaterialApp(
-            theme: appTheme(),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            locale: const Locale('en'),
-            home: const SearchScreen(),
-          ),
+        buildSearchScreenWithExt(
+          results: [_track1, _track2],
+          bridge: bridge,
+          extensions: [_fakeExt],
         ),
       );
       await tester.pumpAndSettle();
@@ -257,44 +273,10 @@ void main() {
     });
 
     testWidgets('batch download shows snackbar', (tester) async {
-      const fakeExt = InstalledExtension(
-        id: 'ext-dl',
-        name: 'ext-dl',
-        displayName: 'Test Extension',
-        version: '1.0.0',
-        description: '',
-        status: 'installed',
-        types: [],
-        permissions: [],
-        enabled: true,
-        hasMetadataProvider: true,
-        hasDownloadProvider: true,
-        hasLyricsProvider: false,
-      );
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            backendBridgeProvider.overrideWithValue(_FakeBackendBridge()),
-            appDirsProvider.overrideWithValue(
-              Future.value(('/fake/ext', '/fake/data')),
-            ),
-            downloadDirPathProvider.overrideWithValue(
-              Future.value('/fake/downloads'),
-            ),
-            extensionsProvider
-                .overrideWith(() => _FakeExtensionsController([fakeExt])),
-            searchProvider.overrideWith(() => _FakeSearchNotifier([_track1])),
-            askBeforeDownloadProvider.overrideWith(
-              () => AskBeforeDownloadNotifier(),
-            ),
-          ],
-          child: MaterialApp(
-            theme: appTheme(),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            locale: const Locale('en'),
-            home: const SearchScreen(),
-          ),
+        buildSearchScreenWithExt(
+          results: [_track1],
+          extensions: [_fakeExt],
         ),
       );
       await tester.pumpAndSettle();
@@ -374,44 +356,11 @@ void main() {
     testWidgets('batch download shows picker and records service for all tracks',
         (tester) async {
       final bridge = _FakeBackendBridge();
-      const fakeExt = InstalledExtension(
-        id: 'ext-batch',
-        name: 'ext-batch',
-        displayName: 'Test Extension',
-        version: '1.0.0',
-        description: '',
-        status: 'installed',
-        types: [],
-        permissions: [],
-        enabled: true,
-        hasMetadataProvider: true,
-        hasDownloadProvider: true,
-        hasLyricsProvider: false,
-      );
       await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            backendBridgeProvider.overrideWithValue(bridge),
-            appDirsProvider.overrideWithValue(
-              Future.value(('/fake/ext', '/fake/data')),
-            ),
-            downloadDirPathProvider.overrideWithValue(
-              Future.value('/fake/downloads'),
-            ),
-            extensionsProvider
-                .overrideWith(() => _FakeExtensionsController([fakeExt])),
-            searchProvider.overrideWith(() => _FakeSearchNotifier([_track1, _track2])),
-            askBeforeDownloadProvider.overrideWith(
-              () => AskBeforeDownloadNotifier(),
-            ),
-          ],
-          child: MaterialApp(
-            theme: appTheme(),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            locale: const Locale('en'),
-            home: const SearchScreen(),
-          ),
+        buildSearchScreenWithExt(
+          results: [_track1, _track2],
+          bridge: bridge,
+          extensions: [_fakeExt],
         ),
       );
       await tester.pumpAndSettle();
