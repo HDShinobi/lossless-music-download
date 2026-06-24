@@ -380,4 +380,26 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get libraryNoResults => 'Không có kết quả';
+
+  @override
+  String get settingDownloadFolder => 'Thư mục tải về';
+
+  @override
+  String get settingEmbedMetadata => 'Ghi thẻ metadata';
+
+  @override
+  String get settingEmbedMetadataDesc =>
+      'Ghi thông tin (tên bài, ca sĩ, năm…) vào file';
+
+  @override
+  String get settingEmbedCover => 'Ghi ảnh bìa';
+
+  @override
+  String get settingEmbedCoverDesc => 'Nhúng ảnh bìa album vào thẻ file';
+
+  @override
+  String get settingEmbedLyrics => 'Ghi lời bài hát';
+
+  @override
+  String get settingEmbedLyricsDesc => 'Nhúng lời bài hát đồng bộ vào file';
 }

@@ -9,6 +9,7 @@ import 'package:lossless_music_download/providers/download_dir_provider.dart';
 import 'package:lossless_music_download/providers/download_queue_provider.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ---------------------------------------------------------------------------
 // Controllable fake BackendBridge
@@ -103,6 +104,12 @@ const _track = Track(
 // ---------------------------------------------------------------------------
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   group('DownloadQueueController', () {
     // (a) enqueue immediately adds visible entry; sequential processor sets done
     test(

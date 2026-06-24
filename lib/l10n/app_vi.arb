@@ -174,5 +174,12 @@
   "downloadOptionsSinglesOnly": "Chỉ single & EP",
   "downloadOptionsSelect": "Chọn album",
   "librarySearchHint": "Tìm trong thư viện…",
-  "libraryNoResults": "Không có kết quả"
+  "libraryNoResults": "Không có kết quả",
+  "settingDownloadFolder": "Thư mục tải về",
+  "settingEmbedMetadata": "Ghi thẻ metadata",
+  "settingEmbedMetadataDesc": "Ghi thông tin (tên bài, ca sĩ, năm…) vào file",
+  "settingEmbedCover": "Ghi ảnh bìa",
+  "settingEmbedCoverDesc": "Nhúng ảnh bìa album vào thẻ file",
+  "settingEmbedLyrics": "Ghi lời bài hát",
+  "settingEmbedLyricsDesc": "Nhúng lời bài hát đồng bộ vào file"
 }

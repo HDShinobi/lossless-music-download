@@ -805,6 +805,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No tracks match'**
   String get libraryNoResults;
+
+  /// No description provided for @settingDownloadFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Download folder'**
+  String get settingDownloadFolder;
+
+  /// No description provided for @settingEmbedMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Embed metadata'**
+  String get settingEmbedMetadata;
+
+  /// No description provided for @settingEmbedMetadataDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Write tags (title, artist, year…) to downloaded files'**
+  String get settingEmbedMetadataDesc;
+
+  /// No description provided for @settingEmbedCover.
+  ///
+  /// In en, this message translates to:
+  /// **'Embed cover art'**
+  String get settingEmbedCover;
+
+  /// No description provided for @settingEmbedCoverDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Include album artwork in file tags'**
+  String get settingEmbedCoverDesc;
+
+  /// No description provided for @settingEmbedLyrics.
+  ///
+  /// In en, this message translates to:
+  /// **'Embed lyrics'**
+  String get settingEmbedLyrics;
+
+  /// No description provided for @settingEmbedLyricsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Include synced lyrics in file tags'**
+  String get settingEmbedLyricsDesc;
 }
 
 class _AppLocalizationsDelegate

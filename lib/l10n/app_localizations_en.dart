@@ -381,4 +381,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get libraryNoResults => 'No tracks match';
+
+  @override
+  String get settingDownloadFolder => 'Download folder';
+
+  @override
+  String get settingEmbedMetadata => 'Embed metadata';
+
+  @override
+  String get settingEmbedMetadataDesc =>
+      'Write tags (title, artist, year…) to downloaded files';
+
+  @override
+  String get settingEmbedCover => 'Embed cover art';
+
+  @override
+  String get settingEmbedCoverDesc => 'Include album artwork in file tags';
+
+  @override
+  String get settingEmbedLyrics => 'Embed lyrics';
+
+  @override
+  String get settingEmbedLyricsDesc => 'Include synced lyrics in file tags';
 }

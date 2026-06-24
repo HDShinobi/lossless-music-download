@@ -39,3 +39,41 @@ final askBeforeDownloadProvider =
     NotifierProvider<AskBeforeDownloadNotifier, bool>(
   AskBeforeDownloadNotifier.new,
 );
+
+// ---------------------------------------------------------------------------
+// Generic bool preference notifier — reusable for any on/off setting.
+// ---------------------------------------------------------------------------
+
+class _BoolPrefNotifier extends Notifier<bool> {
+  _BoolPrefNotifier(this._key, this._defaultValue);
+
+  final String _key;
+  final bool _defaultValue;
+
+  @override
+  bool build() {
+    Future.microtask(() async {
+      final p = await SharedPreferences.getInstance();
+      state = p.getBool(_key) ?? _defaultValue;
+    });
+    return _defaultValue;
+  }
+
+  Future<void> set(bool value) async {
+    state = value;
+    final p = await SharedPreferences.getInstance();
+    await p.setBool(_key, value);
+  }
+}
+
+final embedMetadataProvider = NotifierProvider<_BoolPrefNotifier, bool>(
+  () => _BoolPrefNotifier('embed_metadata', true),
+);
+
+final embedCoverProvider = NotifierProvider<_BoolPrefNotifier, bool>(
+  () => _BoolPrefNotifier('embed_cover', true),
+);
+
+final embedLyricsProvider = NotifierProvider<_BoolPrefNotifier, bool>(
+  () => _BoolPrefNotifier('embed_lyrics', true),
+);

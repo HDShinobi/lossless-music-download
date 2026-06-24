@@ -10,6 +10,7 @@ import '../util/queue_view.dart';
 import '../widgets/track_tile.dart'; // TrackDownloadState
 import 'download_dir_provider.dart';
 import 'download_labels_provider.dart';
+import 'download_options_provider.dart';
 import 'downloads_provider.dart';
 import 'extensions_provider.dart';
 import 'library_provider.dart';
@@ -182,6 +183,10 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         spotifyId = null;
       }
 
+      final embedMetadata = ref.read(embedMetadataProvider);
+      final embedCover = ref.read(embedCoverProvider);
+      final embedLyrics = ref.read(embedLyricsProvider);
+
       final req = DownloadRequest(
         trackName: next.track.name,
         artistName: next.track.artists,
@@ -207,6 +212,9 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         service: resolvedService,
         quality: next.quality,
         itemId: next.itemId,
+        embedMetadata: embedMetadata,
+        embedMaxQualityCover: embedCover,
+        embedLyrics: embedLyrics,
       );
 
       final res = await bridge.downloadByStrategy(req);

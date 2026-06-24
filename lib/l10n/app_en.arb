@@ -174,5 +174,12 @@
   "downloadOptionsSinglesOnly": "Singles & EPs only",
   "downloadOptionsSelect": "Select albums",
   "librarySearchHint": "Search library…",
-  "libraryNoResults": "No tracks match"
+  "libraryNoResults": "No tracks match",
+  "settingDownloadFolder": "Download folder",
+  "settingEmbedMetadata": "Embed metadata",
+  "settingEmbedMetadataDesc": "Write tags (title, artist, year…) to downloaded files",
+  "settingEmbedCover": "Embed cover art",
+  "settingEmbedCoverDesc": "Include album artwork in file tags",
+  "settingEmbedLyrics": "Embed lyrics",
+  "settingEmbedLyricsDesc": "Include synced lyrics in file tags"
 }
