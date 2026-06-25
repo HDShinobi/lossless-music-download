@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Lossless Music · Tải nhạc lossless đã xác minh cho dàn nghe của bạn</title>
-<meta name="description" data-vi="App Android tải nhạc lossless, soi phổ tần để xác nhận hàng thật, rồi phục vụ thư viện qua DLNA/UPnP và WebDAV. Đang phát triển." data-en="An Android app that downloads lossless, verifies it with a spectrum check, then serves your library over DLNA/UPnP and WebDAV. In development." content="App Android tải nhạc lossless, soi phổ tần để xác nhận hàng thật, rồi phục vụ thư viện qua DLNA/UPnP và WebDAV. Đang phát triển."/>
+<title>Lossless Music · Sở hữu nhạc lossless đích thực, chất lượng có thể kiểm chứng</title>
+<meta name="description" data-vi="Ứng dụng Android tải nhạc lossless chất lượng cao, tự động phân tích phổ tần để xác thực chất lượng thực tế, và chia sẻ thư viện nhạc nội bộ qua DLNA/WebDAV. Dự án đang phát triển." data-en="An Android app to download high-quality lossless audio, verify quality via spectrum analysis, and serve your library locally over DLNA and WebDAV." content="Ứng dụng Android tải nhạc lossless chất lượng cao, tự động phân tích phổ tần để xác thực chất lượng thực tế, và chia sẻ thư viện nhạc nội bộ qua DLNA/WebDAV. Dự án đang phát triển."/>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -104,7 +104,12 @@
   .hero-cta { display: flex; gap: .8rem; flex-wrap: wrap; }
 
   .hero-art { position: relative; display: flex; justify-content: center; }
-  .hero-art img { width: clamp(160px, 22vw, 240px); height: auto; border-radius: 28px; }
+  .hero-art img {
+    width: clamp(160px, 22vw, 240px);
+    height: auto;
+    border-radius: 44px;
+    clip-path: inset(1.5% round 18%);
+  }
   .hero-art .glow { position: absolute; inset: -12% ; background: radial-gradient(circle at 50% 45%, rgba(29,185,84,.22), transparent 62%); filter: blur(8px); z-index: -1; }
 
   /* ── SECTION SCAFFOLD ── */
@@ -195,12 +200,46 @@
 
   /* ── SUPPORT ── */
   .support-grid { display: grid; grid-template-columns: 1fr .8fr; gap: 2.6rem; margin-top: 2.4rem; align-items: center; }
-  .momo { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.6rem; text-align: center; }
+  .momo {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.6rem;
+    text-align: center;
+    max-width: 380px;
+    width: 100%;
+    margin: 0 auto;
+  }
   .momo .nm { font-weight: 700; letter-spacing: .02em; margin-bottom: 1rem; }
   .momo .qr { width: 200px; height: 200px; border-radius: 12px; margin: 0 auto 1rem; display: block; box-shadow: 0 0 0 3px #a50064; }
   .momo .cap { color: var(--faint); font-size: .8rem; margin-bottom: 1.1rem; }
-  .btn-momo { background: #a50064; color: #fff; }
-  .btn-momo:hover { background: #8e0056; }
+  .btn-momo, .btn-coffee {
+    background: linear-gradient(135deg, #a50064, #d80082);
+    color: #fff;
+    box-shadow: 0 4px 18px rgba(165, 0, 100, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s, box-shadow 0.2s;
+  }
+  .btn-momo:hover, .btn-coffee:hover {
+    background: linear-gradient(135deg, #b80070, #ea008e);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 22px rgba(165, 0, 100, 0.55);
+  }
+  .btn-momo:active, .btn-coffee:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 10px rgba(165, 0, 100, 0.4);
+  }
+  .btn-nav-support {
+    border-color: rgba(224, 0, 135, 0.4) !important;
+    color: #e00087 !important;
+    margin-right: 0.5rem;
+  }
+  .btn-nav-support:hover {
+    background: rgba(224, 0, 135, 0.1) !important;
+    border-color: #e00087 !important;
+    color: #ff33aa !important;
+    box-shadow: 0 0 10px rgba(224, 0, 135, 0.2);
+  }
   .contact { color: var(--muted); font-size: .95rem; margin-top: 1.6rem; }
   .contact a { color: var(--accent); }
 
@@ -217,7 +256,10 @@
   /* ── RESPONSIVE ── */
   @media (max-width: 900px) {
     .hero-grid { grid-template-columns: 1fr; gap: 2.4rem; }
-    .hero-art { order: -1; justify-content: flex-start; }
+    .hero { text-align: center; }
+    .hero-sub { margin: 1.4rem auto 2.2rem; }
+    .hero-cta { justify-content: center; }
+    .hero-art { order: -1; justify-content: center; }
     .verify-grid, .serve-grid, .support-grid { grid-template-columns: 1fr; }
     .pillars { grid-template-columns: 1fr; }
     .pillar .arrow { display: none; }
@@ -227,7 +269,10 @@
   @media (max-width: 620px) {
     .nav-link.hide-sm { display: none; }
     section, .hero { padding: 3.6rem 0; }
-    .notify { padding: 1.5rem; }
+    .notify { padding: 1.5rem; text-align: center; justify-content: center; }
+  }
+  @media (max-width: 480px) {
+    .brand span { display: none; }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -256,7 +301,10 @@
     </a>
     <div class="nav-right">
       <a class="nav-link hide-sm" href="#how" data-vi="Cách hoạt động" data-en="How it works">Cách hoạt động</a>
-      <a class="nav-link hide-sm" href="#support" data-vi="Ủng hộ" data-en="Support">Ủng hộ</a>
+      <a class="btn btn-ghost btn-sm btn-nav-support hide-sm" href="#support">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px; vertical-align: -2px;"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        <span data-vi="Ủng hộ" data-en="Support">Ủng hộ</span>
+      </a>
       <div class="lang" role="group" aria-label="Language">
         <button data-lang="vi" class="on">VI</button>
         <button data-lang="en">EN</button>
@@ -272,14 +320,25 @@
 <header class="hero">
   <div class="wrap hero-grid">
     <div>
-      <span class="badge"><span class="pulse"></span><span data-vi="ĐANG PHÁT TRIỂN" data-en="IN DEVELOPMENT">ĐANG PHÁT TRIỂN</span></span>
+      <span class="badge"><span class="pulse"></span><span data-vi="BẢN BETA 0.1.0 ĐÃ PHÁT HÀNH" data-en="BETA 0.1.0 AVAILABLE">BẢN BETA 0.1.0 ĐÃ PHÁT HÀNH</span></span>
       <h1 class="hero-title">
-        <span data-vi="Nhạc lossless bạn có thể" data-en="Lossless music you can">Nhạc lossless bạn có thể</span>
-        <span class="accent" data-vi="chứng minh là thật." data-en="actually prove.">chứng minh là thật.</span>
+        <span data-vi="Sở hữu nhạc lossless đích thực," data-en="Own genuine lossless audio,">Sở hữu nhạc lossless đích thực,</span>
+        <span class="accent" data-vi="chất lượng có thể kiểm chứng." data-en="verifiable with confidence.">chất lượng có thể kiểm chứng.</span>
       </h1>
-      <p class="hero-sub" data-vi="Tải nhạc lossless, soi phổ tần để xác nhận là hàng thật, rồi phát thư viện sang mọi player trong mạng nhà bạn." data-en="Download lossless, confirm it is real with a spectrum check, then serve your library to any player on your network.">Tải nhạc lossless, soi phổ tần để xác nhận là hàng thật, rồi phát thư viện sang mọi player trong mạng nhà bạn.</p>
+      <p class="hero-sub" data-vi="Tải nhạc lossless chất lượng cao, phân tích phổ tần để xác thực nguồn nhạc gốc, và truyền tải thư viện mượt mà tới mọi thiết bị phát (player) trong mạng nội bộ." data-en="Download high-fidelity audio, verify its true quality via spectrum analysis, and stream bit-perfect to any player on your local network.">Tải nhạc lossless chất lượng cao, phân tích phổ tần để xác thực nguồn nhạc gốc, và truyền tải thư viện mượt mà tới mọi thiết bị phát (player) trong mạng nội bộ.</p>
       <div class="hero-cta">
-        <a class="btn btn-primary" href="https://discord.gg/T9CEEa8YP2" target="_blank" rel="noopener" data-vi="Vào Discord" data-en="Join Discord">Vào Discord</a>
+        <a class="btn btn-primary" href="https://github.com/HDShinobi/lossless-music-releases/releases/download/v0.1.0/lossless-music-v0.1.0.apk" data-vi="Tải APK (v0.1.0)" data-en="Download APK (v0.1.0)">Tải APK (v0.1.0)</a>
+        <a class="btn btn-ghost" href="https://discord.gg/T9CEEa8YP2" target="_blank" rel="noopener" data-vi="Vào Discord" data-en="Join Discord">Vào Discord</a>
+        <a class="btn btn-coffee" href="#support">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px; vertical-align: -3px;">
+            <path d="M17 8h1a4 4 0 1 1 0 8h-1"/>
+            <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/>
+            <line x1="6" y1="2" x2="6" y2="4"/>
+            <line x1="10" y1="2" x2="10" y2="4"/>
+            <line x1="14" y1="2" x2="14" y2="4"/>
+          </svg>
+          <span data-vi="Mời tôi cafe" data-en="Buy me a coffee">Mời tôi cafe</span>
+        </a>
         <a class="btn btn-ghost" href="#how" data-vi="Xem cách hoạt động" data-en="See how it works">Xem cách hoạt động</a>
       </div>
     </div>
@@ -293,13 +352,13 @@
 <!-- HOW -->
 <section id="how">
   <div class="wrap">
-    <h2 class="h2 reveal" data-vi="Ba việc, một app." data-en="Three jobs, one app.">Ba việc, một app.</h2>
-    <p class="lead reveal" data-vi="Đây không phải player. Đây là nguồn dựng thư viện và cấp nhạc cho player của bạn." data-en="It is not a player. It is the source that builds a library and feeds your player.">Đây không phải player. Đây là nguồn dựng thư viện và cấp nhạc cho player của bạn.</p>
+    <h2 class="h2 reveal" data-vi="Một ứng dụng, quy trình trọn vẹn." data-en="Three jobs, one app.">Một ứng dụng, quy trình trọn vẹn.</h2>
+    <p class="lead reveal" data-vi="Không phải là một trình phát nhạc (player), ứng dụng đóng vai trò là nguồn xây dựng và truyền tải nhạc chất lượng cao tới player của bạn." data-en="It is not a player. It is the source that builds your library and feeds your players.">Không phải là một trình phát nhạc (player), ứng dụng đóng vai trò là nguồn xây dựng và truyền tải nhạc chất lượng cao tới player của bạn.</p>
     <div class="pillars">
       <div class="pillar reveal">
         <span class="step mono">01</span>
         <h3><span class="k" data-vi="Tải" data-en="Download">Tải</span></h3>
-        <p data-vi="Kéo file lossless về qua các extension chạy sandbox do bạn chọn. App phát hành không kèm nguồn nào." data-en="Pull lossless files through sandboxed extensions you choose. The app ships with no sources of its own.">Kéo file lossless về qua các extension chạy sandbox do bạn chọn. App phát hành không kèm nguồn nào.</p>
+        <p data-vi="Tự động tải nhạc lossless thông qua các tiện ích mở rộng (extension) chạy trong môi trường bảo mật (sandbox) do bạn quyết định. Ứng dụng không đi kèm nguồn nhạc sẵn có." data-en="Download lossless audio securely via sandboxed extensions of your choice. The application does not ship with any built-in music sources.">Tự động tải nhạc lossless thông qua các tiện ích mở rộng (extension) chạy trong môi trường bảo mật (sandbox) do bạn quyết định. Ứng dụng không đi kèm nguồn nhạc sẵn có.</p>
         <span class="arrow" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M5 12h13m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </span>
@@ -307,7 +366,7 @@
       <div class="pillar reveal">
         <span class="step mono">02</span>
         <h3><span class="k" data-vi="Xác minh" data-en="Verify">Xác minh</span></h3>
-        <p data-vi="Mỗi file tải về được phân tích phổ tần. Bạn thấy rõ là lossless thật hay hàng nén lại, kèm trần tần số." data-en="Each download gets a spectrum analysis. You see whether it is real lossless or a re-encoded fake, with the frequency ceiling.">Mỗi file tải về được phân tích phổ tần. Bạn thấy rõ là lossless thật hay hàng nén lại, kèm trần tần số.</p>
+        <p data-vi="Tự động phân tích phổ tần (spectrogram) cho mỗi tệp tải về. Bạn sẽ biết ngay đó là lossless thực thụ hay nhạc nén (transcode) được phóng đại dung lượng." data-en="Every download undergoes automated spectrum analysis. Instantly detect whether it is genuine lossless or a transcode fake (upscaled MP3).">Tự động phân tích phổ tần (spectrogram) cho mỗi tệp tải về. Bạn sẽ biết ngay đó là lossless thực thụ hay nhạc nén (transcode) được phóng đại dung lượng.</p>
         <span class="arrow" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M5 12h13m0 0l-5-5m5 5l-5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </span>
@@ -315,7 +374,7 @@
       <div class="pillar reveal">
         <span class="step mono">03</span>
         <h3><span class="k" data-vi="Phục vụ" data-en="Serve">Phục vụ</span></h3>
-        <p data-vi="Thư viện đã xác minh hiện trên mạng nội bộ qua DLNA và WebDAV, sẵn cho PureBit, UAPP hay Poweramp." data-en="Your verified library shows up on the local network over DLNA and WebDAV, ready for PureBit, UAPP, or Poweramp.">Thư viện đã xác minh hiện trên mạng nội bộ qua DLNA và WebDAV, sẵn cho PureBit, UAPP hay Poweramp.</p>
+        <p data-vi="Chia sẻ thư viện nhạc đã kiểm định lên mạng nội bộ thông qua giao thức DLNA và WebDAV, sẵn sàng kết nối với các trình phát chuyên dụng như PureBit, UAPP hay Poweramp." data-en="Stream your verified library over your local network using DLNA and WebDAV, fully compatible with audiophile players like PureBit, UAPP, or Poweramp.">Chia sẻ thư viện nhạc đã kiểm định lên mạng nội bộ thông qua giao thức DLNA và WebDAV, sẵn sàng kết nối với các trình phát chuyên dụng như PureBit, UAPP hay Poweramp.</p>
       </div>
     </div>
   </div>
@@ -324,14 +383,14 @@
 <!-- VERIFY (hot spot) -->
 <section id="verify" class="band">
   <div class="wrap">
-    <h2 class="h2 reveal" data-vi="Thấy ngay file nào là thật." data-en="See which one is real.">Thấy ngay file nào là thật.</h2>
-    <p class="lead reveal" data-vi="Lossless thật giữ âm thanh lên tới đỉnh phổ tần. File 320k đội lốt FLAC sẽ đụng tường và tắt dần ở vùng cao. App vẽ cả hai và cho bạn biết file của mình thuộc loại nào." data-en="Real lossless carries sound to the top of the spectrum. A 320k file dressed up as FLAC hits a wall and goes quiet near the top. The app draws both and tells you which one you have.">Lossless thật giữ âm thanh lên tới đỉnh phổ tần. File 320k đội lốt FLAC sẽ đụng tường và tắt dần ở vùng cao. App vẽ cả hai và cho bạn biết file của mình thuộc loại nào.</p>
+    <h2 class="h2 reveal" data-vi="Nhìn thấu chất lượng âm thanh thật." data-en="See which one is real.">Nhìn thấu chất lượng âm thanh thật.</h2>
+    <p class="lead reveal" data-vi="Nhạc lossless chuẩn giữ lại trọn vẹn dải tần âm thanh cao nhất. Ngược lại, tệp MP3 320kbps giả lập FLAC (transcode) sẽ bị giới hạn tần số đột ngột (thường ở mức 16kHz). Ứng dụng tự động dựng biểu đồ phổ tần để giúp bạn phân biệt chính xác." data-en="True lossless audio preserves the entire high-frequency spectrum. In contrast, a 320kbps MP3 file converted to FLAC will show a sharp cutoff (typically at 16kHz). The app visualizes this comparison so you can verify with confidence.">Nhạc lossless chuẩn giữ lại trọn vẹn dải tần âm thanh cao nhất. Ngược lại, tệp MP3 320kbps giả lập FLAC (transcode) sẽ bị giới hạn tần số đột ngột (thường ở mức 16kHz). Ứng dụng tự động dựng biểu đồ phổ tần để giúp bạn phân biệt chính xác.</p>
 
     <div class="verify-grid">
       <div class="spec-card reveal">
         <div class="spec-row">
           <div class="spec-label">
-            <span class="name" data-vi="Lossless thật" data-en="Real lossless">Lossless thật</span>
+            <span class="name" data-vi="Lossless thực thụ" data-en="Real lossless">Lossless thực thụ</span>
             <span class="verdict ok" data-vi="ĐÃ XÁC MINH" data-en="VERIFIED">ĐÃ XÁC MINH</span>
           </div>
           <div class="spec-canvas-box">
@@ -340,7 +399,7 @@
         </div>
         <div class="spec-row">
           <div class="spec-label">
-            <span class="name" data-vi="FLAC từ nguồn 320k" data-en="FLAC made from 320k">FLAC từ nguồn 320k</span>
+            <span class="name" data-vi="FLAC giả lập (từ nguồn MP3 320k)" data-en="Transcoded FLAC (from 320kbps MP3)">FLAC giả lập (từ nguồn MP3 320k)</span>
             <span class="verdict no" data-vi="NGHI NÉN LẠI" data-en="LIKELY TRANSCODE">NGHI NÉN LẠI</span>
           </div>
           <div class="spec-canvas-box">
@@ -379,8 +438,8 @@
   <div class="wrap">
     <div class="serve-grid">
       <div class="reveal">
-        <h2 class="h2" data-vi="Một thư viện, mọi player trong nhà." data-en="One library, every player in the house.">Một thư viện, mọi player trong nhà.</h2>
-        <p class="lead" data-vi="App chạy một media server nhỏ ở chế độ nền. Các player khác duyệt bộ sưu tập của bạn và phát bit-perfect qua Wi-Fi. Không có gì đi qua cloud, cũng không có gì bị nén lại." data-en="The app runs a small media server in the background. Other players browse your collection and stream it bit-perfect over Wi-Fi. Nothing goes through the cloud and nothing gets re-encoded.">App chạy một media server nhỏ ở chế độ nền. Các player khác duyệt bộ sưu tập của bạn và phát bit-perfect qua Wi-Fi. Không có gì đi qua cloud, cũng không có gì bị nén lại.</p>
+        <h2 class="h2" data-vi="Một thư viện duy nhất cho mọi thiết bị phát." data-en="One library, every player in the house.">Một thư viện duy nhất cho mọi thiết bị phát.</h2>
+        <p class="lead" data-vi="Ứng dụng tích hợp một máy chủ nhạc (media server) gọn nhẹ chạy ngầm. Các thiết bị phát trong mạng dễ dàng duyệt bộ sưu tập và stream nhạc nguyên bản (bit-perfect) qua Wi-Fi. Hoàn toàn không phụ thuộc vào đám mây, không nén lại âm thanh." data-en="The app runs a lightweight background media server. Other devices on your local network can browse and stream your music bit-perfect over Wi-Fi. No cloud dependencies, no processing, and absolutely no re-compression.">Ứng dụng tích hợp một máy chủ nhạc (media server) gọn nhẹ chạy ngầm. Các thiết bị phát trong mạng dễ dàng duyệt bộ sưu tập và stream nhạc nguyên bản (bit-perfect) qua Wi-Fi. Hoàn toàn không phụ thuộc vào đám mây, không nén lại âm thanh.</p>
       </div>
       <div class="server-panel reveal">
         <div class="sp-head">
@@ -411,45 +470,44 @@
 <!-- FEATURES -->
 <section id="features" class="band">
   <div class="wrap">
-    <h2 class="h2 reveal" data-vi="Làm ra để phục vụ một dàn nghe thật sự." data-en="Built to feed a real hi-fi setup.">Làm ra để phục vụ một dàn nghe thật sự.</h2>
+    <h2 class="h2 reveal" data-vi="Thiết kế chuyên biệt cho trải nghiệm nghe nhạc Hi-Fi." data-en="Built to feed a real hi-fi setup.">Thiết kế chuyên biệt cho trải nghiệm nghe nhạc Hi-Fi.</h2>
     <div class="bento">
       <div class="cell wide tint reveal">
-        <h3 data-vi="File sẵn sàng cho player" data-en="Player-ready files">File sẵn sàng cho player</h3>
-        <p data-vi="Tag đầy đủ, ảnh bìa, lời bài hát và ReplayGain nhúng sẵn, để player hiện đủ thông tin và phát đều âm lượng." data-en="Full tags, cover art, lyrics, and ReplayGain baked in, so your player shows everything and plays at an even volume.">Tag đầy đủ, ảnh bìa, lời bài hát và ReplayGain nhúng sẵn, để player hiện đủ thông tin và phát đều âm lượng.</p>
+        <h3 data-vi="Metadata hoàn thiện" data-en="Metadata & Player Ready">Metadata hoàn thiện</h3>
+        <p data-vi="Tích hợp sẵn thẻ tag, ảnh bìa (cover art), lời bài hát và thông tin cân bằng âm lượng (ReplayGain) giúp trình phát hoạt động đồng bộ." data-en="Full tags, cover art, lyrics, and ReplayGain baked in, so your player shows everything and plays at an even volume.">Tích hợp sẵn thẻ tag, ảnh bìa (cover art), lời bài hát và thông tin cân bằng âm lượng (ReplayGain) giúp trình phát hoạt động đồng bộ.</p>
         <div class="wavemini" aria-hidden="true">
           <i style="height:40%"></i><i style="height:70%"></i><i style="height:55%"></i><i style="height:90%"></i><i style="height:48%"></i><i style="height:75%"></i><i style="height:60%"></i><i style="height:100%"></i><i style="height:52%"></i><i style="height:80%"></i><i style="height:44%"></i><i style="height:66%"></i>
         </div>
       </div>
       <div class="cell reveal">
-        <h3 data-vi="Không quảng cáo, không theo dõi" data-en="No ads, no tracking">Không quảng cáo, không theo dõi</h3>
-        <p data-vi="Không gì dòm bạn nghe gì. Không tài khoản, không server nào ghi lại." data-en="Nothing watches what you listen to. There is no account and no server keeping tabs.">Không gì dòm bạn nghe gì. Không tài khoản, không server nào ghi lại.</p>
+        <h3 data-vi="Hoàn toàn riêng tư" data-en="100% Private, No Tracking">Hoàn toàn riêng tư</h3>
+        <p data-vi="Không theo dõi thói quen nghe nhạc, không yêu cầu tạo tài khoản và không có máy chủ trung gian ghi nhận hoạt động của bạn." data-en="Nothing watches what you listen to. There is no account and no server keeping tabs.">Không theo dõi thói quen nghe nhạc, không yêu cầu tạo tài khoản và không có máy chủ trung gian ghi nhận hoạt động của bạn.</p>
       </div>
       <div class="cell reveal">
-        <h3 data-vi="Cấu trúc thư viện gọn" data-en="Clean library structure">Cấu trúc thư viện gọn</h3>
-        <p data-vi="File lưu theo dạng Nghệ sĩ / Album / Bài mà Plex, Jellyfin và Symfonium đọc trơn tru." data-en="Files land in an Artist / Album / Track layout that Plex, Jellyfin, and Symfonium read without a fuss.">File lưu theo dạng Nghệ sĩ / Album / Bài mà Plex, Jellyfin và Symfonium đọc trơn tru.</p>
+        <h3 data-vi="Cấu trúc thư mục chuẩn" data-en="Structured Audio Library">Cấu trúc thư mục chuẩn</h3>
+        <p data-vi="Tự động tổ chức tệp tin theo sơ đồ Nghệ sĩ / Album / Tên bài hát, tương thích hoàn hảo với Plex, Jellyfin và Symfonium." data-en="Files land in an Artist / Album / Track layout that Plex, Jellyfin, and Symfonium read without a fuss.">Tự động tổ chức tệp tin theo sơ đồ Nghệ sĩ / Album / Tên bài hát, tương thích hoàn hảo với Plex, Jellyfin và Symfonium.</p>
       </div>
       <div class="cell reveal">
-        <h3 data-vi="Nguồn do bạn nắm" data-en="Sources you control">Nguồn do bạn nắm</h3>
-        <p data-vi="Không dịch vụ cài sẵn, không phải dán URL bằng tay. Bạn trỏ một aggregator đổi được tới đâu tùy ý." data-en="No baked-in services and no URLs to paste by hand. You point a swappable aggregator wherever you like.">Không dịch vụ cài sẵn, không phải dán URL bằng tay. Bạn trỏ một aggregator đổi được tới đâu tùy ý.</p>
+        <h3 data-vi="Chủ động nguồn nhạc" data-en="Total Source Independence">Chủ động nguồn nhạc</h3>
+        <p data-vi="Không tích hợp sẵn dịch vụ của bên thứ ba, không yêu cầu dán link thủ công. Bạn tự do cấu hình bộ gom nguồn (aggregator) theo ý muốn." data-en="No baked-in services and no URLs to paste by hand. You point a swappable aggregator wherever you like.">Không tích hợp sẵn dịch vụ của bên thứ ba, không yêu cầu dán link thủ công. Bạn tự do cấu hình bộ gom nguồn (aggregator) theo ý muốn.</p>
       </div>
       <div class="cell reveal">
-        <h3 data-vi="Hợp với máy nghe nhạc" data-en="At home on a DAP">Hợp với máy nghe nhạc</h3>
-        <p data-vi="Chạy trên các máy nghe nhạc Android như Hiby, FiiO, Shanling, không chỉ điện thoại." data-en="Runs on Android players from Hiby, FiiO, and Shanling, not just phones.">Chạy trên các máy nghe nhạc Android như Hiby, FiiO, Shanling, không chỉ điện thoại.</p>
+        <h3 data-vi="Tối ưu hóa cho DAP" data-en="Optimized for DAPs">Tối ưu hóa cho DAP</h3>
+        <p data-vi="Hỗ trợ vận hành mượt mà trên các máy nghe nhạc chuyên dụng chạy Android như FiiO, HiBy, Shanling bên cạnh điện thoại thông thường." data-en="Runs on Android players from Hiby, FiiO, and Shanling, not just phones.">Hỗ trợ vận hành mượt mà trên các máy nghe nhạc chuyên dụng chạy Android như FiiO, HiBy, Shanling bên cạnh điện thoại thông thường.</p>
       </div>
       <div class="cell wide tint reveal">
-        <h3 data-vi="Cập nhật tự kiểm" data-en="Updates that check themselves">Cập nhật tự kiểm</h3>
-        <p data-vi="Vì cài ngoài Play Store, app tự tìm bản mới và kiểm từng bản bằng mã băm SHA-256 trước khi cài." data-en="Since it installs outside the Play Store, the app finds new builds and verifies each one with a SHA-256 hash before you install.">Vì cài ngoài Play Store, app tự tìm bản mới và kiểm từng bản bằng mã băm SHA-256 trước khi cài.</p>
-        <div class="hashline mono" aria-hidden="true">sha256: 9f2a1c8e4b7d6033a5e1f0c92db48a7e6c1b…</div>
+        <h3 data-vi="Cập nhật an toàn" data-en="Verified & Secure Updates">Cập nhật an toàn</h3>
+        <p data-vi="Do cài đặt ngoài Google Play, ứng dụng tự động kiểm tra phiên bản mới và xác thực tính toàn vẹn bằng mã băm SHA-256 trước khi tiến hành nâng cấp." data-en="Since it installs outside the Play Store, the app finds new builds and verifies each one with a SHA-256 hash before you install.">Do cài đặt ngoài Google Play, ứng dụng tự động kiểm tra phiên bản mới và xác thực tính toàn vẹn bằng mã băm SHA-256 trước khi tiến hành nâng cấp.</p>
+        <div class="hashline mono">sha256: 6fd015a8bff0cd1f496cb86dca30a987bf5c6376a345154a31ae5bac11721513</div>
       </div>
-    </div>
   </div>
 </section>
 
 <!-- SOURCES -->
 <section id="sources">
   <div class="wrap">
-    <h2 class="h2 reveal" data-vi="Nguồn nằm trong tay bạn." data-en="Sources stay in your hands.">Nguồn nằm trong tay bạn.</h2>
-    <p class="lead reveal" data-vi="App khởi đầu trống. Bạn thêm một aggregator nguồn, và extension chạy trong sandbox chỉ chạm tới đúng domain và file mà nó khai báo. Không gì tự bật sau khi cài." data-en="The app starts empty. You add a source aggregator, and extensions run in a sandbox that only reaches the domains and files they declare. Nothing turns on by itself after install.">App khởi đầu trống. Bạn thêm một aggregator nguồn, và extension chạy trong sandbox chỉ chạm tới đúng domain và file mà nó khai báo. Không gì tự bật sau khi cài.</p>
+    <h2 class="h2 reveal" data-vi="Hoàn toàn kiểm soát nguồn nhạc." data-en="Your Sources, Your Rules">Hoàn toàn kiểm soát nguồn nhạc.</h2>
+    <p class="lead reveal" data-vi="Ứng dụng ban đầu là một khung trống. Khi bạn thêm bộ gom nguồn (aggregator), các tiện ích mở rộng sẽ hoạt động trong môi trường cô lập (sandbox), chỉ được phép truy cập các tên miền và tệp tin đã khai báo trước. Không có tiến trình tự ý kích hoạt." data-en="The app starts as an empty shell. When you import a source aggregator, the extensions run inside a secure sandbox restricted only to declared domains. No unauthorized background activity.">Ứng dụng ban đầu là một khung trống. Khi bạn thêm bộ gom nguồn (aggregator), các tiện ích mở rộng sẽ hoạt động trong môi trường cô lập (sandbox), chỉ được phép truy cập các tên miền và tệp tin đã khai báo trước. Không có tiến trình tự ý kích hoạt.</p>
     <p class="src-note reveal" data-vi="Đây là dự án cá nhân cho mục đích học tập và nghiên cứu. App không host nhạc và không kèm sẵn nguồn nào." data-en="This is a personal project for educational and research use. The app hosts no music and bundles no sources.">Đây là dự án cá nhân cho mục đích học tập và nghiên cứu. App không host nhạc và không kèm sẵn nguồn nào.</p>
   </div>
 </section>
@@ -457,37 +515,40 @@
 <!-- STATUS -->
 <section id="status" class="band">
   <div class="wrap">
-    <h2 class="h2 reveal" data-vi="Vẫn đang được làm." data-en="Still being built.">Vẫn đang được làm.</h2>
-    <p class="lead reveal" data-vi="Phần lõi đang dần thành hình. Đây là tình hình hiện tại." data-en="The core is coming together. Here is roughly where things stand.">Phần lõi đang dần thành hình. Đây là tình hình hiện tại.</p>
+    <h2 class="h2 reveal" data-vi="Trạng thái dự án" data-en="Project Roadmap">Trạng thái dự án</h2>
+    <p class="lead reveal" data-vi="Các tính năng cốt lõi đang được hoàn thiện tích cực. Dưới đây là tiến độ hiện tại:" data-en="The core is coming together. Here is roughly where things stand.">Các tính năng cốt lõi đang được hoàn thiện tích cực. Dưới đây là tiến độ hiện tại:</p>
 
     <div class="road reveal">
       <div class="road-item">
         <svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#1DB954" stroke-width="2"/><path d="M8 12.5l2.5 2.5L16 9" stroke="#1DB954" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="t" data-vi="Động cơ tải và khung app" data-en="Download engine and app shell">Động cơ tải và khung app</span>
-        <span class="s s-work" data-vi="Đang chạy" data-en="Working">Đang chạy</span>
+        <span class="t" data-vi="Công cụ tải nhạc và khung ứng dụng" data-en="Download engine and app shell">Công cụ tải nhạc và khung ứng dụng</span>
+        <span class="s s-work" data-vi="Đang hoạt động" data-en="Working">Đang hoạt động</span>
       </div>
       <div class="road-item">
         <svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#1DB954" stroke-width="2"/><path d="M8 12.5l2.5 2.5L16 9" stroke="#1DB954" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="t" data-vi="Xác minh lossless bằng phổ tần" data-en="Lossless verify with spectrum">Xác minh lossless bằng phổ tần</span>
-        <span class="s s-work" data-vi="Đang chạy" data-en="Working">Đang chạy</span>
+        <span class="t" data-vi="Kiểm định lossless qua phân tích phổ tần" data-en="Lossless verify with spectrum">Kiểm định lossless qua phân tích phổ tần</span>
+        <span class="s s-work" data-vi="Đang hoạt động" data-en="Working">Đang hoạt động</span>
       </div>
       <div class="road-item">
         <svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#6b757d" stroke-width="2"/><path d="M12 7v5l3 2" stroke="#6b757d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span class="t" data-vi="Máy chủ thư viện trên LAN" data-en="LAN library server">Máy chủ thư viện trên LAN</span>
-        <span class="s s-prog" data-vi="Đang làm" data-en="In progress">Đang làm</span>
+        <span class="t" data-vi="Máy chủ chia sẻ nhạc nội bộ (LAN)" data-en="LAN library server">Máy chủ chia sẻ nhạc nội bộ (LAN)</span>
+        <span class="s s-prog" data-vi="Đang phát triển" data-en="In progress">Đang phát triển</span>
       </div>
       <div class="road-item">
-        <svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#3a434b" stroke-width="2"/></svg>
-        <span class="t" data-vi="Bản beta công khai (APK)" data-en="Public beta APK">Bản beta công khai (APK)</span>
-        <span class="s s-next" data-vi="Sắp tới" data-en="Next">Sắp tới</span>
+        <svg class="ic" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#1DB954" stroke-width="2"/><path d="M8 12.5l2.5 2.5L16 9" stroke="#1DB954" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="t" data-vi="Phát hành bản thử nghiệm công khai (APK)" data-en="Public beta APK">Phát hành bản thử nghiệm công khai (APK)</span>
+        <span class="s s-work" data-vi="Đã phát hành — v0.1.0" data-en="Released — v0.1.0">Đã phát hành — v0.1.0</span>
       </div>
     </div>
 
     <div class="notify reveal">
-      <p data-vi="Vào Discord, bạn sẽ biết ngay khi bản APK đầu tiên sẵn sàng." data-en="Join the Discord and you will hear the moment the first APK is ready.">Vào Discord, bạn sẽ biết ngay khi bản APK đầu tiên sẵn sàng.</p>
-      <a class="btn btn-primary" href="https://discord.gg/T9CEEa8YP2" target="_blank" rel="noopener" data-vi="Vào Discord" data-en="Join Discord">Vào Discord</a>
+      <p data-vi="Bản thử nghiệm công khai đầu tiên (v0.1.0) đã sẵn sàng cho Android. Tải tệp APK trực tiếp và cài đặt thủ công." data-en="The first public beta (v0.1.0) is ready for Android. Download the APK and install it manually.">Bản thử nghiệm công khai đầu tiên (v0.1.0) đã sẵn sàng cho Android. Tải tệp APK trực tiếp và cài đặt thủ công.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="https://github.com/HDShinobi/lossless-music-releases/releases/download/v0.1.0/lossless-music-v0.1.0.apk" data-vi="Tải APK (v0.1.0)" data-en="Download APK (v0.1.0)">Tải APK (v0.1.0)</a>
+        <a class="btn btn-ghost" href="https://github.com/HDShinobi/lossless-music-releases/releases/latest" target="_blank" rel="noopener" data-vi="Xem trên GitHub" data-en="View on GitHub">Xem trên GitHub</a>
+      </div>
     </div>
-    <p class="sideload reveal" data-vi="Khi phát hành, bạn sẽ tự cài file APK. Trang tải sẽ kèm mã băm SHA-256 để bạn kiểm tra file trước khi cài." data-en="When it ships, you will install an APK yourself. The download page will list a SHA-256 hash so you can check the file before installing.">Khi phát hành, bạn sẽ tự cài file APK. Trang tải sẽ kèm mã băm SHA-256 để bạn kiểm tra file trước khi cài.</p>
+    <p class="sideload reveal" data-vi="Ứng dụng được phân phối dưới dạng tệp APK cài đặt trực tiếp. Trang phát hành GitHub luôn kèm mã SHA-256 để bạn xác thực độ an toàn của tệp tin trước khi cài đặt." data-en="The app is distributed as an APK you install yourself. Each GitHub release lists a SHA-256 hash so you can verify the file before installing.">Ứng dụng được phân phối dưới dạng tệp APK cài đặt trực tiếp. Trang phát hành GitHub luôn kèm mã SHA-256 để bạn xác thực độ an toàn của tệp tin trước khi cài đặt.</p>
   </div>
 </section>
 
@@ -496,14 +557,14 @@
   <div class="wrap">
     <div class="support-grid">
       <div class="reveal">
-        <h2 class="h2" data-vi="App miễn phí. Ủng hộ là tùy tâm." data-en="Free app. Support is optional.">App miễn phí. Ủng hộ là tùy tâm.</h2>
-        <p class="lead" data-vi="Không có gói nào và không khóa tính năng gì cả. Nếu thấy dự án có ích và muốn góp sức phát triển, một ly cà phê là đủ vui rồi." data-en="There are no tiers and nothing to unlock. If the project is useful to you and you want to help with development, a coffee is plenty.">Không có gói nào và không khóa tính năng gì cả. Nếu thấy dự án có ích và muốn góp sức phát triển, một ly cà phê là đủ vui rồi.</p>
+        <h2 class="h2" data-vi="Miễn phí hoàn toàn. Ủng hộ tùy tâm." data-en="Free app. Support is optional.">Miễn phí hoàn toàn. Ủng hộ tùy tâm.</h2>
+        <p class="lead" data-vi="Không phân chia gói tính năng, không giới hạn trải nghiệm. Nếu bạn thấy dự án hữu ích và muốn tiếp thêm động lực phát triển, một ly cà phê ủng hộ là niềm vui lớn với tác giả." data-en="There are no tiers and nothing to unlock. If the project is useful to you and you want to help with development, a coffee is plenty.">Không phân chia gói tính năng, không giới hạn trải nghiệm. Nếu bạn thấy dự án hữu ích và muốn tiếp thêm động lực phát triển, một ly cà phê ủng hộ là niềm vui lớn với tác giả.</p>
         <p class="contact" data-vi="Có thắc mắc? Nhắn mình trên Telegram " data-en="Questions? Reach me on Telegram ">Có thắc mắc? Nhắn mình trên Telegram <a href="https://t.me/hoangdinh88" target="_blank" rel="noopener">@hoangdinh88</a></p>
       </div>
       <div class="momo reveal">
         <div class="nm">ĐINH VĂN HOÀNG</div>
         <img class="qr" src="qr-momo.png" alt="MoMo QR, ĐINH VĂN HOÀNG" width="200" height="200"/>
-        <div class="cap" data-vi="Quét bằng MoMo hoặc camera điện thoại" data-en="Scan with MoMo or your phone camera">Quét bằng MoMo hoặc camera điện thoại</div>
+        <div class="cap" data-vi="Quét mã bằng ứng dụng MoMo hoặc camera điện thoại" data-en="Scan with MoMo or your phone camera">Quét mã bằng ứng dụng MoMo hoặc camera điện thoại</div>
         <a class="btn btn-momo" href="https://me.momo.vn/V8IXukU4tRIoI2TlIJCq" target="_blank" rel="noopener" data-vi="Mở MoMo" data-en="Open MoMo">Mở MoMo</a>
       </div>
     </div>
@@ -516,15 +577,15 @@
     <div class="foot-grid">
       <div class="foot-brand">
         <div class="t">Lossless Music</div>
-        <p data-vi="Tải nhạc lossless đã xác minh, cho người quan tâm tới chất âm." data-en="Verified-lossless downloads for people who care how it sounds.">Tải nhạc lossless đã xác minh, cho người quan tâm tới chất âm.</p>
+        <p data-vi="Tải và xác thực chất lượng nhạc lossless dành cho những đôi tai khắt khe." data-en="Verified-lossless downloads for people who care how it sounds.">Tải và xác thực chất lượng nhạc lossless dành cho những đôi tai khắt khe.</p>
       </div>
       <div class="foot-links">
         <a href="https://discord.gg/T9CEEa8YP2" target="_blank" rel="noopener">Discord</a>
-        <a href="https://github.com/HDShinobi/lossless-music-download" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/HDShinobi/lossless-music-releases" target="_blank" rel="noopener">GitHub</a>
         <a href="https://t.me/hoangdinh88" target="_blank" rel="noopener">Telegram</a>
       </div>
     </div>
-    <p class="disclaimer" data-vi="Dự án cá nhân, phi thương mại. Không liên kết với dịch vụ nhạc nào. App phát hành không kèm nội dung hay nguồn nhạc." data-en="A personal, non-commercial project. Not affiliated with any music service. The app ships without content or sources.">Dự án cá nhân, phi thương mại. Không liên kết với dịch vụ nhạc nào. App phát hành không kèm nội dung hay nguồn nhạc.</p>
+    <p class="disclaimer" data-vi="Đây là dự án cá nhân, phi thương mại phục vụ mục đích nghiên cứu. Ứng dụng không liên kết với bất kỳ dịch vụ âm nhạc nào, không lưu trữ và không cung cấp sẵn nguồn nhạc." data-en="A personal, non-commercial project. Not affiliated with any music service. The app ships without content or sources.">Đây là dự án cá nhân, phi thương mại phục vụ mục đích nghiên cứu. Ứng dụng không liên kết với bất kỳ dịch vụ âm nhạc nào, không lưu trữ và không cung cấp sẵn nguồn nhạc.</p>
   </div>
 </footer>
 
@@ -535,8 +596,8 @@
 
   /* ---------- i18n ---------- */
   var STR = {
-    vi: { title: "Lossless Music · Tải nhạc lossless đã xác minh cho dàn nghe của bạn" },
-    en: { title: "Lossless Music · Verified-lossless downloads, served to your hi-fi" }
+    vi: { title: "Lossless Music · Sở hữu nhạc lossless đích thực, chất lượng có thể kiểm chứng" },
+    en: { title: "Lossless Music · Verifiable, genuine lossless audio for your hi-fi setup" }
   };
   function applyLang(lang) {
     document.documentElement.lang = lang;
@@ -589,27 +650,79 @@
     var ctx = canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    var cols = Math.floor(w / 3);
-    var cut = kind === "fake" ? 0.42 : 0.0; // silence above this fraction of height for fake
+    var cols = Math.floor(w / 1.2);
+    var cut = kind === "fake" ? 0.42 : 0.0;
     var lit = Math.floor(cols * progress);
     for (var c = 0; c < lit; c++) {
       var x = c * (w / cols);
-      for (var y = 0; y < h; y += 2) {
+      for (var y = 0; y < h; y += 1) {
         var fy = y / h;                       // 0 top .. 1 bottom
         var freq = 1 - fy;                    // 0 bottom .. 1 top
-        // base energy: stronger at low freq, tapering up
-        var energy = Math.pow(1 - freq, 0.6);
-        var noise = seeded(c * 7.1 + y * 0.13 + (kind === "fake" ? 99 : 1));
-        var mag = energy * (0.55 + 0.45 * noise);
-        if (kind === "fake" && fy < cut) { mag *= Math.max(0, (fy / cut)) * 0.05; }
-        if (mag < 0.04) continue;
-        // emerald intensity ramp: dark green -> accent -> bright mint
-        var t = Math.min(1, mag * 1.25);
-        var rr = Math.round(12 + t * (122 - 12));
-        var gg = Math.round(60 + t * (240 - 60));
-        var bb = Math.round(28 + t * (150 - 28));
-        ctx.fillStyle = "rgba(" + rr + "," + gg + "," + bb + "," + (0.35 + 0.6 * t) + ")";
-        ctx.fillRect(x, y, w / cols + 0.6, 2);
+
+        // Simulate realistic music spectrogram structures (Spek style):
+        // 1. Dense bass & lower frequencies (0..0.25)
+        var bassBase = 0.65 * Math.exp(-freq * 5);
+        var bassPulse = Math.pow(Math.sin(c * 0.1), 8) * Math.exp(-freq * 10) * 0.35;
+        var bass = bassBase + bassPulse;
+
+        // 2. Mid-range harmonics (vocals, instruments) (0.25..0.6)
+        var wave1 = Math.exp(-Math.pow(freq - (0.22 + 0.05 * Math.sin(c * 0.04)), 2) / 0.005) * 0.45;
+        var wave2 = Math.exp(-Math.pow(freq - (0.35 + 0.08 * Math.sin(c * 0.02 + 1)), 2) / 0.008) * 0.4;
+        var wave3 = Math.exp(-Math.pow(freq - (0.50 + 0.12 * Math.sin(c * 0.03 + 2)), 2) / 0.012) * 0.35;
+        var wave4 = Math.exp(-Math.pow(freq - (0.65 + 0.06 * Math.sin(c * 0.05 + 3)), 2) / 0.006) * 0.25;
+        var mids = wave1 + wave2 + wave3 + wave4;
+
+        // 3. Transients (snare/beat hits and cymbals) extending high up
+        var beatSnare = Math.pow(Math.sin(c * 0.06), 24) * 0.6;
+        var beatHats = Math.pow(Math.sin(c * 0.03 + 0.8), 32) * 0.35;
+        var transients = beatSnare * Math.exp(-Math.pow(freq - 0.75, 2) / 0.15) + 
+                         beatHats * Math.exp(-Math.pow(freq - 0.88, 2) / 0.05);
+
+        // 4. Background texture noise
+        var bgNoise = seeded(c * 3.1 + y * 0.13 + (kind === "fake" ? 99 : 1)) * 0.15 * (1 - freq * 0.6);
+
+        // Combine to get magnitude
+        var mag = bass + mids + transients + bgNoise;
+
+        // Apply compression cutoff for low quality FLAC (transcode)
+        if (kind === "fake" && fy < cut) {
+          mag = bgNoise * 0.05; // Drop everything except faint residual noise above 16kHz
+        }
+
+        if (mag < 0.05) continue;
+
+        // Spek color scale: Black/Purple -> Blue -> Teal/Cyan -> Green -> Yellow/Orange -> Red
+        var r, g, b;
+        var t = Math.min(1, mag * 1.15);
+        if (t < 0.15) {
+          var ratio = t / 0.15;
+          r = Math.round(15 * (1 - ratio) + ratio * 10);
+          g = Math.round(10 * (1 - ratio) + ratio * 20);
+          b = Math.round(45 * (1 - ratio) + ratio * 160);
+        } else if (t < 0.40) {
+          var ratio = (t - 0.15) / 0.25;
+          r = Math.round(10 * (1 - ratio) + ratio * 0);
+          g = Math.round(20 * (1 - ratio) + ratio * 180);
+          b = Math.round(160 * (1 - ratio) + ratio * 200);
+        } else if (t < 0.65) {
+          var ratio = (t - 0.40) / 0.25;
+          r = Math.round(0 * (1 - ratio) + ratio * 20);
+          g = Math.round(180 * (1 - ratio) + ratio * 220);
+          b = Math.round(200 * (1 - ratio) + ratio * 40);
+        } else if (t < 0.85) {
+          var ratio = (t - 0.65) / 0.20;
+          r = Math.round(20 * (1 - ratio) + ratio * 240);
+          g = Math.round(220 * (1 - ratio) + ratio * 220);
+          b = Math.round(40 * (1 - ratio) + ratio * 10);
+        } else {
+          var ratio = (t - 0.85) / 0.15;
+          r = Math.round(240 * (1 - ratio) + ratio * 240);
+          g = Math.round(220 * (1 - ratio) + ratio * 10);
+          b = Math.round(10 * (1 - ratio) + ratio * 10);
+        }
+
+        ctx.fillStyle = "rgba(" + r + "," + g + "," + b + ", 0.95)";
+        ctx.fillRect(x, y, w / cols + 0.3, 1);
       }
     }
   }
