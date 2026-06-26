@@ -111,6 +111,18 @@
   "verdictLossy": "Lossy format",
   "verdictInconclusive": "Inconclusive",
   "verdictHeuristicNote": "Heuristic from the frequency spectrum — for reference only.",
+  "settingCheckUpdate": "Check for updates",
+  "updateAvailableTitle": "Update available",
+  "updateNewVersionLabel": "Version {version}",
+  "@updateNewVersionLabel": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "updateDownloadInstall": "Download & install",
+  "updateLater": "Later",
+  "updateDownloading": "Downloading…",
+  "updateChecking": "Checking for updates…",
+  "updateUpToDate": "You're on the latest version",
+  "updateFailed": "Update failed. Please try again later.",
   "statFormat": "Format",
   "statSize": "Size",
   "statBitDepth": "Bit depth",

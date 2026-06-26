@@ -269,6 +269,35 @@ class AppLocalizationsVi extends AppLocalizations {
       'Đánh giá dựa trên phổ tần — chỉ mang tính tham khảo.';
 
   @override
+  String get settingCheckUpdate => 'Kiểm tra cập nhật';
+
+  @override
+  String get updateAvailableTitle => 'Có bản cập nhật';
+
+  @override
+  String updateNewVersionLabel(String version) {
+    return 'Phiên bản $version';
+  }
+
+  @override
+  String get updateDownloadInstall => 'Tải & cài đặt';
+
+  @override
+  String get updateLater => 'Để sau';
+
+  @override
+  String get updateDownloading => 'Đang tải…';
+
+  @override
+  String get updateChecking => 'Đang kiểm tra cập nhật…';
+
+  @override
+  String get updateUpToDate => 'Bạn đang dùng bản mới nhất';
+
+  @override
+  String get updateFailed => 'Cập nhật thất bại. Vui lòng thử lại sau.';
+
+  @override
   String get statFormat => 'Định dạng';
 
   @override

@@ -8,9 +8,26 @@ import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../providers/download_dir_provider.dart';
 import '../providers/download_options_provider.dart';
+import '../services/update_checker.dart';
+import '../widgets/update_dialog.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
+
+  /// Manually checks GitHub for a newer release: shows the update dialog if one
+  /// exists, otherwise a brief "up to date" confirmation.
+  Future<void> _checkForUpdates(BuildContext context) async {
+    final t = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(SnackBar(content: Text(t.updateChecking)));
+    final info = await UpdateChecker().checkForUpdate();
+    if (!context.mounted) return;
+    if (info == null) {
+      messenger.showSnackBar(SnackBar(content: Text(t.updateUpToDate)));
+      return;
+    }
+    await showUpdateDialog(context, info);
+  }
 
   /// Requests All-Files-Access (Android 11+), opens the system directory
   /// picker, and persists the chosen real filesystem path as the download
@@ -82,6 +99,14 @@ class SettingsScreen extends ConsumerWidget {
             title: Text(t.sourcesTitle),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.go('/settings/sources'),
+          ),
+
+          // Check for app updates (GitHub Releases)
+          ListTile(
+            leading: const Icon(Icons.system_update_outlined),
+            title: Text(t.settingCheckUpdate),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _checkForUpdates(context),
           ),
 
           const Divider(height: 1),

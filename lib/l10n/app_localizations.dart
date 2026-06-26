@@ -596,6 +596,60 @@ abstract class AppLocalizations {
   /// **'Heuristic from the frequency spectrum — for reference only.'**
   String get verdictHeuristicNote;
 
+  /// No description provided for @settingCheckUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get settingCheckUpdate;
+
+  /// No description provided for @updateAvailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get updateAvailableTitle;
+
+  /// No description provided for @updateNewVersionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String updateNewVersionLabel(String version);
+
+  /// No description provided for @updateDownloadInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Download & install'**
+  String get updateDownloadInstall;
+
+  /// No description provided for @updateLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get updateLater;
+
+  /// No description provided for @updateDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading…'**
+  String get updateDownloading;
+
+  /// No description provided for @updateChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates…'**
+  String get updateChecking;
+
+  /// No description provided for @updateUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re on the latest version'**
+  String get updateUpToDate;
+
+  /// No description provided for @updateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Update failed. Please try again later.'**
+  String get updateFailed;
+
   /// No description provided for @statFormat.
   ///
   /// In en, this message translates to:

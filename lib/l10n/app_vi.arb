@@ -111,6 +111,18 @@
   "verdictLossy": "Định dạng lossy",
   "verdictInconclusive": "Chưa đủ dữ liệu",
   "verdictHeuristicNote": "Đánh giá dựa trên phổ tần — chỉ mang tính tham khảo.",
+  "settingCheckUpdate": "Kiểm tra cập nhật",
+  "updateAvailableTitle": "Có bản cập nhật",
+  "updateNewVersionLabel": "Phiên bản {version}",
+  "@updateNewVersionLabel": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "updateDownloadInstall": "Tải & cài đặt",
+  "updateLater": "Để sau",
+  "updateDownloading": "Đang tải…",
+  "updateChecking": "Đang kiểm tra cập nhật…",
+  "updateUpToDate": "Bạn đang dùng bản mới nhất",
+  "updateFailed": "Cập nhật thất bại. Vui lòng thử lại sau.",
   "statFormat": "Định dạng",
   "statSize": "Dung lượng",
   "statBitDepth": "Độ sâu bit",

@@ -270,6 +270,35 @@ class AppLocalizationsEn extends AppLocalizations {
       'Heuristic from the frequency spectrum — for reference only.';
 
   @override
+  String get settingCheckUpdate => 'Check for updates';
+
+  @override
+  String get updateAvailableTitle => 'Update available';
+
+  @override
+  String updateNewVersionLabel(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get updateDownloadInstall => 'Download & install';
+
+  @override
+  String get updateLater => 'Later';
+
+  @override
+  String get updateDownloading => 'Downloading…';
+
+  @override
+  String get updateChecking => 'Checking for updates…';
+
+  @override
+  String get updateUpToDate => 'You\'re on the latest version';
+
+  @override
+  String get updateFailed => 'Update failed. Please try again later.';
+
+  @override
   String get statFormat => 'Format';
 
   @override

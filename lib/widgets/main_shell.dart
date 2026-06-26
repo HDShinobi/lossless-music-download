@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/download_queue_provider.dart';
 import '../providers/search_provider.dart';
+import '../services/update_checker.dart';
 import '../theme/app_tokens.dart';
 import '../vendor/spotiflac/share_intent_service.dart';
+import 'update_dialog.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key, required this.shell});
@@ -42,6 +44,16 @@ class _MainShellState extends ConsumerState<MainShell> {
       }
       _handleSharedUrl(url);
     });
+
+    // One-time startup check for a newer release (fire-and-forget; silent on
+    // failure or when already up to date).
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeCheckForUpdate());
+  }
+
+  Future<void> _maybeCheckForUpdate() async {
+    final info = await UpdateChecker().checkForUpdate();
+    if (!mounted || info == null) return;
+    await showUpdateDialog(context, info);
   }
 
   Future<void> _handleSharedUrl(String url) async {

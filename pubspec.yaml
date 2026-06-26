@@ -50,6 +50,9 @@ dependencies:
   # User-selectable download folder: directory picker + All-Files-Access grant.
   file_picker: ^8.1.0
   permission_handler: ^11.3.1
+  # In-app update: read current version + open the downloaded APK installer.
+  package_info_plus: ^8.0.0
+  open_filex: ^4.5.0
 
 dev_dependencies:
   flutter_test:
