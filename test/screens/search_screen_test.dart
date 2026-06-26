@@ -7,6 +7,7 @@ import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'package:lossless_music_download/models/download_progress.dart';
 import 'package:lossless_music_download/models/download_request.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
+import 'package:lossless_music_download/models/search_entities.dart';
 import 'package:lossless_music_download/models/track.dart';
 import 'package:lossless_music_download/providers/download_dir_provider.dart';
 import 'package:lossless_music_download/providers/download_options_provider.dart';
@@ -68,11 +69,11 @@ class _FakeSearchNotifier extends SearchNotifier {
   _FakeSearchNotifier(this._results);
 
   @override
-  List<Track> build() => _results;
+  SearchResults build() => SearchResults(tracks: _results);
 
   @override
   Future<void> search(String q) async {
-    state = AsyncData(_results);
+    state = AsyncData(SearchResults(tracks: _results));
   }
 }
 

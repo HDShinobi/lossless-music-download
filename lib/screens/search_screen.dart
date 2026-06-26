@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
+import '../models/search_entities.dart';
 import '../models/track.dart';
 import '../providers/download_options_provider.dart';
 import '../providers/download_queue_provider.dart';
@@ -26,6 +28,7 @@ class SearchScreen extends ConsumerStatefulWidget {
 class _SearchScreenState extends ConsumerState<SearchScreen> {
   bool _selectionMode = false;
   final Set<String> _selectedIds = {};
+  SearchFilter _filter = SearchFilter.all;
 
   // -------------------------------------------------------------------------
   // Selection helpers
@@ -172,6 +175,33 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     _exitSelectionMode();
   }
 
+  Widget _buildFilterBar(AppLocalizations t) {
+    final items = <(SearchFilter, String)>[
+      (SearchFilter.all, t.filterAll),
+      (SearchFilter.song, t.filterSong),
+      (SearchFilter.artist, t.filterArtist),
+      (SearchFilter.album, t.filterAlbum),
+    ];
+    return SizedBox(
+      height: 46,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        children: [
+          for (final (f, label) in items)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: FilterChip(
+                label: Text(label),
+                selected: _filter == f,
+                onSelected: (_) => setState(() => _filter = f),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   // -------------------------------------------------------------------------
   // Build
   // -------------------------------------------------------------------------
@@ -196,7 +226,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
             icon: const Icon(Icons.download_outlined),
             tooltip: t.downloadCta,
             onPressed: () {
-              final tracks = ref.read(searchProvider).value ?? [];
+              final tracks = ref.read(searchProvider).value?.tracks ?? [];
               unawaited(_batchDownload(tracks));
             },
           ),
@@ -275,9 +305,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   ref.read(searchProvider.notifier).search(v),
             ),
           ),
+          // Filter chips (All / Song / Artist / Album) — hidden in selection mode
+          if (!_selectionMode) _buildFilterBar(t),
           // Results body
           Expanded(
             child: _SearchBody(
+              filter: _filter,
               selectionMode: _selectionMode,
               selectedIds: _selectedIds,
               onDownload: (ctx, track) =>
@@ -293,6 +326,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 }
 
 class _SearchBody extends ConsumerWidget {
+  final SearchFilter filter;
   final bool selectionMode;
   final Set<String> selectedIds;
   final void Function(BuildContext context, Track track) onDownload;
@@ -300,6 +334,7 @@ class _SearchBody extends ConsumerWidget {
   final void Function(String trackId) onSelectToggle;
 
   const _SearchBody({
+    required this.filter,
     required this.selectionMode,
     required this.selectedIds,
     required this.onDownload,
@@ -371,23 +406,44 @@ class _SearchBody extends ConsumerWidget {
     return ref.watch(searchProvider).when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, st) => Center(child: Text(t.searchError)),
-      data: (tracks) {
-        if (tracks.isEmpty) {
+      data: (results) {
+        if (results.isEmpty) {
           final enabled = ref.watch(extensionsProvider).maybeWhen(
                 data: (x) => x.where((e) => e.enabled).length,
                 orElse: () => 0,
               );
           return Center(
-            child: Text(
-              enabled == 0 ? t.searchNoSources : t.searchEmpty,
-            ),
+            child: Text(enabled == 0 ? t.searchNoSources : t.searchEmpty),
           );
         }
-        return ListView.builder(
-          itemCount: tracks.length,
-          itemBuilder: (context, index) {
-            final track = tracks[index];
-            return TrackTile(
+
+        // In selection mode only tracks are actionable; otherwise honour the
+        // filter. "All" shows section headers; a single filter is a flat list.
+        final showArtists = !selectionMode &&
+            (filter == SearchFilter.all || filter == SearchFilter.artist) &&
+            results.artists.isNotEmpty;
+        final showAlbums = !selectionMode &&
+            (filter == SearchFilter.all || filter == SearchFilter.album) &&
+            results.albums.isNotEmpty;
+        final showSongs = (selectionMode ||
+                filter == SearchFilter.all ||
+                filter == SearchFilter.song) &&
+            results.tracks.isNotEmpty;
+        final withHeaders = !selectionMode && filter == SearchFilter.all;
+
+        final children = <Widget>[];
+        if (showArtists) {
+          if (withHeaders) children.add(_SectionHeader(title: t.filterArtist));
+          children.addAll(results.artists.map((a) => _ArtistCard(artist: a)));
+        }
+        if (showAlbums) {
+          if (withHeaders) children.add(_SectionHeader(title: t.filterAlbum));
+          children.addAll(results.albums.map((a) => _AlbumCard(album: a)));
+        }
+        if (showSongs) {
+          if (withHeaders) children.add(_SectionHeader(title: t.filterSong));
+          for (final track in results.tracks) {
+            children.add(TrackTile(
               track: track,
               qualityHint: track.qualityBadge,
               selectionMode: selectionMode,
@@ -400,10 +456,138 @@ class _SearchBody extends ConsumerWidget {
               downloadState: ref
                   .read(downloadQueueProvider.notifier)
                   .stateForTrack(track.id),
-            );
-          },
-        );
+            ));
+          }
+        }
+
+        if (children.isEmpty) {
+          return Center(child: Text(t.searchEmpty));
+        }
+        return ListView(children: children);
       },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Section header + artist/album result cards
+// ---------------------------------------------------------------------------
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+        child: Text(
+          title,
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+      );
+}
+
+class _ArtistCard extends StatelessWidget {
+  const _ArtistCard({required this.artist});
+  final SearchArtist artist;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ListTile(
+      leading: _EntityThumb(
+        url: artist.imageUrl,
+        circle: true,
+        fallbackIcon: Icons.person,
+      ),
+      title: Text(artist.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(AppLocalizations.of(context).filterArtist,
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+      trailing: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+      onTap: () => context.push(
+        '/search/artist',
+        extra: ArtistRouteArgs(
+            id: artist.routeId, name: artist.name, coverUrl: artist.imageUrl),
+      ),
+    );
+  }
+}
+
+class _AlbumCard extends StatelessWidget {
+  const _AlbumCard({required this.album});
+  final SearchAlbum album;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final sub = [
+      if (album.artists.isNotEmpty) album.artists,
+      if (album.year.isNotEmpty) album.year,
+    ].join(' · ');
+    return ListTile(
+      leading: _EntityThumb(
+        url: album.imageUrl,
+        circle: false,
+        fallbackIcon: Icons.album,
+      ),
+      title: Text(album.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(sub.isEmpty ? AppLocalizations.of(context).filterAlbum : sub,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+      trailing: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+      onTap: () => context.push(
+        '/search/album',
+        extra: AlbumRouteArgs(
+            id: album.routeId,
+            name: album.name,
+            artist: album.artists,
+            coverUrl: album.imageUrl),
+      ),
+    );
+  }
+}
+
+class _EntityThumb extends StatelessWidget {
+  const _EntityThumb({
+    required this.url,
+    required this.circle,
+    required this.fallbackIcon,
+  });
+  final String? url;
+  final bool circle;
+  final IconData fallbackIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tokens = context.tokens;
+    final radius = BorderRadius.circular(circle ? 24 : 8);
+    final fallback = Container(
+      width: 48,
+      height: 48,
+      color: tokens.surface3,
+      child: Icon(fallbackIcon, color: cs.onSurfaceVariant, size: 24),
+    );
+    return ClipRRect(
+      borderRadius: radius,
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: (url != null && url!.isNotEmpty)
+            ? CachedNetworkImage(
+                imageUrl: url!,
+                fit: BoxFit.cover,
+                memCacheWidth: 144,
+                memCacheHeight: 144,
+                placeholder: (_, _) => fallback,
+                errorWidget: (_, _, _) => fallback,
+              )
+            : fallback,
+      ),
     );
   }
 }

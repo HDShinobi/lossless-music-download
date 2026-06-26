@@ -40,7 +40,7 @@ void main() {
 
       final state = container.read(searchProvider);
       expect(state.hasValue, isTrue);
-      final tracks = state.value!;
+      final tracks = state.value!.tracks;
       expect(tracks.length, 1);
       expect(tracks.first.name, 'Test Song');
       expect(tracks.first.coverUrl, 'https://cover.example.com/img.jpg');
@@ -73,8 +73,8 @@ void main() {
 
       final state = container.read(searchProvider);
       expect(state.hasValue, isTrue);
-      expect(state.value!.length, 2);
-      expect(state.value!.map((t) => t.name).toList(),
+      expect(state.value!.tracks.length, 2);
+      expect(state.value!.tracks.map((t) => t.name).toList(),
           containsAll(['Track One', 'Track Two']));
     });
 
@@ -89,7 +89,7 @@ void main() {
 
       final state = container.read(searchProvider);
       expect(state.hasValue, isTrue);
-      expect(state.value, isEmpty);
+      expect(state.value!.isEmpty, isTrue);
     });
   });
 }

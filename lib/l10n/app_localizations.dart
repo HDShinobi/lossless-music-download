@@ -650,6 +650,30 @@ abstract class AppLocalizations {
   /// **'Update failed. Please try again later.'**
   String get updateFailed;
 
+  /// No description provided for @filterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get filterAll;
+
+  /// No description provided for @filterSong.
+  ///
+  /// In en, this message translates to:
+  /// **'Songs'**
+  String get filterSong;
+
+  /// No description provided for @filterArtist.
+  ///
+  /// In en, this message translates to:
+  /// **'Artists'**
+  String get filterArtist;
+
+  /// No description provided for @filterAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'Albums'**
+  String get filterAlbum;
+
   /// No description provided for @openingArtist.
   ///
   /// In en, this message translates to:

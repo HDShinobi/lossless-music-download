@@ -299,6 +299,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateFailed => 'Update failed. Please try again later.';
 
   @override
+  String get filterAll => 'All';
+
+  @override
+  String get filterSong => 'Songs';
+
+  @override
+  String get filterArtist => 'Artists';
+
+  @override
+  String get filterAlbum => 'Albums';
+
+  @override
   String get openingArtist => 'Opening artist…';
 
   @override

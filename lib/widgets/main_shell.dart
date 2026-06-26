@@ -64,8 +64,8 @@ class _MainShellState extends ConsumerState<MainShell> {
     messenger.showSnackBar(SnackBar(content: Text(t.loadingSharedLink)));
     await ref.read(searchProvider.notifier).resolveFromUrl(url);
     if (!mounted) return;
-    final tracks = ref.read(searchProvider).value;
-    if (tracks != null && tracks.isEmpty) {
+    final results = ref.read(searchProvider).value;
+    if (results != null && results.tracks.isEmpty) {
       messenger.showSnackBar(SnackBar(content: Text(t.shareUrlNotRecognized)));
     }
   }
