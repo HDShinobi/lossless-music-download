@@ -650,6 +650,24 @@ abstract class AppLocalizations {
   /// **'Update failed. Please try again later.'**
   String get updateFailed;
 
+  /// No description provided for @openingArtist.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening artist…'**
+  String get openingArtist;
+
+  /// No description provided for @openingAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening album…'**
+  String get openingAlbum;
+
+  /// No description provided for @entityNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t find details to open'**
+  String get entityNotFound;
+
   /// No description provided for @manageEdit.
   ///
   /// In en, this message translates to:

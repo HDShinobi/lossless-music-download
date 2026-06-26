@@ -254,15 +254,18 @@ void main() {
       expect(tapped, isTrue);
     });
 
-    testWidgets('no tappable spans when the track lacks artist/album IDs',
+    testWidgets('tappable even without IDs (resolved on demand on tap)',
         (tester) async {
+      var artistTapped = false;
       await pumpWithNav(tester, track: track,
-          onArtistTap: () {}, onAlbumTap: () {});
+          onArtistTap: () => artistTapped = true, onAlbumTap: () {});
 
-      expect(find.byKey(const Key('trackArtist')), findsNothing);
-      expect(find.byKey(const Key('trackAlbum')), findsNothing);
-      // Plain joined subtitle still rendered.
-      expect(find.text('Test Artist · Test Album'), findsOneWidget);
+      // Names are always tappable when handlers are wired; the missing ID is
+      // resolved on demand by the tap handler.
+      expect(find.byKey(const Key('trackArtist')), findsOneWidget);
+      expect(find.byKey(const Key('trackAlbum')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('trackArtist')));
+      expect(artistTapped, isTrue);
     });
 
     testWidgets('no tappable spans when no navigation callbacks are given',

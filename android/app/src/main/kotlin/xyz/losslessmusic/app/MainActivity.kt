@@ -181,6 +181,12 @@ class MainActivity : FlutterActivity() {
             call.argument<String>("metadataJson")!!,
         )
         "reEnrichFile" -> true to Bridge.reEnrichFile(call.argument<String>("requestJson")!!)
+        "customSearchWithExtension" -> true to Bridge.customSearchWithExtensionJSON(
+            call.argument<String>("extensionId")!!,
+            call.argument<String>("query")!!,
+            call.argument<String>("optionsJson") ?: "",
+        )
+        "getSearchProviders" -> true to Bridge.getSearchProvidersJSON()
         else -> false to null
     }
 

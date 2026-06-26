@@ -299,6 +299,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateFailed => 'Update failed. Please try again later.';
 
   @override
+  String get openingArtist => 'Opening artist…';
+
+  @override
+  String get openingAlbum => 'Opening album…';
+
+  @override
+  String get entityNotFound => 'Couldn\'t find details to open';
+
+  @override
   String get manageEdit => 'Edit metadata';
 
   @override

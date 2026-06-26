@@ -239,6 +239,23 @@ func ReEnrichFile(requestJSON string) (string, error) {
 	return gobackend.ReEnrichFile(requestJSON)
 }
 
+// --- Entity search (resolve artist/album by name) --------------------------
+
+// CustomSearchWithExtensionJSON runs an extension's custom search with the
+// given JSON options (e.g. {"filter":"artist","limit":10}) and returns the
+// results as a JSON array of entity maps ({id,name,artists,images,item_type,
+// provider_id,...}). Used to resolve an artist/album ID from a name when a
+// track's metadata didn't include it.
+func CustomSearchWithExtensionJSON(extensionID, query, optionsJSON string) (string, error) {
+	return gobackend.CustomSearchWithExtensionJSON(extensionID, query, optionsJSON)
+}
+
+// GetSearchProvidersJSON returns the installed extensions that support custom
+// (entity) search, as a JSON array ({id,display_name,...}).
+func GetSearchProvidersJSON() (string, error) {
+	return gobackend.GetSearchProvidersJSON()
+}
+
 // --- Provider priority ---
 
 // GetProviderPriorityJSON returns the current download provider priority as a

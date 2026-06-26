@@ -124,16 +124,12 @@ class TrackTile extends StatelessWidget {
     return parts.join(' · ');
   }
 
-  bool get _artistTappable =>
-      onArtistTap != null &&
-      track.artistId != null &&
-      track.artistId!.isNotEmpty &&
-      track.artists.isNotEmpty;
+  // Always tappable when a handler is wired and there's a name: the artist/
+  // album ID is resolved on demand if the search result didn't include it.
+  bool get _artistTappable => onArtistTap != null && track.artists.isNotEmpty;
 
   bool get _albumTappable =>
       onAlbumTap != null &&
-      track.albumId != null &&
-      track.albumId!.isNotEmpty &&
       track.albumName != null &&
       track.albumName!.isNotEmpty;
 

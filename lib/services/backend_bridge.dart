@@ -191,6 +191,36 @@ class BackendBridge {
         : Map<String, dynamic>.from(jsonDecode(raw));
   }
 
+  /// Runs an extension's custom (entity) search. [options] typically carries
+  /// `{'filter': 'artist'|'album', 'limit': n}`. Returns entity maps
+  /// ({id, name, artists, images, item_type, provider_id, ...}).
+  Future<List<Map<String, dynamic>>> customSearch(
+    String extensionId,
+    String query, {
+    Map<String, dynamic>? options,
+  }) async {
+    final raw = await _c.invokeMethod<String>('customSearchWithExtension', {
+      'extensionId': extensionId,
+      'query': query,
+      'optionsJson': options == null ? '' : jsonEncode(options),
+    });
+    if (raw == null || raw.isEmpty) return [];
+    final decoded = jsonDecode(raw);
+    return decoded is List
+        ? decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList()
+        : <Map<String, dynamic>>[];
+  }
+
+  /// Lists installed extensions that support custom (entity) search.
+  Future<List<Map<String, dynamic>>> getSearchProviders() async {
+    final raw = await _c.invokeMethod<String>('getSearchProviders');
+    if (raw == null || raw.isEmpty) return [];
+    final decoded = jsonDecode(raw);
+    return decoded is List
+        ? decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList()
+        : <Map<String, dynamic>>[];
+  }
+
   Future<void> setDownloadDirectory(String path) =>
       _c.invokeMethod('setDownloadDirectory', {'path': path});
 

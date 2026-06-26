@@ -298,6 +298,15 @@ class AppLocalizationsVi extends AppLocalizations {
   String get updateFailed => 'Cập nhật thất bại. Vui lòng thử lại sau.';
 
   @override
+  String get openingArtist => 'Đang mở trang nghệ sĩ…';
+
+  @override
+  String get openingAlbum => 'Đang mở trang album…';
+
+  @override
+  String get entityNotFound => 'Không tìm thấy thông tin để mở';
+
+  @override
   String get manageEdit => 'Sửa thông tin';
 
   @override
