@@ -2,8 +2,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lossless_music_download/main.dart';
 import 'package:lossless_music_download/screens/library_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  // The Library screen awaits downloadDirProvider, which reads SharedPreferences
+  // to resolve the (possibly user-chosen) download folder. Seed the in-memory
+  // store so getInstance() completes instead of hanging pumpAndSettle.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('tapping Library tab shows Library screen', (t) async {
     await t.pumpWidget(const ProviderScope(child: MyApp()));
     await t.pumpAndSettle();

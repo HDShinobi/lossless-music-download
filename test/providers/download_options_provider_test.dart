@@ -11,11 +11,11 @@ void main() {
   });
 
   group('askBeforeDownloadProvider', () {
-    test('default state is false', () {
+    test('default state is true', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      expect(container.read(askBeforeDownloadProvider), isFalse);
+      expect(container.read(askBeforeDownloadProvider), isTrue);
     });
 
     test('set(true) updates state to true', () async {
@@ -59,14 +59,14 @@ void main() {
       expect(container.read(askBeforeDownloadProvider), isTrue);
     });
 
-    test('load() defaults to false when no prefs key exists', () async {
+    test('load() defaults to true when no prefs key exists', () async {
       SharedPreferences.setMockInitialValues({});
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
       await container.read(askBeforeDownloadProvider.notifier).load();
 
-      expect(container.read(askBeforeDownloadProvider), isFalse);
+      expect(container.read(askBeforeDownloadProvider), isTrue);
     });
   });
 }

@@ -1,12 +1,67 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../providers/download_dir_provider.dart';
 import '../providers/download_options_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
+
+  /// Requests All-Files-Access (Android 11+), opens the system directory
+  /// picker, and persists the chosen real filesystem path as the download
+  /// folder. No-ops if the user cancels or denies permission.
+  Future<void> _pickDownloadFolder(BuildContext context, WidgetRef ref) async {
+    final t = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (Platform.isAndroid) {
+      var status = await Permission.manageExternalStorage.status;
+      if (!status.isGranted) {
+        status = await Permission.manageExternalStorage.request();
+      }
+      if (!status.isGranted) {
+        if (!context.mounted) return;
+        final open = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(t.settingStoragePermissionTitle),
+            content: Text(t.settingStoragePermissionBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(t.commonCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text(t.settingStoragePermissionOpen),
+              ),
+            ],
+          ),
+        );
+        if (open == true) await openAppSettings();
+        return;
+      }
+    }
+
+    final picked = await FilePicker.platform.getDirectoryPath();
+    if (picked == null || picked.isEmpty) return; // cancelled
+    final path = normalizePickedDirectory(picked);
+    if (path == null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(t.settingStoragePermissionBody)),
+      );
+      return;
+    }
+    await ref.read(downloadDirControllerProvider.notifier).setDirectory(path);
+    messenger.showSnackBar(
+      SnackBar(content: Text(t.settingDownloadFolderUpdated)),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -31,16 +86,18 @@ class SettingsScreen extends ConsumerWidget {
 
           const Divider(height: 1),
 
-          // Download folder (read-only display)
+          // Download folder (tap to change)
           folderAsync.when(
             loading: () => ListTile(
               leading: const Icon(Icons.folder_outlined),
               title: Text(t.settingDownloadFolder),
               subtitle: const Text('…'),
             ),
-            error: (_, __) => ListTile(
+            error: (_, _) => ListTile(
               leading: const Icon(Icons.folder_outlined),
               title: Text(t.settingDownloadFolder),
+              trailing: const Icon(Icons.edit_outlined),
+              onTap: () => _pickDownloadFolder(context, ref),
             ),
             data: (path) => ListTile(
               leading: const Icon(Icons.folder_outlined),
@@ -54,6 +111,8 @@ class SettingsScreen extends ConsumerWidget {
                     .bodySmall
                     ?.copyWith(fontFamily: 'monospace'),
               ),
+              trailing: const Icon(Icons.edit_outlined),
+              onTap: () => _pickDownloadFolder(context, ref),
             ),
           ),
 

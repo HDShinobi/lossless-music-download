@@ -181,5 +181,11 @@
   "settingEmbedCover": "Embed cover art",
   "settingEmbedCoverDesc": "Include album artwork in file tags",
   "settingEmbedLyrics": "Embed lyrics",
-  "settingEmbedLyricsDesc": "Include synced lyrics in file tags"
+  "settingEmbedLyricsDesc": "Include synced lyrics in file tags",
+  "settingDownloadFolderChange": "Tap to change",
+  "settingDownloadFolderUpdated": "Download folder updated",
+  "settingStoragePermissionTitle": "Storage access needed",
+  "settingStoragePermissionBody": "To save downloads to a folder you choose, allow \"All files access\" for Lossless Music in system settings.",
+  "settingStoragePermissionOpen": "Open settings",
+  "commonCancel": "Cancel"
 }

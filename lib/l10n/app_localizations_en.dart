@@ -403,4 +403,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingEmbedLyricsDesc => 'Include synced lyrics in file tags';
+
+  @override
+  String get settingDownloadFolderChange => 'Tap to change';
+
+  @override
+  String get settingDownloadFolderUpdated => 'Download folder updated';
+
+  @override
+  String get settingStoragePermissionTitle => 'Storage access needed';
+
+  @override
+  String get settingStoragePermissionBody =>
+      'To save downloads to a folder you choose, allow \"All files access\" for Lossless Music in system settings.';
+
+  @override
+  String get settingStoragePermissionOpen => 'Open settings';
+
+  @override
+  String get commonCancel => 'Cancel';
 }

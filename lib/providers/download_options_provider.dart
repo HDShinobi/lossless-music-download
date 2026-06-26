@@ -14,9 +14,9 @@ class AskBeforeDownloadNotifier extends Notifier<bool> {
     // Load persisted value on first build without blocking the UI.
     Future.microtask(() async {
       final p = await SharedPreferences.getInstance();
-      if (ref.mounted && !_explicitlySet) state = p.getBool(_key) ?? false;
+      if (ref.mounted && !_explicitlySet) state = p.getBool(_key) ?? true;
     });
-    return false;
+    return true;
   }
 
   /// Deprecated: `build()` now auto-loads the persisted value via a microtask
@@ -24,7 +24,7 @@ class AskBeforeDownloadNotifier extends Notifier<bool> {
   /// to call [load] manually.
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
-    state = p.getBool(_key) ?? false;
+    state = p.getBool(_key) ?? true;
   }
 
   Future<void> set(bool value) async {

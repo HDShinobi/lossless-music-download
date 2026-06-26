@@ -181,5 +181,11 @@
   "settingEmbedCover": "Ghi ảnh bìa",
   "settingEmbedCoverDesc": "Nhúng ảnh bìa album vào thẻ file",
   "settingEmbedLyrics": "Ghi lời bài hát",
-  "settingEmbedLyricsDesc": "Nhúng lời bài hát đồng bộ vào file"
+  "settingEmbedLyricsDesc": "Nhúng lời bài hát đồng bộ vào file",
+  "settingDownloadFolderChange": "Chạm để đổi",
+  "settingDownloadFolderUpdated": "Đã cập nhật thư mục tải về",
+  "settingStoragePermissionTitle": "Cần quyền truy cập bộ nhớ",
+  "settingStoragePermissionBody": "Để lưu file vào thư mục bạn chọn, hãy cấp quyền \"Truy cập tất cả tệp\" cho Lossless Music trong cài đặt hệ thống.",
+  "settingStoragePermissionOpen": "Mở cài đặt",
+  "commonCancel": "Huỷ"
 }

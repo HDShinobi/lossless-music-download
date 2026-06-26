@@ -402,4 +402,23 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get settingEmbedLyricsDesc => 'Nhúng lời bài hát đồng bộ vào file';
+
+  @override
+  String get settingDownloadFolderChange => 'Chạm để đổi';
+
+  @override
+  String get settingDownloadFolderUpdated => 'Đã cập nhật thư mục tải về';
+
+  @override
+  String get settingStoragePermissionTitle => 'Cần quyền truy cập bộ nhớ';
+
+  @override
+  String get settingStoragePermissionBody =>
+      'Để lưu file vào thư mục bạn chọn, hãy cấp quyền \"Truy cập tất cả tệp\" cho Lossless Music trong cài đặt hệ thống.';
+
+  @override
+  String get settingStoragePermissionOpen => 'Mở cài đặt';
+
+  @override
+  String get commonCancel => 'Huỷ';
 }

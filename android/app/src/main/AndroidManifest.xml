@@ -5,6 +5,20 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
     <!-- Required to receive SSDP multicast for DLNA discovery (MulticastLock). -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
+
+    <!-- User-selectable download folder (Settings → Download folder).
+         Android 6–10: app-sandbox writes to shared storage. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+    <!-- Android 10–12: read from shared storage. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <!-- Android 11+ (API 30+): "All Files Access" — lets the backend write a
+         real filesystem path (e.g. /storage/emulated/0/Music/Lossless) chosen
+         by the user, instead of a content:// SAF URI. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <!-- Android 13+: granular audio access for library scanning. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <application
         android:label="Lossless Music"
         android:name="${applicationName}"

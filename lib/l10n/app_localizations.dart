@@ -847,6 +847,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Include synced lyrics in file tags'**
   String get settingEmbedLyricsDesc;
+
+  /// No description provided for @settingDownloadFolderChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to change'**
+  String get settingDownloadFolderChange;
+
+  /// No description provided for @settingDownloadFolderUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Download folder updated'**
+  String get settingDownloadFolderUpdated;
+
+  /// No description provided for @settingStoragePermissionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage access needed'**
+  String get settingStoragePermissionTitle;
+
+  /// No description provided for @settingStoragePermissionBody.
+  ///
+  /// In en, this message translates to:
+  /// **'To save downloads to a folder you choose, allow \"All files access\" for Lossless Music in system settings.'**
+  String get settingStoragePermissionBody;
+
+  /// No description provided for @settingStoragePermissionOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get settingStoragePermissionOpen;
+
+  /// No description provided for @commonCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get commonCancel;
 }
 
 class _AppLocalizationsDelegate
