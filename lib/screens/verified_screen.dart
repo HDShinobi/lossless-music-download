@@ -6,8 +6,11 @@ import '../l10n/app_localizations.dart';
 import '../providers/library_manager.dart';
 import '../providers/library_provider.dart';
 import '../theme/app_tokens.dart';
+import '../providers/extensions_provider.dart';
 import '../util/lossless_verdict.dart';
 import '../vendor/spotiflac/audio_analysis_widget.dart';
+import '../vendor/spotiflac/replaygain_service.dart';
+import '../widgets/convert_sheet.dart';
 import '../widgets/edit_metadata_sheet.dart';
 
 /// Detail screen for a single [LibraryEntry] showing a heuristic lossless
@@ -75,6 +78,41 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
     }
   }
 
+  Future<void> _replayGain(BuildContext context) async {
+    final t = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(SnackBar(content: Text(t.replayGainStarted)));
+    final ok = await ReplayGainService.applyToFile(
+      entry.path,
+      ref.read(backendBridgeProvider),
+    );
+    if (!context.mounted) return;
+    messenger.showSnackBar(SnackBar(
+      content: Text(ok ? t.replayGainDone : t.replayGainFailed),
+    ));
+  }
+
+  Future<void> _convert(BuildContext context) async {
+    final t = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final choice = await showConvertSheet(context);
+    if (choice == null) return;
+    messenger.showSnackBar(SnackBar(content: Text(t.convertStarted)));
+    final newPath = await ref.read(libraryManagerProvider.notifier).convert(
+          entry.path,
+          choice.format,
+          choice.bitrate,
+        );
+    if (!context.mounted) return;
+    if (newPath == null) {
+      messenger.showSnackBar(SnackBar(content: Text(t.convertFailed)));
+      return;
+    }
+    messenger.showSnackBar(SnackBar(content: Text(t.convertDone)));
+    // The original file was replaced by a new-format file; leave detail view.
+    context.pop();
+  }
+
   Future<void> _confirmDelete(BuildContext context) async {
     final t = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
@@ -128,6 +166,10 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
                   _edit(context);
                 case 'reenrich':
                   _reEnrich(context);
+                case 'replaygain':
+                  _replayGain(context);
+                case 'convert':
+                  _convert(context);
                 case 'delete':
                   _confirmDelete(context);
               }
@@ -146,6 +188,22 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
                 child: ListTile(
                   leading: const Icon(Icons.auto_fix_high_outlined),
                   title: Text(t.manageReEnrich),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'replaygain',
+                child: ListTile(
+                  leading: const Icon(Icons.volume_up_outlined),
+                  title: Text(t.manageReplayGain),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'convert',
+                child: ListTile(
+                  leading: const Icon(Icons.transform),
+                  title: Text(t.manageConvert),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),

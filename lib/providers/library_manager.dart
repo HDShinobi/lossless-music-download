@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/ffmpeg_metadata_service.dart';
+import '../vendor/spotiflac/convert_service.dart';
 import 'extensions_provider.dart';
 import 'library_provider.dart';
 
@@ -92,6 +93,24 @@ class LibraryManager extends Notifier<void> {
       );
     }
     ref.invalidate(libraryProvider);
+  }
+
+  /// Converts the file at [path] to [format]/[bitrate] (FFmpeg), deletes the
+  /// original on success, and refreshes the library. Returns the new file path,
+  /// or null on failure.
+  Future<String?> convert(String path, String format, String bitrate) async {
+    final newPath = await ConvertService.convert(
+      inputPath: path,
+      format: format,
+      bitrate: bitrate,
+    );
+    if (newPath == null) return null;
+    if (newPath != path) {
+      final original = File(path);
+      if (await original.exists()) await original.delete();
+    }
+    ref.invalidate(libraryProvider);
+    return newPath;
   }
 
   /// Re-fetches metadata/cover/lyrics for [request] (backend reEnrichRequest

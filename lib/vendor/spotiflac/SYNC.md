@@ -57,3 +57,11 @@ package:spotiflac_android/services/platform_bridge.dart    -> compat_platform_br
 ## Local modifications (re-apply after each upstream sync)
 - Imports: `ffmpeg_kit_flutter_new_audio` → `ffmpeg_kit_flutter_new_full` (we bundle the full variant).
 - `AudioAnalysisCard`: added optional `onAnalyzed(AudioAnalysisData)` callback, fired where `_data` is set (cache hit + fresh run), so VerifiedScreen can derive a conservative lossless verdict. Search `LOCAL ADDITION`.
+
+## replaygain_service.dart / convert_service.dart (adapted, not verbatim)
+- replaygain_service.dart: ports SpotiFLAC's ReplayGainService.applyToFile +
+  the scanReplayGain() routine from ffmpeg_service.dart (EBU R128, -18 LUFS
+  ref). Writes replaygain_track_gain/_peak via our BackendBridge.editFileMetadata.
+- convert_service.dart: ports convertAudioFormat()'s per-format FFmpeg commands
+  (libmp3lame/libopus/aac/flac/pcm). Uses ffmpeg_kit_full + -map_metadata 0 to
+  carry tags. On upstream sync, re-diff against ffmpeg_service.dart.

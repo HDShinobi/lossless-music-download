@@ -304,7 +304,40 @@ class AppLocalizationsVi extends AppLocalizations {
   String get manageReEnrich => 'Làm mới metadata';
 
   @override
+  String get manageReplayGain => 'Quét ReplayGain';
+
+  @override
+  String get manageConvert => 'Đổi định dạng';
+
+  @override
   String get manageDelete => 'Xoá khỏi máy';
+
+  @override
+  String get replayGainStarted => 'Đang quét độ to…';
+
+  @override
+  String get replayGainDone => 'Đã ghi thẻ ReplayGain';
+
+  @override
+  String get replayGainFailed => 'Quét ReplayGain thất bại';
+
+  @override
+  String get convertSheetTitle => 'Đổi định dạng';
+
+  @override
+  String get convertBitrateLabel => 'Bitrate';
+
+  @override
+  String get convertStarted => 'Đang chuyển đổi…';
+
+  @override
+  String get convertDone => 'Đã chuyển đổi';
+
+  @override
+  String get convertFailed => 'Chuyển đổi thất bại';
+
+  @override
+  String get commonConvert => 'Chuyển đổi';
 
   @override
   String get editSheetTitle => 'Sửa thông tin';

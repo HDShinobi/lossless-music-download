@@ -305,7 +305,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String get manageReEnrich => 'Re-enrich (refetch tags)';
 
   @override
+  String get manageReplayGain => 'Scan ReplayGain';
+
+  @override
+  String get manageConvert => 'Convert format';
+
+  @override
   String get manageDelete => 'Delete from device';
+
+  @override
+  String get replayGainStarted => 'Scanning loudness…';
+
+  @override
+  String get replayGainDone => 'ReplayGain tags written';
+
+  @override
+  String get replayGainFailed => 'ReplayGain scan failed';
+
+  @override
+  String get convertSheetTitle => 'Convert format';
+
+  @override
+  String get convertBitrateLabel => 'Bitrate';
+
+  @override
+  String get convertStarted => 'Converting…';
+
+  @override
+  String get convertDone => 'Converted';
+
+  @override
+  String get convertFailed => 'Conversion failed';
+
+  @override
+  String get commonConvert => 'Convert';
 
   @override
   String get editSheetTitle => 'Edit metadata';

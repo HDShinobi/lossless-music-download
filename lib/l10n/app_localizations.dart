@@ -662,11 +662,77 @@ abstract class AppLocalizations {
   /// **'Re-enrich (refetch tags)'**
   String get manageReEnrich;
 
+  /// No description provided for @manageReplayGain.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan ReplayGain'**
+  String get manageReplayGain;
+
+  /// No description provided for @manageConvert.
+  ///
+  /// In en, this message translates to:
+  /// **'Convert format'**
+  String get manageConvert;
+
   /// No description provided for @manageDelete.
   ///
   /// In en, this message translates to:
   /// **'Delete from device'**
   String get manageDelete;
+
+  /// No description provided for @replayGainStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning loudness…'**
+  String get replayGainStarted;
+
+  /// No description provided for @replayGainDone.
+  ///
+  /// In en, this message translates to:
+  /// **'ReplayGain tags written'**
+  String get replayGainDone;
+
+  /// No description provided for @replayGainFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'ReplayGain scan failed'**
+  String get replayGainFailed;
+
+  /// No description provided for @convertSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Convert format'**
+  String get convertSheetTitle;
+
+  /// No description provided for @convertBitrateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Bitrate'**
+  String get convertBitrateLabel;
+
+  /// No description provided for @convertStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Converting…'**
+  String get convertStarted;
+
+  /// No description provided for @convertDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Converted'**
+  String get convertDone;
+
+  /// No description provided for @convertFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversion failed'**
+  String get convertFailed;
+
+  /// No description provided for @commonConvert.
+  ///
+  /// In en, this message translates to:
+  /// **'Convert'**
+  String get commonConvert;
 
   /// No description provided for @editSheetTitle.
   ///
