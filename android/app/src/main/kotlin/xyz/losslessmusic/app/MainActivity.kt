@@ -169,6 +169,13 @@ class MainActivity : FlutterActivity() {
         "scanLibraryFolder" -> true to Bridge.scanLibraryFolderJSON(
             call.argument<String>("folderPath")!!
         )
+        "getLyricsLRC" -> true to Bridge.getLyricsLRC(
+            call.argument<String>("spotifyId") ?: "",
+            call.argument<String>("trackName") ?: "",
+            call.argument<String>("artistName") ?: "",
+            call.argument<String>("filePath") ?: "",
+            (call.argument<Number>("durationMs") ?: 0).toLong(),
+        )
         else -> false to null
     }
 

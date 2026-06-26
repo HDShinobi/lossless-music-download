@@ -2360,6 +2360,7 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 			outputPath := buildOutputPathForExtension(req, ext)
 			if req.ItemID != "" {
 				StartItemProgress(req.ItemID)
+				SetItemDownloading(req.ItemID)
 			}
 
 			result, err := provider.Download(trackID, req.Quality, outputPath, req.ItemID, func(percent int) {
@@ -2416,14 +2417,8 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 					resp.Composer = req.Composer
 				}
 
-				if !alreadyExists && req.EmbedMetadata && (req.Genre != "" || req.Label != "") && canEmbedGenreLabel(normalizedResult.FilePath) {
-					if err := EmbedGenreLabel(normalizedResult.FilePath, req.Genre, req.Label); err != nil {
-						GoLog("[DownloadWithExtensionFallback] Warning: failed to embed genre/label: %v\n", err)
-					} else {
-						GoLog("[DownloadWithExtensionFallback] Embedded genre=%q label=%q\n", req.Genre, req.Label)
-					}
-				} else if !alreadyExists && req.EmbedMetadata && (req.Genre != "" || req.Label != "") {
-					GoLog("[DownloadWithExtensionFallback] Skipping genre/label embed for non-local output path: %q\n", normalizedResult.FilePath)
+				if !alreadyExists {
+					embedMetadataAfterDownload(req, normalizedResult.FilePath)
 				}
 
 				if !alreadyExists && !isFDOutput(req.OutputFD) && strings.TrimSpace(req.OutputDir) != "" {
@@ -2530,6 +2525,7 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 			outputPath := buildOutputPathForExtension(req, ext)
 			if req.ItemID != "" {
 				StartItemProgress(req.ItemID)
+				SetItemDownloading(req.ItemID)
 			}
 
 			// Fallback provider: request its own highest quality, not the
@@ -2585,14 +2581,8 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 				}
 				applyExtensionRequestFallbacks(&resp, req)
 
-				if !alreadyExists && req.EmbedMetadata && (req.Genre != "" || req.Label != "") && canEmbedGenreLabel(normalizedResult.FilePath) {
-					if err := EmbedGenreLabel(normalizedResult.FilePath, req.Genre, req.Label); err != nil {
-						GoLog("[DownloadWithExtensionFallback] Warning: failed to embed genre/label: %v\n", err)
-					} else {
-						GoLog("[DownloadWithExtensionFallback] Embedded genre=%q label=%q\n", req.Genre, req.Label)
-					}
-				} else if !alreadyExists && req.EmbedMetadata && (req.Genre != "" || req.Label != "") {
-					GoLog("[DownloadWithExtensionFallback] Skipping genre/label embed for non-local output path: %q\n", normalizedResult.FilePath)
+				if !alreadyExists {
+					embedMetadataAfterDownload(req, normalizedResult.FilePath)
 				}
 
 				if !alreadyExists && !isFDOutput(req.OutputFD) && strings.TrimSpace(req.OutputDir) != "" {
@@ -3489,3 +3479,4 @@ func (m *extensionManager) GetLyricsProviders() []*extensionProviderWrapper {
 
 	return providers
 }
+

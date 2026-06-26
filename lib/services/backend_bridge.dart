@@ -140,6 +140,26 @@ class BackendBridge {
     return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
   }
 
+  /// Fetches lyrics as LRC text. With [filePath] empty, fetches online from the
+  /// configured lyrics providers; otherwise reads embedded lyrics from the file.
+  /// Returns empty string when no lyrics are found.
+  Future<String> getLyricsLRC({
+    String spotifyId = '',
+    required String trackName,
+    required String artistName,
+    String filePath = '',
+    int durationMs = 0,
+  }) async {
+    final raw = await _c.invokeMethod<String>('getLyricsLRC', {
+      'spotifyId': spotifyId,
+      'trackName': trackName,
+      'artistName': artistName,
+      'filePath': filePath,
+      'durationMs': durationMs,
+    });
+    return raw ?? '';
+  }
+
   Future<void> setDownloadDirectory(String path) =>
       _c.invokeMethod('setDownloadDirectory', {'path': path});
 

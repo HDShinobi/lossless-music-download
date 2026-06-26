@@ -1,11 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 import '../models/download_progress.dart';
 import '../models/download_request.dart';
 import '../models/installed_extension.dart';
 import '../models/track.dart';
+import '../services/backend_bridge.dart';
+import '../services/ffmpeg_metadata_service.dart';
 import '../util/queue_view.dart';
 import '../widgets/track_tile.dart'; // TrackDownloadState
 import 'download_dir_provider.dart';
@@ -230,7 +235,19 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         progressIfDone: failed ? null : 1.0,
         error: failed ? (err?.isNotEmpty == true ? err : 'unknown') : null,
       );
-      if (!failed) ref.invalidate(libraryProvider);
+      if (!failed) {
+        // FLAC is tagged natively in the Go backend. Non-FLAC downloads
+        // (Opus/M4A/MP3) are tagged here via FFmpeg.
+        await _embedNonFlacMetadata(
+          bridge: bridge,
+          res: res,
+          track: next.track,
+          embedMetadata: embedMetadata,
+          embedCover: embedCover,
+          embedLyrics: embedLyrics,
+        );
+        ref.invalidate(libraryProvider);
+      }
     } on _DuplicateSkipped {
       // Item skipped — status already set to done above.
     } catch (e) {
@@ -239,6 +256,98 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       _isProcessing = false;
       // Process the next queued item (if any).
       unawaited(_processQueue());
+    }
+  }
+
+  /// Tags a freshly downloaded NON-FLAC file (Opus/M4A/MP3) via FFmpeg. FLAC is
+  /// handled natively in the Go backend, so this is a no-op for FLAC.
+  Future<void> _embedNonFlacMetadata({
+    required BackendBridge bridge,
+    required Map<String, dynamic> res,
+    required Track track,
+    required bool embedMetadata,
+    required bool embedCover,
+    required bool embedLyrics,
+  }) async {
+    if (!embedMetadata) return;
+    final filePath = res['file_path']?.toString() ?? '';
+    if (filePath.isEmpty ||
+        filePath.startsWith('content://') ||
+        filePath.startsWith('/proc/self/fd/') ||
+        !FfmpegMetadataService.isNonFlacEmbeddable(filePath)) {
+      return;
+    }
+    if (!await File(filePath).exists()) return;
+
+    final metadata = <String, String>{
+      if (track.name.isNotEmpty) 'TITLE': track.name,
+      if (track.artists.isNotEmpty) 'ARTIST': track.artists,
+      if ((track.albumName ?? '').isNotEmpty) 'ALBUM': track.albumName!,
+      if ((track.albumArtist ?? '').isNotEmpty) 'ALBUMARTIST': track.albumArtist!,
+      if ((track.releaseDate ?? '').isNotEmpty) 'DATE': track.releaseDate!,
+      if ((track.isrc ?? '').isNotEmpty) 'ISRC': track.isrc!,
+      if ((track.genre ?? '').isNotEmpty) 'GENRE': track.genre!,
+      if ((track.label ?? '').isNotEmpty) 'ORGANIZATION': track.label!,
+      if ((track.copyright ?? '').isNotEmpty) 'COPYRIGHT': track.copyright!,
+      if ((track.composer ?? '').isNotEmpty) 'COMPOSER': track.composer!,
+      if ((track.trackNumber ?? 0) > 0) 'TRACKNUMBER': '${track.trackNumber}',
+      if ((track.discNumber ?? 0) > 0) 'DISCNUMBER': '${track.discNumber}',
+    };
+
+    if (embedLyrics) {
+      try {
+        final isProviderId =
+            track.id.startsWith('qobuz:') || track.id.startsWith('tidal:');
+        final lrc = await bridge.getLyricsLRC(
+          spotifyId: isProviderId ? '' : track.id,
+          trackName: track.name,
+          artistName: track.artists,
+          durationMs: track.durationMs ?? 0,
+        );
+        final trimmed = lrc.trim();
+        if (trimmed.isNotEmpty && trimmed != '[instrumental:true]') {
+          metadata['LYRICS'] = trimmed;
+        }
+      } catch (_) {
+        // Lyrics are best-effort; ignore failures.
+      }
+    }
+
+    String? coverPath;
+    if (embedCover && (track.coverUrl ?? '').isNotEmpty) {
+      coverPath = await _downloadCoverToTemp(track.coverUrl!);
+    }
+
+    try {
+      await FfmpegMetadataService.embed(
+        filePath: filePath,
+        metadata: metadata,
+        coverPath: coverPath,
+      );
+    } catch (_) {
+      // Embedding failure is non-fatal — the file is still downloaded.
+    } finally {
+      if (coverPath != null) {
+        try {
+          await File(coverPath).delete();
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// Downloads a cover image to a temp file. Returns the path, or null on error.
+  Future<String?> _downloadCoverToTemp(String url) async {
+    try {
+      final resp = await http.get(Uri.parse(url));
+      if (resp.statusCode != 200 || resp.bodyBytes.isEmpty) return null;
+      final dir = await getTemporaryDirectory();
+      final ext = url.toLowerCase().contains('.png') ? '.png' : '.jpg';
+      final path =
+          '${dir.path}${Platform.pathSeparator}cover_${DateTime.now().microsecondsSinceEpoch}$ext';
+      await File(path).writeAsBytes(resp.bodyBytes);
+      return path;
+    } catch (_) {
+      return null;
     }
   }
 

@@ -198,6 +198,25 @@ func SetExtensionSettingsJSON(id, settingsJSON string) error {
 	return gobackend.SetExtensionSettingsJSON(id, settingsJSON)
 }
 
+// GetProviderMetadataJSON fetches metadata for a specific resource (track,
+// album, artist, playlist) from a named provider extension by its raw ID.
+// providerID is the extension ID (e.g. "qobuz", "tidal"), resourceType is
+// "artist", "album", "track", or "playlist", and resourceID is the
+// provider-native ID (without any prefix).
+func GetProviderMetadataJSON(providerID, resourceType, resourceID string) (string, error) {
+	return gobackend.GetProviderMetadataJSON(providerID, resourceType, resourceID)
+}
+
+// --- Lyrics ---
+
+// GetLyricsLRC fetches synced/plain lyrics as LRC text for a track. When
+// filePath is non-empty it reads embedded lyrics from that file; when empty it
+// fetches online from the configured lyrics providers by spotifyID/name/artist.
+// Used by the Dart FFmpeg path to embed lyrics into non-FLAC downloads.
+func GetLyricsLRC(spotifyID, trackName, artistName, filePath string, durationMs int64) (string, error) {
+	return gobackend.GetLyricsLRC(spotifyID, trackName, artistName, filePath, durationMs)
+}
+
 // --- Provider priority ---
 
 // GetProviderPriorityJSON returns the current download provider priority as a
@@ -226,4 +245,30 @@ func SetMetadataProviderPriorityJSON(j string) error {
 // in outputDir and returns a JSON-encoded result.
 func CheckDuplicate(outputDir, isrc string) (string, error) {
 	return gobackend.CheckDuplicate(outputDir, isrc)
+}
+
+// --- App version ---
+
+// SetAppVersion sets the app version string used to build the User-Agent
+// header ("SpotiFLAC-Mobile/<version>") for api.zarz.moe resolve requests
+// and extension HTTP calls that don't supply their own UA. Must be called at
+// startup (before any network call) with the app's versionName.
+func SetAppVersion(version string) {
+	gobackend.SetAppVersion(version)
+}
+
+// --- Library scan ---
+
+// SetLibraryCoverCacheDir configures the directory where the library scanner
+// extracts and caches embedded cover art images. Must be called before
+// ScanLibraryFolderJSON for cover art to be extracted.
+func SetLibraryCoverCacheDir(cacheDir string) {
+	gobackend.SetLibraryCoverCacheDir(cacheDir)
+}
+
+// ScanLibraryFolderJSON scans a directory for audio files, reads their
+// embedded metadata (ID3/Vorbis/M4A tags) and extracts cover art, then
+// returns a JSON-encoded array of LibraryScanResult objects.
+func ScanLibraryFolderJSON(folderPath string) (string, error) {
+	return gobackend.ScanLibraryFolderJSON(folderPath)
 }
