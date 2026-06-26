@@ -2360,7 +2360,9 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 			outputPath := buildOutputPathForExtension(req, ext)
 			if req.ItemID != "" {
 				StartItemProgress(req.ItemID)
+				// LM-FORK: emit downloading state for UI progress (see docs/UPSTREAM-SYNC.md)
 				SetItemDownloading(req.ItemID)
+				// END LM-FORK
 			}
 
 			result, err := provider.Download(trackID, req.Quality, outputPath, req.ItemID, func(percent int) {
@@ -2417,9 +2419,12 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 					resp.Composer = req.Composer
 				}
 
+				// LM-FORK: route post-download metadata embedding through our helper
+				// (logic lives in embed_after_download.go; see docs/UPSTREAM-SYNC.md)
 				if !alreadyExists {
 					embedMetadataAfterDownload(req, normalizedResult.FilePath)
 				}
+				// END LM-FORK
 
 				if !alreadyExists && !isFDOutput(req.OutputFD) && strings.TrimSpace(req.OutputDir) != "" {
 					indexISRC := strings.TrimSpace(resp.ISRC)
@@ -2525,7 +2530,9 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 			outputPath := buildOutputPathForExtension(req, ext)
 			if req.ItemID != "" {
 				StartItemProgress(req.ItemID)
+				// LM-FORK: emit downloading state for UI progress (see docs/UPSTREAM-SYNC.md)
 				SetItemDownloading(req.ItemID)
+				// END LM-FORK
 			}
 
 			// Fallback provider: request its own highest quality, not the
@@ -2581,9 +2588,12 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 				}
 				applyExtensionRequestFallbacks(&resp, req)
 
+				// LM-FORK: route post-download metadata embedding through our helper
+				// (logic lives in embed_after_download.go; see docs/UPSTREAM-SYNC.md)
 				if !alreadyExists {
 					embedMetadataAfterDownload(req, normalizedResult.FilePath)
 				}
+				// END LM-FORK
 
 				if !alreadyExists && !isFDOutput(req.OutputFD) && strings.TrimSpace(req.OutputDir) != "" {
 					indexISRC := strings.TrimSpace(resp.ISRC)
