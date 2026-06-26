@@ -160,6 +160,37 @@ class BackendBridge {
     return raw ?? '';
   }
 
+  /// Writes [metadata] (lowercase tag keys: title, artist, album, album_artist,
+  /// date, genre, track_number, lyrics, cover_path, …) into the file at
+  /// [filePath]. Returns the backend result map; `method` is "native"/"native_*"
+  /// for formats the Go backend tags directly (FLAC/WAV/AIFF/APE), or "ffmpeg"
+  /// (with a `fields` map) for lossy formats the caller must finish via FFmpeg.
+  Future<Map<String, dynamic>> editFileMetadata(
+    String filePath,
+    Map<String, String> metadata,
+  ) async {
+    final raw = await _c.invokeMethod<String>('editFileMetadata', {
+      'filePath': filePath,
+      'metadataJson': jsonEncode(metadata),
+    });
+    return raw == null || raw.isEmpty
+        ? {}
+        : Map<String, dynamic>.from(jsonDecode(raw));
+  }
+
+  /// Re-fetches metadata/cover/lyrics for an existing local file from the
+  /// configured providers and re-embeds them. [request] matches the backend
+  /// reEnrichRequest shape. Returns the enriched result map.
+  Future<Map<String, dynamic>> reEnrichFile(Map<String, dynamic> request) async {
+    final raw = await _c.invokeMethod<String>(
+      'reEnrichFile',
+      {'requestJson': jsonEncode(request)},
+    );
+    return raw == null || raw.isEmpty
+        ? {}
+        : Map<String, dynamic>.from(jsonDecode(raw));
+  }
+
   Future<void> setDownloadDirectory(String path) =>
       _c.invokeMethod('setDownloadDirectory', {'path': path});
 

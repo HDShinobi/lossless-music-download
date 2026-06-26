@@ -650,6 +650,132 @@ abstract class AppLocalizations {
   /// **'Update failed. Please try again later.'**
   String get updateFailed;
 
+  /// No description provided for @manageEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit metadata'**
+  String get manageEdit;
+
+  /// No description provided for @manageReEnrich.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-enrich (refetch tags)'**
+  String get manageReEnrich;
+
+  /// No description provided for @manageDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete from device'**
+  String get manageDelete;
+
+  /// No description provided for @editSheetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit metadata'**
+  String get editSheetTitle;
+
+  /// No description provided for @editFieldTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get editFieldTitle;
+
+  /// No description provided for @editFieldArtist.
+  ///
+  /// In en, this message translates to:
+  /// **'Artist'**
+  String get editFieldArtist;
+
+  /// No description provided for @editFieldAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'Album'**
+  String get editFieldAlbum;
+
+  /// No description provided for @editFieldAlbumArtist.
+  ///
+  /// In en, this message translates to:
+  /// **'Album artist'**
+  String get editFieldAlbumArtist;
+
+  /// No description provided for @editFieldYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get editFieldYear;
+
+  /// No description provided for @editFieldGenre.
+  ///
+  /// In en, this message translates to:
+  /// **'Genre'**
+  String get editFieldGenre;
+
+  /// No description provided for @editFieldTrack.
+  ///
+  /// In en, this message translates to:
+  /// **'Track #'**
+  String get editFieldTrack;
+
+  /// No description provided for @commonSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get commonSave;
+
+  /// No description provided for @editSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Metadata saved'**
+  String get editSaved;
+
+  /// No description provided for @editFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save metadata'**
+  String get editFailed;
+
+  /// No description provided for @deleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this track?'**
+  String get deleteConfirmTitle;
+
+  /// No description provided for @deleteConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The file will be permanently removed from this device.'**
+  String get deleteConfirmBody;
+
+  /// No description provided for @commonDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get commonDelete;
+
+  /// No description provided for @deleteDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Track deleted'**
+  String get deleteDone;
+
+  /// No description provided for @reEnrichStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Refetching metadata…'**
+  String get reEnrichStarted;
+
+  /// No description provided for @reEnrichDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Metadata refreshed'**
+  String get reEnrichDone;
+
+  /// No description provided for @reEnrichFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-enrich failed'**
+  String get reEnrichFailed;
+
   /// No description provided for @statFormat.
   ///
   /// In en, this message translates to:

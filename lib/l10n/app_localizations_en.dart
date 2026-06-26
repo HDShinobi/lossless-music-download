@@ -299,6 +299,70 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateFailed => 'Update failed. Please try again later.';
 
   @override
+  String get manageEdit => 'Edit metadata';
+
+  @override
+  String get manageReEnrich => 'Re-enrich (refetch tags)';
+
+  @override
+  String get manageDelete => 'Delete from device';
+
+  @override
+  String get editSheetTitle => 'Edit metadata';
+
+  @override
+  String get editFieldTitle => 'Title';
+
+  @override
+  String get editFieldArtist => 'Artist';
+
+  @override
+  String get editFieldAlbum => 'Album';
+
+  @override
+  String get editFieldAlbumArtist => 'Album artist';
+
+  @override
+  String get editFieldYear => 'Year';
+
+  @override
+  String get editFieldGenre => 'Genre';
+
+  @override
+  String get editFieldTrack => 'Track #';
+
+  @override
+  String get commonSave => 'Save';
+
+  @override
+  String get editSaved => 'Metadata saved';
+
+  @override
+  String get editFailed => 'Could not save metadata';
+
+  @override
+  String get deleteConfirmTitle => 'Delete this track?';
+
+  @override
+  String get deleteConfirmBody =>
+      'The file will be permanently removed from this device.';
+
+  @override
+  String get commonDelete => 'Delete';
+
+  @override
+  String get deleteDone => 'Track deleted';
+
+  @override
+  String get reEnrichStarted => 'Refetching metadata…';
+
+  @override
+  String get reEnrichDone => 'Metadata refreshed';
+
+  @override
+  String get reEnrichFailed => 'Re-enrich failed';
+
+  @override
   String get statFormat => 'Format';
 
   @override

@@ -176,6 +176,11 @@ class MainActivity : FlutterActivity() {
             call.argument<String>("filePath") ?: "",
             (call.argument<Number>("durationMs") ?: 0).toLong(),
         )
+        "editFileMetadata" -> true to Bridge.editFileMetadata(
+            call.argument<String>("filePath")!!,
+            call.argument<String>("metadataJson")!!,
+        )
+        "reEnrichFile" -> true to Bridge.reEnrichFile(call.argument<String>("requestJson")!!)
         else -> false to null
     }
 

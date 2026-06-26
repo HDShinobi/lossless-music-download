@@ -298,6 +298,69 @@ class AppLocalizationsVi extends AppLocalizations {
   String get updateFailed => 'Cập nhật thất bại. Vui lòng thử lại sau.';
 
   @override
+  String get manageEdit => 'Sửa thông tin';
+
+  @override
+  String get manageReEnrich => 'Làm mới metadata';
+
+  @override
+  String get manageDelete => 'Xoá khỏi máy';
+
+  @override
+  String get editSheetTitle => 'Sửa thông tin';
+
+  @override
+  String get editFieldTitle => 'Tên bài';
+
+  @override
+  String get editFieldArtist => 'Nghệ sĩ';
+
+  @override
+  String get editFieldAlbum => 'Album';
+
+  @override
+  String get editFieldAlbumArtist => 'Nghệ sĩ album';
+
+  @override
+  String get editFieldYear => 'Năm';
+
+  @override
+  String get editFieldGenre => 'Thể loại';
+
+  @override
+  String get editFieldTrack => 'Số track';
+
+  @override
+  String get commonSave => 'Lưu';
+
+  @override
+  String get editSaved => 'Đã lưu thông tin';
+
+  @override
+  String get editFailed => 'Không lưu được thông tin';
+
+  @override
+  String get deleteConfirmTitle => 'Xoá bài này?';
+
+  @override
+  String get deleteConfirmBody => 'Tệp sẽ bị xoá vĩnh viễn khỏi thiết bị này.';
+
+  @override
+  String get commonDelete => 'Xoá';
+
+  @override
+  String get deleteDone => 'Đã xoá bài';
+
+  @override
+  String get reEnrichStarted => 'Đang làm mới metadata…';
+
+  @override
+  String get reEnrichDone => 'Đã làm mới metadata';
+
+  @override
+  String get reEnrichFailed => 'Làm mới thất bại';
+
+  @override
   String get statFormat => 'Định dạng';
 
   @override

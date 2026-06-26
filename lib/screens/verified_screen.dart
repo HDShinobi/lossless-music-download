@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../l10n/app_localizations.dart';
+import '../providers/library_manager.dart';
 import '../providers/library_provider.dart';
 import '../theme/app_tokens.dart';
 import '../util/lossless_verdict.dart';
 import '../vendor/spotiflac/audio_analysis_widget.dart';
+import '../widgets/edit_metadata_sheet.dart';
 
 /// Detail screen for a single [LibraryEntry] showing a heuristic lossless
 /// badge and the real audio analysis card (decode + FFT spectral cutoff,
@@ -35,6 +37,74 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
     return nameWithoutExt.replaceFirst(RegExp(r'^[0-9]+[\s.]\s*'), '');
   }
 
+  // ---- Management actions ----
+
+  Future<void> _edit(BuildContext context) async {
+    final t = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final fields = await showEditMetadataSheet(context, entry);
+    if (fields == null || fields.isEmpty) return; // cancelled / nothing changed
+    try {
+      await ref.read(libraryManagerProvider.notifier).editMetadata(
+            entry.path,
+            fields,
+          );
+      messenger.showSnackBar(SnackBar(content: Text(t.editSaved)));
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(content: Text(t.editFailed)));
+    }
+  }
+
+  Future<void> _reEnrich(BuildContext context) async {
+    final t = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(SnackBar(content: Text(t.reEnrichStarted)));
+    try {
+      await ref.read(libraryManagerProvider.notifier).reEnrich({
+        'file_path': entry.path,
+        'track_name': entry.title ?? _displayName,
+        'artist_name': entry.artistName ?? '',
+        'album_name': entry.albumName ?? '',
+        'embed_lyrics': true,
+        'max_quality': true,
+      });
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(t.reEnrichDone)));
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(content: Text(t.reEnrichFailed)));
+    }
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final t = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t.deleteConfirmTitle),
+        content: Text(t.deleteConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t.commonCancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t.commonDelete),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref.read(libraryManagerProvider.notifier).delete(entry.path);
+    if (!context.mounted) return;
+    messenger.showSnackBar(SnackBar(content: Text(t.deleteDone)));
+    context.pop(); // back to library (which re-scans)
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
@@ -49,6 +119,48 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         leading: BackButton(onPressed: () => context.pop()),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (v) {
+              switch (v) {
+                case 'edit':
+                  _edit(context);
+                case 'reenrich':
+                  _reEnrich(context);
+                case 'delete':
+                  _confirmDelete(context);
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'edit',
+                child: ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: Text(t.manageEdit),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'reenrich',
+                child: ListTile(
+                  leading: const Icon(Icons.auto_fix_high_outlined),
+                  title: Text(t.manageReEnrich),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline, color: cs.error),
+                  title: Text(t.manageDelete,
+                      style: TextStyle(color: cs.error)),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

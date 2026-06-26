@@ -217,6 +217,28 @@ func GetLyricsLRC(spotifyID, trackName, artistName, filePath string, durationMs 
 	return gobackend.GetLyricsLRC(spotifyID, trackName, artistName, filePath, durationMs)
 }
 
+// --- Library management (edit / re-enrich) ---------------------------------
+//
+// Thin re-exports of the vendored go_backend functions so they reach Dart via
+// the MethodChannel. go_backend stays pristine (diffable against upstream);
+// only this bridge file changes.
+
+// EditFileMetadata writes the given metadata (JSON map of UPPERCASE tag keys)
+// into the audio file at filePath. Returns a JSON result indicating the method
+// used: "native"/"native_*" when the Go backend wrote the tags directly (FLAC,
+// WAV, AIFF, APE…), or "ffmpeg" with a fields map for the Dart FFmpeg path to
+// finish (MP3/Opus/M4A).
+func EditFileMetadata(filePath, metadataJSON string) (string, error) {
+	return gobackend.EditFileMetadata(filePath, metadataJSON)
+}
+
+// ReEnrichFile re-fetches metadata/cover/lyrics for an existing local file from
+// the configured providers and re-embeds them. requestJSON matches the backend
+// reEnrichRequest shape. Returns a JSON result (enriched fields + method).
+func ReEnrichFile(requestJSON string) (string, error) {
+	return gobackend.ReEnrichFile(requestJSON)
+}
+
 // --- Provider priority ---
 
 // GetProviderPriorityJSON returns the current download provider priority as a
