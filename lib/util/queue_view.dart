@@ -51,10 +51,12 @@ class Sample {
     final itemId = item.itemId;
     final track = labels[itemId];
 
-    // Derive total bytes from progress ratio (avoid division by zero / NaN).
-    final int? totalBytes = (item.progress > 0 && item.bytesReceived > 0)
-        ? (item.bytesReceived / item.progress).round()
-        : null;
+    // Prefer backend-reported total; fall back to deriving from progress ratio.
+    final int? totalBytes = item.bytesTotal > 0
+        ? item.bytesTotal
+        : (item.progress > 0 && item.bytesReceived > 0)
+            ? (item.bytesReceived / item.progress).round()
+            : null;
 
     // Compute speed if we have a previous sample with a positive time delta
     // and a positive bytes delta.

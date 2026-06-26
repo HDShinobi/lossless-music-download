@@ -21,3 +21,5 @@ go_backend/.gomobile/
 # Scratch
 .remember/tmp/
 .remember/logs/
+# Added by code-review-graph
+.code-review-graph/

@@ -30,9 +30,18 @@ void main() {
       expect(result, '187.0 MB / 312.0 MB · 60%');
     });
 
-    test('totalBytes == 0 does not throw and shows only MB segment', () {
+    test('totalBytes == 0 with no bytes/progress falls back to 0%', () {
       final result = formatProgressLine(doneBytes: 0, totalBytes: 0);
-      expect(result, '0.0 MB');
+      expect(result, '0%');
+    });
+
+    test('totalBytes == 0 with progress shows percentage (extension flow)', () {
+      final result = formatProgressLine(
+        doneBytes: 0,
+        totalBytes: 0,
+        progress: 0.45,
+      );
+      expect(result, '45%');
     });
 
     test('doneBytes > 0 with totalBytes == 0 shows only done MB segment', () {

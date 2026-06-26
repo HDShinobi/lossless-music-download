@@ -106,8 +106,11 @@ Widget buildSearchScreen({
       ),
       extensionsProvider.overrideWith(() => _FakeExtensionsController([])),
       searchProvider.overrideWith(() => _FakeSearchNotifier(results)),
+      // Force "don't ask" so tapping download exercises the direct-enqueue
+      // path. (The provider default is now true; the ask-first flow is covered
+      // by its own dedicated tests below.)
       askBeforeDownloadProvider.overrideWith(
-        () => AskBeforeDownloadNotifier(),
+        () => _FixedAskBeforeDownloadNotifier(false),
       ),
     ],
     child: MaterialApp(

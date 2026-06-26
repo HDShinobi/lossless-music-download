@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/library_provider.dart';
 import '../theme/app_tokens.dart';
-import '../vendor/spotiflac/audio_analysis_widget.dart';
 
 /// Detail screen for a single [LibraryEntry] showing a heuristic lossless
 /// badge and the real audio analysis card (decode + FFT spectral cutoff,
@@ -45,10 +44,7 @@ class VerifiedScreen extends ConsumerWidget {
           const SizedBox(height: 16),
           _VerifiedBadge(entry: entry, t: t, cs: cs, tokens: tokens),
           const SizedBox(height: 16),
-          // Real analysis: decode (FFmpeg) + FFT spectral cutoff + loudness +
-          // dynamic range + spectrogram. Vendored from SpotiFLAC (see
-          // lib/vendor/spotiflac/). Inherits our brand theme via Theme.of.
-          AudioAnalysisCard(filePath: entry.path),
+          _SpectrumPlaceholder(t: t, cs: cs, tokens: tokens),
           const SizedBox(height: 16),
           _ServeRow(t: t, cs: cs, tokens: tokens),
         ],
@@ -193,6 +189,48 @@ class _VerifiedBadge extends StatelessWidget {
                 ],
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Serve row
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Spectrum placeholder (FFmpeg spectral analysis coming in a later step)
+// ---------------------------------------------------------------------------
+
+class _SpectrumPlaceholder extends StatelessWidget {
+  const _SpectrumPlaceholder({
+    required this.t,
+    required this.cs,
+    required this.tokens,
+  });
+
+  final AppLocalizations t;
+  final ColorScheme cs;
+  final AppTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: tokens.surface2,
+        border: Border.all(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.bar_chart_rounded, size: 22, color: tokens.muted2),
+          const SizedBox(width: 12),
+          Text(
+            t.verifiedSpectrumNote,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
         ],
       ),

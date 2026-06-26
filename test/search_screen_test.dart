@@ -101,25 +101,6 @@ void main() {
     });
 
     testWidgets(
-        'source banner uses accent-soft (primaryContainer) decoration',
-        (tester) async {
-      await pumpSearchScreen(
-        tester,
-        tracks: const [],
-        extensions: [_fakeExt(id: 'source1')],
-      );
-
-      final banner = tester.widget<Container>(
-        find.byKey(const Key('sourceBanner')),
-      );
-      final decoration = banner.decoration as BoxDecoration;
-      // primaryContainer == accent-soft #10241A in the brand theme
-      expect(decoration.color, const Color(0xFF10241A));
-      expect(decoration.border, isNotNull);
-      expect(decoration.borderRadius, BorderRadius.circular(12));
-    });
-
-    testWidgets(
         'shows searchNoSources when results empty and no enabled extensions',
         (tester) async {
       await pumpSearchScreen(

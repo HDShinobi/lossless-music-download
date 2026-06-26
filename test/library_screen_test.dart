@@ -1,12 +1,56 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'package:lossless_music_download/providers/download_dir_provider.dart';
+import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/providers/library_provider.dart';
 import 'package:lossless_music_download/screens/library_screen.dart';
+import 'package:lossless_music_download/services/backend_bridge.dart';
+
+// ---------------------------------------------------------------------------
+// Fake bridge — returns scan results built from real files on disk,
+// bypassing the native method channel.
+// ---------------------------------------------------------------------------
+const _audioExts = {'.flac', '.m4a', '.mp3', '.alac', '.wav', '.aiff', '.ogg', '.opus'};
+
+class _FakeScanBridge extends BackendBridge {
+  _FakeScanBridge(this._dir) : super(const MethodChannel('_fake'));
+  final String _dir;
+
+  @override
+  Future<void> setLibraryCoverCacheDir(String cacheDir) async {}
+
+  @override
+  Future<List<Map<String, dynamic>>> scanLibraryFolder(String folderPath) async {
+    final d = Directory(folderPath);
+    return d
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) {
+          final ext = '.${f.path.split('.').last.toLowerCase()}';
+          return _audioExts.contains(ext);
+        })
+        .map((f) {
+          final name = f.uri.pathSegments.last;
+          final title = name.contains('.')
+              ? name.substring(0, name.lastIndexOf('.'))
+              : name;
+          return <String, dynamic>{
+            'filePath': f.path,
+            'trackName': title,
+            'artistName': '',
+            'albumName': '',
+            'coverPath': '',
+            'duration': 0,
+          };
+        })
+        .toList();
+  }
+}
 
 Widget buildLibraryScreen(List<dynamic> overrides) {
   return ProviderScope(
@@ -76,10 +120,20 @@ void main() {
       File('${tempDir.path}/song2.flac').writeAsBytesSync([3, 4, 5, 6]);
       File('${tempDir.path}/readme.txt').writeAsStringSync('hello');
 
+      // Fake bridge whose scanLibraryFolder mimics the Go scanner output
+      // without real method channels or native code.
+      final fakeBridge = _FakeScanBridge(tempDir.path);
+
+      final coverCacheDir =
+          Directory.systemTemp.createTempSync('cover_cache_');
+      addTearDown(() => coverCacheDir.deleteSync(recursive: true));
+
       final container = ProviderContainer(
         overrides: [
-          // Override the whole downloadDirProvider to skip bridge calls
           downloadDirProvider.overrideWith((_) async => tempDir.path),
+          backendBridgeProvider.overrideWithValue(fakeBridge),
+          libraryCoverCacheDirProvider
+              .overrideWithValue(Future.value(coverCacheDir.path)),
         ],
       );
       addTearDown(container.dispose);

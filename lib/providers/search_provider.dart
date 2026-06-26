@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/track.dart';
 import 'extensions_provider.dart';
+import 'recent_searches_provider.dart';
 
 class SearchNotifier extends AsyncNotifier<List<Track>> {
   @override
@@ -12,9 +15,13 @@ class SearchNotifier extends AsyncNotifier<List<Track>> {
       return;
     }
     state = const AsyncLoading();
-    state = await AsyncValue.guard(
+    final result = await AsyncValue.guard(
       () => ref.read(backendBridgeProvider).searchTracks(q.trim()),
     );
+    state = result;
+    if (result is AsyncData) {
+      unawaited(ref.read(recentSearchesProvider.notifier).add(q.trim()));
+    }
   }
 
   Track _trackFromResolved(Map<String, dynamic> m) => Track(
@@ -38,7 +45,7 @@ class SearchNotifier extends AsyncNotifier<List<Track>> {
       List<Track> tracks;
       if (type == 'track' && result['track'] is Map) {
         tracks = [_trackFromResolved(result['track'] as Map<String, dynamic>)];
-      } else if ((type == 'album' || type == 'playlist') &&
+      } else if ((type == 'album' || type == 'playlist' || type == 'artist') &&
           result['tracks'] is List) {
         tracks = (result['tracks'] as List)
             .whereType<Map<String, dynamic>>()

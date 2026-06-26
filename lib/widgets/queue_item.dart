@@ -55,6 +55,7 @@ class QueueItem extends ConsumerWidget {
           totalBytes: view.totalBytes,
           speedBytesPerSec: view.speedBytesPerSec,
           eta: view.eta,
+          progress: item.progress,
         );
       case _ItemState.finalizing:
         statusLine = t.queueStatusFinalizing;
@@ -172,7 +173,7 @@ class QueueItem extends ConsumerWidget {
     // progress is non-zero. Only shown for active download/finalizing states.
     final showStrip =
         state == _ItemState.downloading || state == _ItemState.finalizing;
-    final stripValue = (state == _ItemState.downloading && item.progress > 0)
+    final stripValue = (state == _ItemState.downloading && item.progress >= 0)
         ? item.progress.clamp(0.0, 1.0)
         : null; // null → indeterminate
 

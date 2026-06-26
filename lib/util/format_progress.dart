@@ -10,6 +10,7 @@ String formatProgressLine({
   int? totalBytes,
   double? speedBytesPerSec,
   Duration? eta,
+  double? progress,
 }) {
   const mb = 1024.0 * 1024.0;
   final doneMb = doneBytes / mb;
@@ -23,11 +24,17 @@ String formatProgressLine({
     final pct = ((doneBytes / totalBytes) * 100).round();
     segments.add('$pct%');
   } else {
-    segments.add('${doneMb.toStringAsFixed(1)} MB');
+    if (doneBytes > 0) {
+      segments.add('${doneMb.toStringAsFixed(1)} MB');
+    }
+    if (progress != null && progress >= 0) {
+      final pct = (progress * 100).round();
+      segments.add('$pct%');
+    }
   }
 
   // Speed segment
-  if (speedBytesPerSec != null) {
+  if (speedBytesPerSec != null && speedBytesPerSec > 0) {
     final speedMb = speedBytesPerSec / mb;
     segments.add('${speedMb.toStringAsFixed(1)} MB/s');
   }
@@ -39,5 +46,5 @@ String formatProgressLine({
     segments.add('~${minutes}m ${seconds}s');
   }
 
-  return segments.join(' · ');
+  return segments.isEmpty ? '0%' : segments.join(' · ');
 }
