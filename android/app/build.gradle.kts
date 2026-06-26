@@ -40,6 +40,21 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // R8 strips/renames the ffmpeg-kit Java classes that its native
+            // JNI_OnLoad binds to ("Bad JNI version" → all plugins fail to
+            // register → blank screen on real devices). Disable shrinking for
+            // this sideloaded beta; the APK is dominated by native libs anyway.
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+    }
+
+    // Extract native libs to disk on install. ffmpeg-kit's 16KB-aligned .so
+    // files can fail to load directly from the APK (uncompressed) on older
+    // Android (e.g. the LG V30 / API 28); extraction loads them reliably.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 }
