@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import '../models/track.dart';
@@ -212,35 +213,25 @@ class _CoverArt extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tokens = context.tokens;
 
+    final fallback = _InitialFallback(name: track.name, tokens: tokens, cs: cs);
     return ClipRRect(
       borderRadius: BorderRadius.circular(9),
       child: SizedBox(
         width: 48,
         height: 48,
-        child: track.coverUrl != null
-            ? Image.network(
-                track.coverUrl!,
+        child: track.coverUrl != null && track.coverUrl!.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: track.coverUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (ctx, err, trace) =>
-                    _InitialFallback(name: track.name, tokens: tokens, cs: cs),
-                loadingBuilder: (ctx, child, progress) {
-                  if (progress == null) return child;
-                  return Container(
-                    color: tokens.surface2,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: cs.primary,
-                        value: progress.expectedTotalBytes != null
-                            ? progress.cumulativeBytesLoaded /
-                                progress.expectedTotalBytes!
-                            : null,
-                      ),
-                    ),
-                  );
-                },
+                // Decode at thumbnail size so a full-res cover URL doesn't
+                // chew memory or stall; cached so list rebuilds don't refetch.
+                memCacheWidth: 144,
+                memCacheHeight: 144,
+                fadeInDuration: const Duration(milliseconds: 150),
+                placeholder: (ctx, _) => fallback,
+                errorWidget: (ctx, _, _) => fallback,
               )
-            : _InitialFallback(name: track.name, tokens: tokens, cs: cs),
+            : fallback,
       ),
     );
   }

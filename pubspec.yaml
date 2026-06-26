@@ -53,6 +53,10 @@ dependencies:
   # In-app update: read current version + open the downloaded APK installer.
   package_info_plus: ^8.0.0
   open_filex: ^4.5.0
+  # Cached, resized cover-art thumbnails (avoids perpetual reload spinners).
+  cached_network_image: ^3.4.1
+  # Android SDK level detection (storage-permission flow differs <30 vs >=30).
+  device_info_plus: ^10.1.0
 
 dev_dependencies:
   flutter_test:

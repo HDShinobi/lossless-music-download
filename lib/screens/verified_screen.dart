@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -225,11 +227,13 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
         children: [
           _Header(entry: entry, displayName: _displayName, tokens: tokens),
           const SizedBox(height: 16),
-          _VerifiedBadge(entry: entry, t: t, cs: cs, tokens: tokens),
-          if (_analysis != null) ...[
-            const SizedBox(height: 12),
+          // One status badge: the format-scan badge until the spectral analysis
+          // runs, then the richer spectral verdict replaces it (avoids two
+          // near-identical "Lossless" cards).
+          if (_analysis == null)
+            _VerifiedBadge(entry: entry, t: t, cs: cs, tokens: tokens)
+          else
             _SpectralVerdict(data: _analysis!, t: t, cs: cs, tokens: tokens),
-          ],
           const SizedBox(height: 16),
           // Real spectral analysis (decode → FFT → spectrogram + cutoff).
           AudioAnalysisCard(
@@ -367,19 +371,34 @@ class _Header extends StatelessWidget {
     ];
     final subtitle = subtitleParts.join(' · ');
 
+    final coverPath = entry.coverPath;
+    final hasCover = coverPath != null &&
+        coverPath.isNotEmpty &&
+        File(coverPath).existsSync();
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Cover placeholder
-        Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(
+        // Album cover (extracted by the library scan), or a placeholder.
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 72,
+            height: 72,
             color: tokens.surface3,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Center(
-            child: Icon(Icons.music_note, size: 36, color: cs.primary),
+            child: hasCover
+                ? Image.file(
+                    File(coverPath),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Center(
+                      child: Icon(Icons.music_note,
+                          size: 36, color: cs.primary),
+                    ),
+                  )
+                : Center(
+                    child:
+                        Icon(Icons.music_note, size: 36, color: cs.primary),
+                  ),
           ),
         ),
         const SizedBox(width: 14),

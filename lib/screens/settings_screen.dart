@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,7 +30,8 @@ class SettingsScreen extends ConsumerWidget {
     await showUpdateDialog(context, info);
   }
 
-  /// Requests All-Files-Access (Android 11+), opens the system directory
+  /// Requests the right storage permission for the OS version (legacy storage
+  /// on Android 9–10, All-Files-Access on 11+), opens the system directory
   /// picker, and persists the chosen real filesystem path as the download
   /// folder. No-ops if the user cancels or denies permission.
   Future<void> _pickDownloadFolder(BuildContext context, WidgetRef ref) async {
@@ -37,9 +39,17 @@ class SettingsScreen extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
 
     if (Platform.isAndroid) {
-      var status = await Permission.manageExternalStorage.status;
+      // MANAGE_EXTERNAL_STORAGE ("All files access") only exists on Android 11+
+      // (API 30). On 9–10 we must request the legacy WRITE_EXTERNAL_STORAGE
+      // runtime permission instead, otherwise the request never resolves and
+      // the picker keeps asking forever.
+      final sdkInt = (await DeviceInfoPlugin().androidInfo).version.sdkInt;
+      final permission =
+          sdkInt >= 30 ? Permission.manageExternalStorage : Permission.storage;
+
+      var status = await permission.status;
       if (!status.isGranted) {
-        status = await Permission.manageExternalStorage.request();
+        status = await permission.request();
       }
       if (!status.isGranted) {
         if (!context.mounted) return;
