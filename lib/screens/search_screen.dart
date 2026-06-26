@@ -12,6 +12,8 @@ import '../providers/search_provider.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/download_sheet.dart';
 import '../widgets/track_tile.dart';
+import 'album_screen.dart';
+import 'artist_screen.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
@@ -335,6 +337,23 @@ class _SearchBody extends ConsumerWidget {
               onDownload: () => onDownload(context, track),
               onLongPress: () => onLongPress(track.id),
               onSelectToggle: () => onSelectToggle(track.id),
+              onArtistTap: () => context.push(
+                '/search/artist',
+                extra: ArtistRouteArgs(
+                  id: track.artistId ?? '',
+                  name: track.artists,
+                  coverUrl: track.coverUrl,
+                ),
+              ),
+              onAlbumTap: () => context.push(
+                '/search/album',
+                extra: AlbumRouteArgs(
+                  id: track.albumId ?? '',
+                  name: track.albumName ?? '',
+                  artist: track.artists,
+                  coverUrl: track.coverUrl,
+                ),
+              ),
               downloadState: ref
                   .read(downloadQueueProvider.notifier)
                   .stateForTrack(track.id),

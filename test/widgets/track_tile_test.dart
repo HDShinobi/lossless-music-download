@@ -199,6 +199,81 @@ void main() {
     });
   });
 
+  group('TrackTile artist/album entry points', () {
+    const trackWithIds = Track(
+      id: 't1',
+      name: 'Song One',
+      artists: 'Artist A',
+      albumName: 'Album X',
+      artistId: 'deezer:111',
+      albumId: 'deezer:222',
+    );
+
+    Future<void> pumpWithNav(
+      WidgetTester tester, {
+      required Track track,
+      VoidCallback? onArtistTap,
+      VoidCallback? onAlbumTap,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: appTheme(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          home: Scaffold(
+            body: TrackTile(
+              track: track,
+              onDownload: () {},
+              onArtistTap: onArtistTap,
+              onAlbumTap: onAlbumTap,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('tapping the artist name fires onArtistTap', (tester) async {
+      var tapped = false;
+      await pumpWithNav(tester,
+          track: trackWithIds, onArtistTap: () => tapped = true);
+
+      expect(find.byKey(const Key('trackArtist')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('trackArtist')));
+      expect(tapped, isTrue);
+    });
+
+    testWidgets('tapping the album name fires onAlbumTap', (tester) async {
+      var tapped = false;
+      await pumpWithNav(tester,
+          track: trackWithIds, onAlbumTap: () => tapped = true);
+
+      expect(find.byKey(const Key('trackAlbum')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('trackAlbum')));
+      expect(tapped, isTrue);
+    });
+
+    testWidgets('no tappable spans when the track lacks artist/album IDs',
+        (tester) async {
+      await pumpWithNav(tester, track: track,
+          onArtistTap: () {}, onAlbumTap: () {});
+
+      expect(find.byKey(const Key('trackArtist')), findsNothing);
+      expect(find.byKey(const Key('trackAlbum')), findsNothing);
+      // Plain joined subtitle still rendered.
+      expect(find.text('Test Artist · Test Album'), findsOneWidget);
+    });
+
+    testWidgets('no tappable spans when no navigation callbacks are given',
+        (tester) async {
+      await pumpWithNav(tester, track: trackWithIds);
+
+      expect(find.byKey(const Key('trackArtist')), findsNothing);
+      expect(find.byKey(const Key('trackAlbum')), findsNothing);
+    });
+  });
+
   group('_DownloadStateIcon states', () {
     for (final tc in [
       (TrackDownloadState.idle, Icons.download_outlined),

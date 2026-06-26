@@ -27,6 +27,8 @@ class TrackTile extends StatelessWidget {
     this.onLongPress,
     this.onSelectToggle,
     this.downloadState = TrackDownloadState.idle,
+    this.onArtistTap,
+    this.onAlbumTap,
   });
 
   final Track track;
@@ -37,6 +39,15 @@ class TrackTile extends StatelessWidget {
   final VoidCallback? onLongPress;
   final VoidCallback? onSelectToggle;
   final TrackDownloadState downloadState;
+
+  /// Called when the artist name is tapped. Only wired into a tappable span
+  /// when non-null AND [track] carries an `artistId`; otherwise the artist
+  /// renders as plain text.
+  final VoidCallback? onArtistTap;
+
+  /// Called when the album name is tapped. Same gating as [onArtistTap] but on
+  /// `albumId`.
+  final VoidCallback? onAlbumTap;
 
   @override
   Widget build(BuildContext context) {
@@ -72,16 +83,7 @@ class TrackTile extends StatelessWidget {
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    Flexible(
-                      child: Text(
-                        _subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tt.bodySmall?.copyWith(
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
+                    Flexible(child: _buildSubtitle(context, cs, tt)),
                     if (qualityHint != null) ...[
                       const SizedBox(width: 6),
                       _QualityBadge(
@@ -119,6 +121,81 @@ class TrackTile extends StatelessWidget {
       parts.add(track.albumName!);
     }
     return parts.join(' · ');
+  }
+
+  bool get _artistTappable =>
+      onArtistTap != null &&
+      track.artistId != null &&
+      track.artistId!.isNotEmpty &&
+      track.artists.isNotEmpty;
+
+  bool get _albumTappable =>
+      onAlbumTap != null &&
+      track.albumId != null &&
+      track.albumId!.isNotEmpty &&
+      track.albumName != null &&
+      track.albumName!.isNotEmpty;
+
+  /// Builds the subtitle row. When navigation callbacks are wired and the track
+  /// carries the matching IDs, the artist and/or album become tappable
+  /// (underlined, accent-coloured) spans; otherwise it stays plain text — so
+  /// selection mode and ID-less results render exactly as before.
+  Widget _buildSubtitle(BuildContext context, ColorScheme cs, TextTheme tt) {
+    final plainStyle = tt.bodySmall?.copyWith(color: cs.onSurfaceVariant);
+
+    if (selectionMode || (!_artistTappable && !_albumTappable)) {
+      return Text(
+        _subtitle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: plainStyle,
+      );
+    }
+
+    final linkStyle = tt.bodySmall?.copyWith(
+      color: cs.primary,
+      decoration: TextDecoration.underline,
+      decorationColor: cs.primary,
+    );
+    final hasAlbum =
+        track.albumName != null && track.albumName!.isNotEmpty;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: _artistTappable
+              ? GestureDetector(
+                  key: const Key('trackArtist'),
+                  onTap: onArtistTap,
+                  child: Text(track.artists,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: linkStyle),
+                )
+              : Text(track.artists,
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: plainStyle),
+        ),
+        if (hasAlbum) ...[
+          Text(' · ', style: plainStyle),
+          Flexible(
+            child: _albumTappable
+                ? GestureDetector(
+                    key: const Key('trackAlbum'),
+                    onTap: onAlbumTap,
+                    child: Text(track.albumName!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: linkStyle),
+                  )
+                : Text(track.albumName!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: plainStyle),
+          ),
+        ],
+      ],
+    );
   }
 }
 
