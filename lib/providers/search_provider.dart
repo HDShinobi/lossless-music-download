@@ -8,34 +8,44 @@ import 'extensions_provider.dart';
 import 'recent_searches_provider.dart';
 
 class SearchNotifier extends AsyncNotifier<SearchResults> {
+  /// Bumped on every search so a slow entity (phase 2) result from an earlier
+  /// query can't overwrite a newer search.
+  int _seq = 0;
+
   @override
   SearchResults build() => SearchResults.empty;
 
   Future<void> search(String q) async {
     final query = q.trim();
+    final mySeq = ++_seq;
     if (query.isEmpty) {
       state = const AsyncData(SearchResults.empty);
       return;
     }
     state = const AsyncLoading();
-    final result = await AsyncValue.guard(() => _search(query));
-    state = result;
-    if (result is AsyncData) {
-      unawaited(ref.read(recentSearchesProvider.notifier).add(query));
-    }
-  }
-
-  /// Fetches tracks (metadata search) plus artist/album entities (provider
-  /// custom search) in parallel. Tracks are the primary result; artist/album
-  /// sections populate only for providers that support entity search.
-  Future<SearchResults> _search(String query) async {
     final bridge = ref.read(backendBridgeProvider);
-    final tracksFuture = bridge.searchTracks(query);
-    final entitiesFuture = _searchEntities(bridge, query);
 
-    final tracks = await tracksFuture;
-    final (artists, albums) = await entitiesFuture;
-    return SearchResults(tracks: tracks, artists: artists, albums: albums);
+    // Phase 1 — tracks (the primary result): show them as soon as they arrive
+    // so search feels fast.
+    final tracksAv =
+        await AsyncValue.guard(() => bridge.searchTracks(query));
+    if (mySeq != _seq) return; // a newer search superseded this one
+    state = tracksAv.whenData((tracks) => SearchResults(tracks: tracks));
+    if (tracksAv is! AsyncData) return;
+    unawaited(ref.read(recentSearchesProvider.notifier).add(query));
+    final tracks = tracksAv.value ?? const [];
+
+    // Phase 2 — artist/album entities (slower, provider custom search): fold
+    // them in when ready, only if this is still the current search.
+    try {
+      final (artists, albums) = await _searchEntities(bridge, query);
+      if (mySeq == _seq && state.hasValue) {
+        state = AsyncData(
+            SearchResults(tracks: tracks, artists: artists, albums: albums));
+      }
+    } catch (_) {
+      // Keep the track results; entity sections just stay empty.
+    }
   }
 
   Future<(List<SearchArtist>, List<SearchAlbum>)> _searchEntities(

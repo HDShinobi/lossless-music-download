@@ -10,7 +10,6 @@ import '../models/track.dart';
 import '../providers/download_options_provider.dart';
 import '../providers/download_queue_provider.dart';
 import '../providers/extensions_provider.dart';
-import '../providers/metadata_resolver.dart';
 import '../providers/search_provider.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/download_sheet.dart';
@@ -342,63 +341,6 @@ class _SearchBody extends ConsumerWidget {
     required this.onSelectToggle,
   });
 
-  /// Opens the artist page. Uses the track's artistId if present, otherwise
-  /// resolves it on demand by name via the metadata providers.
-  Future<void> _openArtist(
-      BuildContext context, WidgetRef ref, Track track) async {
-    final t = AppLocalizations.of(context);
-    final messenger = ScaffoldMessenger.of(context);
-    var id = track.artistId ?? '';
-    if (id.isEmpty) {
-      messenger.showSnackBar(SnackBar(content: Text(t.openingArtist)));
-      id = await ref.read(metadataResolverProvider).resolve(
-                name: track.artists,
-                filter: 'artist',
-                providerHint: track.source,
-              ) ??
-          '';
-      if (!context.mounted) return;
-      if (id.isEmpty) {
-        messenger.showSnackBar(SnackBar(content: Text(t.entityNotFound)));
-        return;
-      }
-    }
-    if (!context.mounted) return;
-    context.push('/search/artist',
-        extra: ArtistRouteArgs(
-            id: id, name: track.artists, coverUrl: track.coverUrl));
-  }
-
-  /// Opens the album page (resolves albumId on demand if missing).
-  Future<void> _openAlbum(
-      BuildContext context, WidgetRef ref, Track track) async {
-    final t = AppLocalizations.of(context);
-    final messenger = ScaffoldMessenger.of(context);
-    final albumName = track.albumName ?? '';
-    var id = track.albumId ?? '';
-    if (id.isEmpty && albumName.isNotEmpty) {
-      messenger.showSnackBar(SnackBar(content: Text(t.openingAlbum)));
-      id = await ref.read(metadataResolverProvider).resolve(
-                name: albumName,
-                filter: 'album',
-                providerHint: track.source,
-              ) ??
-          '';
-      if (!context.mounted) return;
-      if (id.isEmpty) {
-        messenger.showSnackBar(SnackBar(content: Text(t.entityNotFound)));
-        return;
-      }
-    }
-    if (!context.mounted) return;
-    context.push('/search/album',
-        extra: AlbumRouteArgs(
-            id: id,
-            name: albumName,
-            artist: track.artists,
-            coverUrl: track.coverUrl));
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(downloadQueueProvider); // rebuild tiles when queue changes
@@ -431,15 +373,8 @@ class _SearchBody extends ConsumerWidget {
             results.tracks.isNotEmpty;
         final withHeaders = !selectionMode && filter == SearchFilter.all;
 
+        // Section order: Songs → Albums → Artists.
         final children = <Widget>[];
-        if (showArtists) {
-          if (withHeaders) children.add(_SectionHeader(title: t.filterArtist));
-          children.addAll(results.artists.map((a) => _ArtistCard(artist: a)));
-        }
-        if (showAlbums) {
-          if (withHeaders) children.add(_SectionHeader(title: t.filterAlbum));
-          children.addAll(results.albums.map((a) => _AlbumCard(album: a)));
-        }
         if (showSongs) {
           if (withHeaders) children.add(_SectionHeader(title: t.filterSong));
           for (final track in results.tracks) {
@@ -451,13 +386,21 @@ class _SearchBody extends ConsumerWidget {
               onDownload: () => onDownload(context, track),
               onLongPress: () => onLongPress(track.id),
               onSelectToggle: () => onSelectToggle(track.id),
-              onArtistTap: () => _openArtist(context, ref, track),
-              onAlbumTap: () => _openAlbum(context, ref, track),
+              // No artist/album links on track rows — the Albums/Artists
+              // sections below are the place to open those pages.
               downloadState: ref
                   .read(downloadQueueProvider.notifier)
                   .stateForTrack(track.id),
             ));
           }
+        }
+        if (showAlbums) {
+          if (withHeaders) children.add(_SectionHeader(title: t.filterAlbum));
+          children.addAll(results.albums.map((a) => _AlbumCard(album: a)));
+        }
+        if (showArtists) {
+          if (withHeaders) children.add(_SectionHeader(title: t.filterArtist));
+          children.addAll(results.artists.map((a) => _ArtistCard(artist: a)));
         }
 
         if (children.isEmpty) {
