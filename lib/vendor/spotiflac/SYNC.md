@@ -53,3 +53,7 @@ package:spotiflac_android/services/platform_bridge.dart    -> compat_platform_br
 8. Commit with `chore(vendor): re-sync SpotiFLAC @ <new-commit>`.
 
 - share_intent_service.dart @ 7b22bbf2 (import only: spotiflac_android/utils/logger.dart → compat_logger.dart)
+
+## Local modifications (re-apply after each upstream sync)
+- Imports: `ffmpeg_kit_flutter_new_audio` → `ffmpeg_kit_flutter_new_full` (we bundle the full variant).
+- `AudioAnalysisCard`: added optional `onAnalyzed(AudioAnalysisData)` callback, fired where `_data` is set (cache hit + fresh run), so VerifiedScreen can derive a conservative lossless verdict. Search `LOCAL ADDITION`.

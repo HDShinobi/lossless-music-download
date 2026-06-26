@@ -254,6 +254,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'Illustrative spectrum. Full analysis coming.';
 
   @override
+  String get verdictLossless => 'Lossless — looks genuine';
+
+  @override
+  String get verdictSuspect => 'Suspect lossy (low spectral cutoff)';
+
+  @override
+  String get verdictLossy => 'Lossy format';
+
+  @override
+  String get verdictInconclusive => 'Inconclusive';
+
+  @override
+  String get verdictHeuristicNote =>
+      'Heuristic from the frequency spectrum — for reference only.';
+
+  @override
   String get statFormat => 'Format';
 
   @override

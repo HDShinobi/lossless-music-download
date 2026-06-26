@@ -5,14 +5,27 @@ import 'package:go_router/go_router.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/library_provider.dart';
 import '../theme/app_tokens.dart';
+import '../util/lossless_verdict.dart';
+import '../vendor/spotiflac/audio_analysis_widget.dart';
 
 /// Detail screen for a single [LibraryEntry] showing a heuristic lossless
 /// badge and the real audio analysis card (decode + FFT spectral cutoff,
-/// loudness, dynamic range, and spectrogram), vendored from SpotiFLAC.
-class VerifiedScreen extends ConsumerWidget {
+/// loudness, dynamic range, and spectrogram), vendored from SpotiFLAC. Once the
+/// analysis completes, a conservative real/upscale verdict is derived from the
+/// spectral cutoff vs sample rate.
+class VerifiedScreen extends ConsumerStatefulWidget {
   const VerifiedScreen({super.key, required this.entry});
 
   final LibraryEntry entry;
+
+  @override
+  ConsumerState<VerifiedScreen> createState() => _VerifiedScreenState();
+}
+
+class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
+  AudioAnalysisData? _analysis;
+
+  LibraryEntry get entry => widget.entry;
 
   /// Strip leading track number ("01 " or "01. ") and file extension.
   String get _displayName {
@@ -23,7 +36,7 @@ class VerifiedScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
     final cs = Theme.of(context).colorScheme;
     final tokens = context.tokens;
@@ -43,10 +56,116 @@ class VerifiedScreen extends ConsumerWidget {
           _Header(entry: entry, displayName: _displayName, tokens: tokens),
           const SizedBox(height: 16),
           _VerifiedBadge(entry: entry, t: t, cs: cs, tokens: tokens),
+          if (_analysis != null) ...[
+            const SizedBox(height: 12),
+            _SpectralVerdict(data: _analysis!, t: t, cs: cs, tokens: tokens),
+          ],
           const SizedBox(height: 16),
-          _SpectrumPlaceholder(t: t, cs: cs, tokens: tokens),
+          // Real spectral analysis (decode → FFT → spectrogram + cutoff).
+          AudioAnalysisCard(
+            filePath: entry.path,
+            onAnalyzed: (data) {
+              if (mounted) setState(() => _analysis = data);
+            },
+          ),
           const SizedBox(height: 16),
           _ServeRow(t: t, cs: cs, tokens: tokens),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Spectral verdict (conservative real/upscale heuristic)
+// ---------------------------------------------------------------------------
+
+class _SpectralVerdict extends StatelessWidget {
+  const _SpectralVerdict({
+    required this.data,
+    required this.t,
+    required this.cs,
+    required this.tokens,
+  });
+
+  final AudioAnalysisData data;
+  final AppLocalizations t;
+  final ColorScheme cs;
+  final AppTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    final verdict = assessLossless(
+      codec: data.codec,
+      sampleRate: data.sampleRate,
+      cutoffHz: data.spectralCutoffHz,
+    );
+
+    final (IconData icon, Color color, String label) = switch (verdict) {
+      LosslessVerdict.lossless => (
+          Icons.verified_rounded,
+          cs.primary,
+          t.verdictLossless,
+        ),
+      LosslessVerdict.suspectLossy => (
+          Icons.warning_amber_rounded,
+          tokens.warn,
+          t.verdictSuspect,
+        ),
+      LosslessVerdict.lossy => (
+          Icons.graphic_eq_rounded,
+          cs.onSurfaceVariant,
+          t.verdictLossy,
+        ),
+      LosslessVerdict.inconclusive => (
+          Icons.help_outline_rounded,
+          tokens.muted2,
+          t.verdictInconclusive,
+        ),
+    };
+
+    final cutoff = data.spectralCutoffHz;
+    final cutoffText =
+        cutoff != null ? '${(cutoff / 1000).toStringAsFixed(1)} kHz' : '—';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: tokens.surface2,
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 22, color: color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              Text(
+                'cutoff $cutoffText',
+                style: tokens.mono.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            t.verdictHeuristicNote,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
+          ),
         ],
       ),
     );
@@ -189,48 +308,6 @@ class _VerifiedBadge extends StatelessWidget {
                 ],
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Serve row
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Spectrum placeholder (FFmpeg spectral analysis coming in a later step)
-// ---------------------------------------------------------------------------
-
-class _SpectrumPlaceholder extends StatelessWidget {
-  const _SpectrumPlaceholder({
-    required this.t,
-    required this.cs,
-    required this.tokens,
-  });
-
-  final AppLocalizations t;
-  final ColorScheme cs;
-  final AppTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        color: tokens.surface2,
-        border: Border.all(color: cs.outlineVariant),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.bar_chart_rounded, size: 22, color: tokens.muted2),
-          const SizedBox(width: 12),
-          Text(
-            t.verifiedSpectrumNote,
-            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
           ),
         ],
       ),

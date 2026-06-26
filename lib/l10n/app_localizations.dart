@@ -566,6 +566,36 @@ abstract class AppLocalizations {
   /// **'Illustrative spectrum. Full analysis coming.'**
   String get verifiedSpectrumNote;
 
+  /// No description provided for @verdictLossless.
+  ///
+  /// In en, this message translates to:
+  /// **'Lossless — looks genuine'**
+  String get verdictLossless;
+
+  /// No description provided for @verdictSuspect.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspect lossy (low spectral cutoff)'**
+  String get verdictSuspect;
+
+  /// No description provided for @verdictLossy.
+  ///
+  /// In en, this message translates to:
+  /// **'Lossy format'**
+  String get verdictLossy;
+
+  /// No description provided for @verdictInconclusive.
+  ///
+  /// In en, this message translates to:
+  /// **'Inconclusive'**
+  String get verdictInconclusive;
+
+  /// No description provided for @verdictHeuristicNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Heuristic from the frequency spectrum — for reference only.'**
+  String get verdictHeuristicNote;
+
   /// No description provided for @statFormat.
   ///
   /// In en, this message translates to:

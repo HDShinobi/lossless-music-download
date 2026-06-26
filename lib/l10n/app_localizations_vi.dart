@@ -253,6 +253,22 @@ class AppLocalizationsVi extends AppLocalizations {
   String get verifiedSpectrumNote => 'Phổ minh hoạ. Phân tích đầy đủ sắp có.';
 
   @override
+  String get verdictLossless => 'Lossless — có vẻ thật';
+
+  @override
+  String get verdictSuspect => 'Nghi lossy (cutoff phổ thấp)';
+
+  @override
+  String get verdictLossy => 'Định dạng lossy';
+
+  @override
+  String get verdictInconclusive => 'Chưa đủ dữ liệu';
+
+  @override
+  String get verdictHeuristicNote =>
+      'Đánh giá dựa trên phổ tần — chỉ mang tính tham khảo.';
+
+  @override
   String get statFormat => 'Định dạng';
 
   @override

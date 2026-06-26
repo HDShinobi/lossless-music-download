@@ -4,11 +4,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
-import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit_config.dart';
-import 'package:ffmpeg_kit_flutter_new_audio/ffprobe_kit.dart';
-import 'package:ffmpeg_kit_flutter_new_audio/level.dart';
-import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
+import 'package:ffmpeg_kit_flutter_new_full/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_full/ffmpeg_kit_config.dart';
+import 'package:ffmpeg_kit_flutter_new_full/ffprobe_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_full/level.dart';
+import 'package:ffmpeg_kit_flutter_new_full/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'settings_group.dart';
@@ -179,7 +179,13 @@ class SpectrogramData {
 class AudioAnalysisCard extends StatefulWidget {
   final String filePath;
 
-  const AudioAnalysisCard({super.key, required this.filePath});
+  /// LOCAL ADDITION (not upstream): fires with the analysis result once it is
+  /// available (from cache or a fresh run), so the host screen can derive a
+  /// lossless verdict from [AudioAnalysisData.spectralCutoffHz] etc. Optional —
+  /// null preserves upstream behaviour. See SYNC.md.
+  final void Function(AudioAnalysisData data)? onAnalyzed;
+
+  const AudioAnalysisCard({super.key, required this.filePath, this.onAnalyzed});
 
   @override
   State<AudioAnalysisCard> createState() => _AudioAnalysisCardState();
@@ -239,6 +245,7 @@ class _AudioAnalysisCardState extends State<AudioAnalysisCard> {
           _data = cached;
           _checkingCache = false;
         });
+        widget.onAnalyzed?.call(cached); // LOCAL ADDITION (see SYNC.md)
         final image = await _loadSpectrogramFromCache(widget.filePath);
         if (image != null && mounted) {
           setState(() {
@@ -303,6 +310,7 @@ class _AudioAnalysisCardState extends State<AudioAnalysisCard> {
           _spectrogramImage = image;
           _analyzing = false;
         });
+        widget.onAnalyzed?.call(data); // LOCAL ADDITION (see SYNC.md)
       }
     } catch (e) {
       if (mounted) {
