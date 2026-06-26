@@ -25,8 +25,10 @@ android {
         applicationId = "xyz.losslessmusic.app"
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
-        versionCode = 1
-        versionName = "0.1.0"
+        // Read from pubspec (via Flutter) so the installed app reports its real
+        // version — required for the in-app update check to compare correctly.
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
         // Phase 0: gomobile .aar is arm64-only (see scripts/build_android.sh). Add x86_64/armeabi-v7a here AND to the gomobile -target before any release build.
         ndk {
             abiFilters += listOf("arm64-v8a")
