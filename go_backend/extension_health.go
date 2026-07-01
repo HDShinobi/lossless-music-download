@@ -15,7 +15,9 @@ import (
 const (
 	extensionHealthDefaultTimeout = 4 * time.Second
 	extensionHealthMaxBodyBytes   = 64 * 1024
-	extensionHealthDefaultCache   = 60 * time.Second
+	extensionHealthDefaultCache   = 10 * time.Minute
+	extensionHealthMinCache       = 60 * time.Second
+	extensionHealthUnknownCache   = 2 * time.Minute
 )
 
 type ExtensionHealthResult struct {
@@ -58,6 +60,7 @@ func CheckExtensionHealthJSON(extensionID string) (string, error) {
 	}
 
 	result := CheckExtensionHealth(ext)
+	cacheExtensionHealthResult(ext, result)
 	bytes, err := json.Marshal(result)
 	if err != nil {
 		return "", err
@@ -85,16 +88,31 @@ func CheckExtensionHealthCached(ext *loadedExtension) ExtensionHealthResult {
 	extensionHealthCacheMu.Unlock()
 
 	result := CheckExtensionHealth(ext)
+	cacheExtensionHealthResult(ext, result)
+	return result
+}
+
+func cacheExtensionHealthResult(ext *loadedExtension, result ExtensionHealthResult) {
+	if ext == nil || ext.Manifest == nil || len(ext.Manifest.ServiceHealth) == 0 {
+		return
+	}
+
+	cacheKey := strings.TrimSpace(ext.ID)
+	if cacheKey == "" {
+		return
+	}
+
 	ttl := extensionHealthCacheTTL(ext.Manifest.ServiceHealth)
+	if result.Status == "unknown" && ttl > extensionHealthUnknownCache {
+		ttl = extensionHealthUnknownCache
+	}
 
 	extensionHealthCacheMu.Lock()
 	extensionHealthCache[cacheKey] = cachedExtensionHealthResult{
 		result:    result,
-		expiresAt: now.Add(ttl),
+		expiresAt: time.Now().Add(ttl),
 	}
 	extensionHealthCacheMu.Unlock()
-
-	return result
 }
 
 func CheckExtensionHealth(ext *loadedExtension) ExtensionHealthResult {
@@ -149,6 +167,9 @@ func extensionHealthCacheTTL(checks []ExtensionHealthCheck) time.Duration {
 			continue
 		}
 		checkTTL := time.Duration(check.CacheTTLSeconds) * time.Second
+		if checkTTL < extensionHealthMinCache {
+			checkTTL = extensionHealthMinCache
+		}
 		if checkTTL < ttl {
 			ttl = checkTTL
 		}
@@ -226,7 +247,11 @@ func runExtensionHealthCheck(manifest *ExtensionManifest, check ExtensionHealthC
 	resp, err := NewMetadataHTTPClient(timeout).Do(req)
 	result.LatencyMs = time.Since(start).Milliseconds()
 	if err != nil {
-		result.Status = "offline"
+		if isTransientExtensionHealthError(err) {
+			result.Status = "unknown"
+		} else {
+			result.Status = "offline"
+		}
 		result.Error = err.Error()
 		return result
 	}
@@ -262,6 +287,10 @@ func runExtensionHealthCheck(manifest *ExtensionManifest, check ExtensionHealthC
 	return result
 }
 
+func isTransientExtensionHealthError(err error) bool {
+	return isTransientNetworkError(err) || isConnectivityFailure(err)
+}
+
 func classifyExtensionHealthBody(body []byte, serviceKey string) (string, string) {
 	if len(strings.TrimSpace(string(body))) == 0 {
 		return "online", ""
@@ -287,6 +316,9 @@ func classifyExtensionHealthBody(body []byte, serviceKey string) (string, string
 	case "degraded", "partial", "warning", "warn":
 		return "degraded", rawStatus
 	case "down", "offline", "error", "failed", "fail", "unhealthy":
+		if isTransientHealthStatusMessage(string(body)) {
+			return "unknown", rawStatus
+		}
 		return "offline", rawStatus
 	default:
 		return "online", rawStatus
@@ -327,48 +359,85 @@ func classifyExtensionHealthService(payload map[string]interface{}, serviceKey s
 
 	rawStatus, hasStatus := service["status"]
 	okValue, hasOK := service["ok"].(bool)
+	joinedMessage := strings.Join(messageParts, ": ")
+	transient := isTransientHealthStatusMessage(detail) ||
+		isTransientHealthStatusMessage(errText) ||
+		isTransientHealthStatusMessage(label)
+
 	if statusCode, ok := healthNumber(rawStatus); ok {
 		if statusCode >= 200 && statusCode < 300 {
-			return "online", strings.Join(messageParts, ": "), true
+			return "online", joinedMessage, true
 		}
 		if statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden {
-			return "degraded", strings.Join(messageParts, ": "), true
+			return "degraded", joinedMessage, true
 		}
 		if statusCode == http.StatusInternalServerError && hasOK && okValue {
-			return "online", strings.Join(messageParts, ": "), true
+			return "online", joinedMessage, true
 		}
-		return "offline", strings.Join(messageParts, ": "), true
+		if transient || isTransientHealthStatusCode(statusCode) {
+			return "unknown", joinedMessage, true
+		}
+		return "offline", joinedMessage, true
 	}
 
 	if isExtensionHealthAuthRequired(detail) {
-		return "degraded", strings.Join(messageParts, ": "), true
+		return "degraded", joinedMessage, true
+	}
+	if transient {
+		return "unknown", joinedMessage, true
 	}
 	if hasOK {
 		if okValue {
-			return "online", strings.Join(messageParts, ": "), true
+			return "online", joinedMessage, true
 		}
-		return "offline", strings.Join(messageParts, ": "), true
+		return "offline", joinedMessage, true
 	}
 	if !hasStatus {
-		return "unknown", strings.Join(messageParts, ": "), true
+		return "unknown", joinedMessage, true
 	}
 
 	statusString := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%v", rawStatus)))
 	switch statusString {
 	case "ok", "up", "online", "healthy", "operational":
-		return "online", strings.Join(messageParts, ": "), true
+		return "online", joinedMessage, true
 	case "degraded", "partial", "warning", "warn":
-		return "degraded", strings.Join(messageParts, ": "), true
+		return "degraded", joinedMessage, true
 	case "down", "offline", "error", "failed", "fail", "unhealthy":
-		return "offline", strings.Join(messageParts, ": "), true
+		return "offline", joinedMessage, true
 	default:
-		return "unknown", strings.Join(messageParts, ": "), true
+		return "unknown", joinedMessage, true
 	}
 }
 
 func isExtensionHealthAuthRequired(detail string) bool {
 	switch strings.ToLower(strings.TrimSpace(detail)) {
 	case "auth_required", "authorization_required", "login_required", "unauthorized":
+		return true
+	default:
+		return false
+	}
+}
+
+func isTransientHealthStatusMessage(text string) bool {
+	t := strings.ToLower(strings.TrimSpace(text))
+	if t == "" {
+		return false
+	}
+	return strings.Contains(t, "context deadline exceeded") ||
+		strings.Contains(t, "deadline exceeded") ||
+		strings.Contains(t, "timeout") ||
+		strings.Contains(t, "timed out") ||
+		strings.Contains(t, "temporarily unavailable") ||
+		strings.Contains(t, "try again")
+}
+
+func isTransientHealthStatusCode(code int) bool {
+	switch code {
+	case http.StatusRequestTimeout,
+		http.StatusTooManyRequests,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout:
 		return true
 	default:
 		return false

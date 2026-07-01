@@ -29,6 +29,7 @@ type ExtTrackMetadata struct {
 	ExternalURL string `json:"external_urls,omitempty"`
 	DurationMS  int    `json:"duration_ms"`
 	CoverURL    string `json:"cover_url,omitempty"`
+	PreviewURL  string `json:"preview_url,omitempty"`
 	Images      string `json:"images,omitempty"`
 	ReleaseDate string `json:"release_date,omitempty"`
 	TrackNumber int    `json:"track_number,omitempty"`
@@ -68,9 +69,12 @@ type ExtAlbumMetadata struct {
 	Artists     string             `json:"artists"`
 	ArtistID    string             `json:"artist_id,omitempty"`
 	CoverURL    string             `json:"cover_url,omitempty"`
+	HeaderImage string             `json:"header_image,omitempty"`
+	HeaderVideo string             `json:"header_video,omitempty"`
 	ReleaseDate string             `json:"release_date,omitempty"`
 	TotalTracks int                `json:"total_tracks"`
 	AlbumType   string             `json:"album_type,omitempty"`
+	AudioTraits []string           `json:"audio_traits,omitempty"`
 	Tracks      []ExtTrackMetadata `json:"tracks"`
 	ProviderID  string             `json:"provider_id"`
 }
@@ -80,6 +84,7 @@ type ExtArtistMetadata struct {
 	Name        string             `json:"name"`
 	ImageURL    string             `json:"image_url,omitempty"`
 	HeaderImage string             `json:"header_image,omitempty"`
+	HeaderVideo string             `json:"header_video,omitempty"`
 	Listeners   int                `json:"listeners,omitempty"`
 	Albums      []ExtAlbumMetadata `json:"albums,omitempty"`
 	Releases    []ExtAlbumMetadata `json:"releases,omitempty"`
@@ -473,6 +478,18 @@ func shouldAbortCancelledFallback(itemID string, err error) bool {
 	return itemID != "" && isDownloadCancelled(itemID)
 }
 
+func normalizeExtensionDownloadErrorType(errorType, message string) string {
+	normalized := strings.TrimSpace(errorType)
+	classified := classifyDownloadErrorType(message)
+	if classified != "" && classified != "unknown" {
+		switch strings.ToLower(normalized) {
+		case "", "unknown", "runtime_error", "api_error", "download_error", "extension_error":
+			return classified
+		}
+	}
+	return normalized
+}
+
 type DownloadDecryptionInfo struct {
 	Strategy        string                 `json:"strategy,omitempty"`
 	Key             string                 `json:"key,omitempty"`
@@ -483,14 +500,15 @@ type DownloadDecryptionInfo struct {
 }
 
 type ExtDownloadResult struct {
-	Success       bool   `json:"success"`
-	FilePath      string `json:"file_path,omitempty"`
-	AlreadyExists bool   `json:"already_exists,omitempty"`
-	BitDepth      int    `json:"bit_depth,omitempty"`
-	SampleRate    int    `json:"sample_rate,omitempty"`
-	AudioCodec    string `json:"audio_codec,omitempty"`
-	ErrorMessage  string `json:"error_message,omitempty"`
-	ErrorType     string `json:"error_type,omitempty"`
+	Success           bool   `json:"success"`
+	FilePath          string `json:"file_path,omitempty"`
+	AlreadyExists     bool   `json:"already_exists,omitempty"`
+	BitDepth          int    `json:"bit_depth,omitempty"`
+	SampleRate        int    `json:"sample_rate,omitempty"`
+	AudioCodec        string `json:"audio_codec,omitempty"`
+	ErrorMessage      string `json:"error_message,omitempty"`
+	ErrorType         string `json:"error_type,omitempty"`
+	RetryAfterSeconds int    `json:"retry_after_seconds,omitempty"`
 
 	Title                       string                  `json:"title,omitempty"`
 	Artist                      string                  `json:"artist,omitempty"`
@@ -724,6 +742,32 @@ func gojaObjectStringMap(vm *goja.Runtime, obj *goja.Object, keys ...string) map
 	return result
 }
 
+func gojaObjectStringSlice(obj *goja.Object, keys ...string) []string {
+	value := gojaObjectValue(obj, keys...)
+	if gojaValueIsEmpty(value) {
+		return nil
+	}
+	exported, ok := value.Export().([]interface{})
+	if !ok || len(exported) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(exported))
+	for _, item := range exported {
+		str, ok := item.(string)
+		if !ok {
+			continue
+		}
+		str = strings.TrimSpace(str)
+		if str != "" {
+			result = append(result, str)
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
 func gojaArrayLength(value goja.Value, vm *goja.Runtime) (int, error) {
 	if gojaValueIsEmpty(value) {
 		return 0, nil
@@ -754,6 +798,7 @@ func parseExtensionTrackValue(vm *goja.Runtime, value goja.Value) ExtTrackMetada
 		ExternalURL:   gojaObjectString(obj, "external_urls", "externalUrls", "external_url", "externalUrl", "url"),
 		DurationMS:    gojaObjectInt(obj, "duration_ms", "durationMs"),
 		CoverURL:      gojaObjectString(obj, "cover_url", "coverUrl"),
+		PreviewURL:    gojaObjectString(obj, "preview_url", "previewUrl"),
 		Images:        gojaObjectString(obj, "images"),
 		ReleaseDate:   gojaObjectString(obj, "release_date", "releaseDate"),
 		TrackNumber:   gojaObjectInt(obj, "track_number", "trackNumber"),
@@ -820,12 +865,147 @@ func parseExtensionAlbumValue(vm *goja.Runtime, value goja.Value) (ExtAlbumMetad
 		Artists:     gojaObjectString(obj, "artists"),
 		ArtistID:    gojaObjectString(obj, "artist_id", "artistId"),
 		CoverURL:    gojaObjectString(obj, "cover_url", "coverUrl", "images"),
+		HeaderImage: gojaObjectString(obj, "header_image", "headerImage"),
+		HeaderVideo: gojaObjectString(obj, "header_video", "headerVideo"),
 		ReleaseDate: gojaObjectString(obj, "release_date", "releaseDate"),
 		TotalTracks: gojaObjectInt(obj, "total_tracks", "totalTracks"),
 		AlbumType:   gojaObjectString(obj, "album_type", "albumType"),
+		AudioTraits: gojaObjectStringSlice(obj, "audio_traits", "audioTraits"),
 		Tracks:      tracks,
 		ProviderID:  gojaObjectString(obj, "provider_id", "providerId"),
-	}, nil
+	}.withTrackFallbacks(), nil
+}
+
+// withTrackFallbacks fills the album-level artist and release date from the
+// album's tracks when the extension did not provide them at the album level.
+// This is a generic mechanism so any extension benefits, without per-extension
+// special-casing in the app.
+func (a ExtAlbumMetadata) withTrackFallbacks() ExtAlbumMetadata {
+	if strings.TrimSpace(a.Artists) == "" {
+		a.Artists = albumArtistFromTracks(a.Tracks)
+	}
+	if strings.TrimSpace(a.ReleaseDate) == "" {
+		a.ReleaseDate = albumReleaseDateFromTracks(a.Tracks)
+	}
+	if len(a.AudioTraits) == 0 {
+		a.AudioTraits = albumAudioTraitsFromTracks(a.Tracks)
+	}
+	return a
+}
+
+// albumArtistFromTracks prefers an explicit per-track album artist, then falls
+// back to the most common track artist across the album.
+func albumArtistFromTracks(tracks []ExtTrackMetadata) string {
+	for _, t := range tracks {
+		if s := strings.TrimSpace(t.AlbumArtist); s != "" {
+			return s
+		}
+	}
+	counts := map[string]int{}
+	order := []string{}
+	for _, t := range tracks {
+		artist := strings.TrimSpace(t.Artists)
+		if artist == "" {
+			continue
+		}
+		if _, ok := counts[artist]; !ok {
+			order = append(order, artist)
+		}
+		counts[artist]++
+	}
+	best := ""
+	bestCount := 0
+	for _, artist := range order {
+		if counts[artist] > bestCount {
+			best = artist
+			bestCount = counts[artist]
+		}
+	}
+	return best
+}
+
+// albumReleaseDateFromTracks returns the first non-empty track release date.
+func albumReleaseDateFromTracks(tracks []ExtTrackMetadata) string {
+	for _, t := range tracks {
+		if s := strings.TrimSpace(t.ReleaseDate); s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// albumAudioTraitsFromTracks derives album-level audio badges (Dolby Atmos,
+// Hi-Res Lossless, Lossless) from the per-track audio quality/mode fields that
+// extensions like Tidal and Qobuz already provide. Tokens match what the album
+// header understands ("dolby_atmos", "hi_res_lossless", "lossless").
+func albumAudioTraitsFromTracks(tracks []ExtTrackMetadata) []string {
+	atmos := false
+	hiRes := false
+	lossless := false
+
+	for _, t := range tracks {
+		modes := strings.ToUpper(t.AudioModes)
+		quality := strings.ToUpper(t.AudioQuality)
+		if strings.Contains(modes, "ATMOS") || strings.Contains(quality, "ATMOS") {
+			atmos = true
+		}
+		if strings.Contains(quality, "HI_RES") ||
+			strings.Contains(quality, "HIRES") ||
+			strings.Contains(quality, "MASTER") ||
+			strings.Contains(quality, "MQA") {
+			hiRes = true
+		}
+		if strings.Contains(quality, "LOSSLESS") ||
+			strings.Contains(quality, "FLAC") {
+			lossless = true
+		}
+		if bd, sr := parseBitDepthSampleRate(quality); bd > 0 {
+			if bd > 16 || sr > 48 {
+				hiRes = true
+			} else {
+				lossless = true
+			}
+		}
+	}
+
+	traits := []string{}
+	if atmos {
+		traits = append(traits, "dolby_atmos")
+	}
+	if hiRes {
+		traits = append(traits, "hi_res_lossless")
+	} else if lossless {
+		traits = append(traits, "lossless")
+	}
+	return traits
+}
+
+// parseBitDepthSampleRate extracts a bit depth and sample rate (in kHz) from
+// labels such as "24bit/96kHz", "16bit/44.1kHz" or "24bit".
+func parseBitDepthSampleRate(quality string) (int, float64) {
+	lower := strings.ToLower(quality)
+	bitDepth := 0
+	sampleRate := 0.0
+
+	if idx := strings.Index(lower, "bit"); idx > 0 {
+		j := idx
+		for j > 0 && lower[j-1] >= '0' && lower[j-1] <= '9' {
+			j--
+		}
+		if n, err := strconv.Atoi(lower[j:idx]); err == nil {
+			bitDepth = n
+		}
+	}
+	if idx := strings.Index(lower, "khz"); idx > 0 {
+		j := idx
+		for j > 0 && ((lower[j-1] >= '0' && lower[j-1] <= '9') || lower[j-1] == '.') {
+			j--
+		}
+		if f, err := strconv.ParseFloat(lower[j:idx], 64); err == nil {
+			sampleRate = f
+		}
+	}
+	return bitDepth, sampleRate
 }
 
 func parseExtensionAlbumArray(vm *goja.Runtime, value goja.Value) ([]ExtAlbumMetadata, error) {
@@ -891,6 +1071,7 @@ func parseExtensionArtistValue(vm *goja.Runtime, value goja.Value) (ExtArtistMet
 		Name:        gojaObjectString(obj, "name"),
 		ImageURL:    gojaObjectString(obj, "image_url", "imageUrl"),
 		HeaderImage: gojaObjectString(obj, "header_image", "headerImage"),
+		HeaderVideo: gojaObjectString(obj, "header_video", "headerVideo"),
 		Listeners:   gojaObjectInt(obj, "listeners"),
 		Albums:      albums,
 		Releases:    releases,
@@ -942,35 +1123,36 @@ func parseExtensionDownloadDecryptionValue(vm *goja.Runtime, value goja.Value) *
 func parseExtensionDownloadResultValue(vm *goja.Runtime, value goja.Value) ExtDownloadResult {
 	obj := value.ToObject(vm)
 	return ExtDownloadResult{
-		Success:         gojaObjectBool(obj, "success"),
-		FilePath:        gojaObjectString(obj, "file_path", "filePath", "path"),
-		AlreadyExists:   gojaObjectBool(obj, "already_exists", "alreadyExists"),
-		BitDepth:        gojaObjectInt(obj, "bit_depth", "bitDepth"),
-		SampleRate:      gojaObjectInt(obj, "sample_rate", "sampleRate"),
-		AudioCodec:      gojaObjectString(obj, "audio_codec", "audioCodec", "codec"),
-		ErrorMessage:    gojaObjectString(obj, "error_message", "errorMessage", "error"),
-		ErrorType:       gojaObjectString(obj, "error_type", "errorType"),
-		Title:           gojaObjectString(obj, "title"),
-		Artist:          gojaObjectString(obj, "artist"),
-		Album:           gojaObjectString(obj, "album"),
-		AlbumArtist:     gojaObjectString(obj, "album_artist", "albumArtist"),
-		TrackNumber:     gojaObjectInt(obj, "track_number", "trackNumber"),
-		DiscNumber:      gojaObjectInt(obj, "disc_number", "discNumber"),
-		TotalTracks:     gojaObjectInt(obj, "total_tracks", "totalTracks"),
-		TotalDiscs:      gojaObjectInt(obj, "total_discs", "totalDiscs"),
-		ReleaseDate:     gojaObjectString(obj, "release_date", "releaseDate"),
-		CoverURL:        gojaObjectString(obj, "cover_url", "coverUrl"),
-		ISRC:            gojaObjectString(obj, "isrc"),
-		Genre:           gojaObjectString(obj, "genre"),
-		Label:           gojaObjectString(obj, "label"),
-		Copyright:       gojaObjectString(obj, "copyright"),
-		Composer:        gojaObjectString(obj, "composer"),
-		LyricsLRC:       gojaObjectString(obj, "lyrics_lrc", "lyricsLrc"),
-		DecryptionKey:   gojaObjectString(obj, "decryption_key", "decryptionKey"),
-		Decryption:      parseExtensionDownloadDecryptionValue(vm, gojaObjectValue(obj, "decryption")),
-		ActualExtension: gojaObjectString(obj, "actual_extension", "actualExtension"),
-		OutputExtension: gojaObjectString(obj, "output_extension", "outputExtension"),
-		ActualContainer: gojaObjectString(obj, "actual_container", "actualContainer", "container"),
+		Success:           gojaObjectBool(obj, "success"),
+		FilePath:          gojaObjectString(obj, "file_path", "filePath", "path"),
+		AlreadyExists:     gojaObjectBool(obj, "already_exists", "alreadyExists"),
+		BitDepth:          gojaObjectInt(obj, "bit_depth", "bitDepth"),
+		SampleRate:        gojaObjectInt(obj, "sample_rate", "sampleRate"),
+		AudioCodec:        gojaObjectString(obj, "audio_codec", "audioCodec", "codec"),
+		ErrorMessage:      gojaObjectString(obj, "error_message", "errorMessage", "error"),
+		ErrorType:         gojaObjectString(obj, "error_type", "errorType"),
+		RetryAfterSeconds: gojaObjectInt(obj, "retry_after_seconds", "retryAfterSeconds"),
+		Title:             gojaObjectString(obj, "title"),
+		Artist:            gojaObjectString(obj, "artist"),
+		Album:             gojaObjectString(obj, "album"),
+		AlbumArtist:       gojaObjectString(obj, "album_artist", "albumArtist"),
+		TrackNumber:       gojaObjectInt(obj, "track_number", "trackNumber"),
+		DiscNumber:        gojaObjectInt(obj, "disc_number", "discNumber"),
+		TotalTracks:       gojaObjectInt(obj, "total_tracks", "totalTracks"),
+		TotalDiscs:        gojaObjectInt(obj, "total_discs", "totalDiscs"),
+		ReleaseDate:       gojaObjectString(obj, "release_date", "releaseDate"),
+		CoverURL:          gojaObjectString(obj, "cover_url", "coverUrl"),
+		ISRC:              gojaObjectString(obj, "isrc"),
+		Genre:             gojaObjectString(obj, "genre"),
+		Label:             gojaObjectString(obj, "label"),
+		Copyright:         gojaObjectString(obj, "copyright"),
+		Composer:          gojaObjectString(obj, "composer"),
+		LyricsLRC:         gojaObjectString(obj, "lyrics_lrc", "lyricsLrc"),
+		DecryptionKey:     gojaObjectString(obj, "decryption_key", "decryptionKey"),
+		Decryption:        parseExtensionDownloadDecryptionValue(vm, gojaObjectValue(obj, "decryption")),
+		ActualExtension:   gojaObjectString(obj, "actual_extension", "actualExtension"),
+		OutputExtension:   gojaObjectString(obj, "output_extension", "outputExtension"),
+		ActualContainer:   gojaObjectString(obj, "actual_container", "actualContainer", "container"),
 		RequiresContainerConversion: gojaObjectBool(
 			obj,
 			"requires_container_conversion",
@@ -982,9 +1164,11 @@ func parseExtensionDownloadResultValue(vm *goja.Runtime, value goja.Value) ExtDo
 func parseExtensionURLHandleValue(vm *goja.Runtime, value goja.Value) (ExtURLHandleResult, error) {
 	obj := value.ToObject(vm)
 	handleResult := ExtURLHandleResult{
-		Type:     gojaObjectString(obj, "type"),
-		Name:     gojaObjectString(obj, "name"),
-		CoverURL: gojaObjectString(obj, "cover_url", "coverUrl"),
+		Type:        gojaObjectString(obj, "type"),
+		Name:        gojaObjectString(obj, "name"),
+		CoverURL:    gojaObjectString(obj, "cover_url", "coverUrl"),
+		HeaderImage: gojaObjectString(obj, "header_image", "headerImage"),
+		HeaderVideo: gojaObjectString(obj, "header_video", "headerVideo"),
 	}
 
 	if trackValue := gojaObjectValue(obj, "track"); !gojaValueIsEmpty(trackValue) {
@@ -2135,6 +2319,8 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 	}
 
 	var lastErr error
+	var lastErrType string
+	var lastRetryAfterSeconds int
 	var stopProviderFallback bool
 	var sourceExtensionLocked bool
 	var sourceExtensionAvailability *ExtAvailabilityResult
@@ -2449,10 +2635,23 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 					}, nil
 				}
 				lastErr = err
+				lastErrType = ""
 			} else if result.ErrorMessage != "" {
 				lastErr = fmt.Errorf("%s", result.ErrorMessage)
+				lastErrType = normalizeExtensionDownloadErrorType(result.ErrorType, result.ErrorMessage)
+				lastRetryAfterSeconds = result.RetryAfterSeconds
 			}
 			GoLog("[DownloadWithExtensionFallback] Source extension %s failed: %v\n", req.Source, lastErr)
+
+			if strings.EqualFold(lastErrType, "verification_required") {
+				GoLog("[DownloadWithExtensionFallback] Source extension %s requires verification, not trying other providers\n", req.Source)
+				return &DownloadResponse{
+					Success:   false,
+					Error:     "Download failed: " + lastErr.Error(),
+					ErrorType: "verification_required",
+					Service:   req.Source,
+				}, nil
+			}
 
 			if stopProviderFallback || sourceExtensionLocked {
 				if sourceExtensionLocked {
@@ -2461,10 +2660,11 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 				}
 				GoLog("[DownloadWithExtensionFallback] stopProviderFallback is true, not trying other providers\n")
 				return &DownloadResponse{
-					Success:   false,
-					Error:     "Download failed: " + lastErr.Error(),
-					ErrorType: "extension_error",
-					Service:   req.Source,
+					Success:           false,
+					Error:             "Download failed: " + lastErr.Error(),
+					ErrorType:         firstNonEmptyString(lastErrType, "extension_error"),
+					RetryAfterSeconds: lastRetryAfterSeconds,
+					Service:           req.Source,
 				}, nil
 			}
 		} else {
@@ -2518,6 +2718,15 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 				GoLog("[DownloadWithExtensionFallback] %s: not available\n", providerID)
 				if err != nil {
 					lastErr = err
+					if strings.EqualFold(classifyDownloadErrorType(err.Error()), "verification_required") {
+						GoLog("[DownloadWithExtensionFallback] %s requires verification (availability); pausing fallback to open the challenge\n", providerID)
+						return &DownloadResponse{
+							Success:   false,
+							Error:     "Download failed: " + err.Error(),
+							ErrorType: "verification_required",
+							Service:   providerID,
+						}, nil
+					}
 				}
 				if terminalAvailability {
 					GoLog("[DownloadWithExtensionFallback] %s requested skip_fallback after availability check\n", providerID)
@@ -2535,12 +2744,26 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 				// END LM-FORK
 			}
 
-			// Fallback provider: request its own highest quality, not the
-			// source provider's quality token.
+			// Honor the requested quality when this provider recognizes it
+			// (e.g. an explicit user selection). Only when the token is not
+			// one of this provider's own options do we fall back to its
+			// highest quality, since a source provider's token may not map.
 			fallbackQuality := req.Quality
 			if len(ext.Manifest.QualityOptions) > 0 {
-				if best := strings.TrimSpace(ext.Manifest.QualityOptions[0].ID); best != "" {
-					fallbackQuality = best
+				requested := strings.TrimSpace(req.Quality)
+				recognized := false
+				if requested != "" {
+					for _, opt := range ext.Manifest.QualityOptions {
+						if strings.EqualFold(strings.TrimSpace(opt.ID), requested) {
+							recognized = true
+							break
+						}
+					}
+				}
+				if !recognized {
+					if best := strings.TrimSpace(ext.Manifest.QualityOptions[0].ID); best != "" {
+						fallbackQuality = best
+					}
 				}
 			}
 
@@ -2618,10 +2841,31 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 					}, nil
 				}
 				lastErr = err
+				lastErrType = ""
 			} else if result.ErrorMessage != "" {
 				lastErr = fmt.Errorf("%s", result.ErrorMessage)
+				lastErrType = normalizeExtensionDownloadErrorType(result.ErrorType, result.ErrorMessage)
+				lastRetryAfterSeconds = result.RetryAfterSeconds
 			}
 			GoLog("[DownloadWithExtensionFallback] %s failed: %v\n", providerID, lastErr)
+
+			if lastErr != nil {
+				effType := lastErrType
+				if effType == "" {
+					effType = classifyDownloadErrorType(lastErr.Error())
+				}
+				if strings.EqualFold(effType, "verification_required") {
+					GoLog("[DownloadWithExtensionFallback] %s requires verification; pausing fallback to open the challenge\n", providerID)
+					return &DownloadResponse{
+						Success:           false,
+						Error:             "Download failed: " + lastErr.Error(),
+						ErrorType:         "verification_required",
+						RetryAfterSeconds: lastRetryAfterSeconds,
+						Service:           providerID,
+					}, nil
+				}
+			}
+
 			if terminalAvailability {
 				GoLog("[DownloadWithExtensionFallback] %s requested skip_fallback after download failure\n", providerID)
 				return buildExtensionFallbackStoppedResponse(providerID, availability, lastErr), nil
@@ -2630,14 +2874,15 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 	}
 
 	if lastErr != nil {
-		errorType := classifyDownloadErrorType(lastErr.Error())
+		errorType := firstNonEmptyString(lastErrType, classifyDownloadErrorType(lastErr.Error()))
 		if errorType == "unknown" {
 			errorType = "not_found"
 		}
 		return &DownloadResponse{
-			Success:   false,
-			Error:     "All providers failed. Last error: " + lastErr.Error(),
-			ErrorType: errorType,
+			Success:           false,
+			Error:             "All providers failed. Last error: " + lastErr.Error(),
+			ErrorType:         errorType,
+			RetryAfterSeconds: lastRetryAfterSeconds,
 		}, nil
 	}
 
@@ -2654,21 +2899,22 @@ func buildOutputPath(req DownloadRequest) string {
 	}
 
 	metadata := map[string]interface{}{
-		"title":        req.TrackName,
-		"artist":       req.ArtistName,
-		"album":        req.AlbumName,
-		"album_artist": req.AlbumArtist,
-		"track":        req.TrackNumber,
-		"track_number": req.TrackNumber,
-		"total_tracks": req.TotalTracks,
-		"disc":         req.DiscNumber,
-		"disc_number":  req.DiscNumber,
-		"total_discs":  req.TotalDiscs,
-		"year":         extractYear(req.ReleaseDate),
-		"date":         req.ReleaseDate,
-		"release_date": req.ReleaseDate,
-		"isrc":         req.ISRC,
-		"composer":     req.Composer,
+		"title":             req.TrackName,
+		"artist":            req.ArtistName,
+		"album":             req.AlbumName,
+		"album_artist":      req.AlbumArtist,
+		"track":             req.TrackNumber,
+		"track_number":      req.TrackNumber,
+		"total_tracks":      req.TotalTracks,
+		"playlist_position": req.PlaylistPosition,
+		"disc":              req.DiscNumber,
+		"disc_number":       req.DiscNumber,
+		"total_discs":       req.TotalDiscs,
+		"year":              extractYear(req.ReleaseDate),
+		"date":              req.ReleaseDate,
+		"release_date":      req.ReleaseDate,
+		"isrc":              req.ISRC,
+		"composer":          req.Composer,
 	}
 
 	filename := buildFilenameFromTemplate(req.FilenameFormat, metadata)
@@ -2713,21 +2959,22 @@ func buildOutputPathForExtension(req DownloadRequest, ext *loadedExtension) stri
 	AddAllowedDownloadDir(tempDir)
 
 	metadata := map[string]interface{}{
-		"title":        req.TrackName,
-		"artist":       req.ArtistName,
-		"album":        req.AlbumName,
-		"album_artist": req.AlbumArtist,
-		"track":        req.TrackNumber,
-		"track_number": req.TrackNumber,
-		"total_tracks": req.TotalTracks,
-		"disc":         req.DiscNumber,
-		"disc_number":  req.DiscNumber,
-		"total_discs":  req.TotalDiscs,
-		"year":         extractYear(req.ReleaseDate),
-		"date":         req.ReleaseDate,
-		"release_date": req.ReleaseDate,
-		"isrc":         req.ISRC,
-		"composer":     req.Composer,
+		"title":             req.TrackName,
+		"artist":            req.ArtistName,
+		"album":             req.AlbumName,
+		"album_artist":      req.AlbumArtist,
+		"track":             req.TrackNumber,
+		"track_number":      req.TrackNumber,
+		"total_tracks":      req.TotalTracks,
+		"playlist_position": req.PlaylistPosition,
+		"disc":              req.DiscNumber,
+		"disc_number":       req.DiscNumber,
+		"total_discs":       req.TotalDiscs,
+		"year":              extractYear(req.ReleaseDate),
+		"date":              req.ReleaseDate,
+		"release_date":      req.ReleaseDate,
+		"isrc":              req.ISRC,
+		"composer":          req.Composer,
 	}
 
 	filename := buildFilenameFromTemplate(req.FilenameFormat, metadata)
@@ -2884,13 +3131,15 @@ func (p *extensionProviderWrapper) customSearch(query string, options map[string
 }
 
 type ExtURLHandleResult struct {
-	Type     string             `json:"type"`
-	Track    *ExtTrackMetadata  `json:"track,omitempty"`
-	Tracks   []ExtTrackMetadata `json:"tracks,omitempty"`
-	Album    *ExtAlbumMetadata  `json:"album,omitempty"`
-	Artist   *ExtArtistMetadata `json:"artist,omitempty"`
-	Name     string             `json:"name,omitempty"`
-	CoverURL string             `json:"cover_url,omitempty"`
+	Type        string             `json:"type"`
+	Track       *ExtTrackMetadata  `json:"track,omitempty"`
+	Tracks      []ExtTrackMetadata `json:"tracks,omitempty"`
+	Album       *ExtAlbumMetadata  `json:"album,omitempty"`
+	Artist      *ExtArtistMetadata `json:"artist,omitempty"`
+	Name        string             `json:"name,omitempty"`
+	CoverURL    string             `json:"cover_url,omitempty"`
+	HeaderImage string             `json:"header_image,omitempty"`
+	HeaderVideo string             `json:"header_video,omitempty"`
 }
 
 func (p *extensionProviderWrapper) HandleURL(url string) (*ExtURLHandleResult, error) {

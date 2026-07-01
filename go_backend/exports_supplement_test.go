@@ -31,6 +31,44 @@ func TestDownloadErrorClassificationPrioritizesRateLimit(t *testing.T) {
 	}
 }
 
+func TestDownloadErrorClassificationDetectsVerificationRequired(t *testing.T) {
+	cases := []string{
+		"HTTP 401 for /tickets",
+		"HTTP status 428: precondition required",
+		"Verification required",
+	}
+	for _, tc := range cases {
+		if got := classifyDownloadErrorType(tc); got != "verification_required" {
+			t.Fatalf("classifyDownloadErrorType(%q) = %q, want verification_required", tc, got)
+		}
+	}
+}
+
+func TestGetProviderMetadataPrefersEnabledDeezerExtension(t *testing.T) {
+	dir := t.TempDir()
+	if err := InitExtensionSystem(filepath.Join(dir, "extensions"), filepath.Join(dir, "data")); err != nil {
+		t.Fatalf("InitExtensionSystem: %v", err)
+	}
+	CleanupExtensions()
+	defer CleanupExtensions()
+
+	ext := newTestLoadedExtension(t, ExtensionTypeMetadataProvider)
+	ext.ID = "deezer"
+	ext.Manifest.Name = "deezer"
+	manager := getExtensionManager()
+	manager.mu.Lock()
+	manager.extensions = map[string]*loadedExtension{ext.ID: ext}
+	manager.mu.Unlock()
+
+	jsonText, err := GetProviderMetadataJSON("deezer", "album", "201")
+	if err != nil {
+		t.Fatalf("GetProviderMetadataJSON deezer album: %v", err)
+	}
+	if !strings.Contains(jsonText, "album-track") {
+		t.Fatalf("expected enabled deezer extension metadata, got %s", jsonText)
+	}
+}
+
 func TestExportsJSONWrappersAndExtensionManagerSurface(t *testing.T) {
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "data")
@@ -390,10 +428,25 @@ func TestExportsJSONWrappersAndExtensionManagerSurface(t *testing.T) {
 	if catsJSON, err := GetStoreCategoriesJSON(); err != nil || !strings.Contains(catsJSON, "metadata") {
 		t.Fatalf("GetStoreCategoriesJSON = %q/%v", catsJSON, err)
 	}
-	if dest, err := buildStoreExtensionDestPath(dir, "coverage/ext"); err != nil || !strings.HasSuffix(dest, ".spotiflac-ext") {
+	if dest, err := buildStoreExtensionDestPath(
+		dir,
+		"coverage/ext",
+		"https://registry.example.com/coverage.spotiflac-ext",
+	); err != nil || !strings.HasSuffix(dest, ".spotiflac-ext") {
 		t.Fatalf("buildStoreExtensionDestPath = %q/%v", dest, err)
 	}
-	if _, err := buildStoreExtensionDestPath(dir, " "); err == nil {
+	if dest, err := buildStoreExtensionDestPath(
+		dir,
+		"coverage/ext",
+		"https://registry.example.com/coverage.sflx",
+	); err != nil || !strings.HasSuffix(dest, ".sflx") {
+		t.Fatalf("buildStoreExtensionDestPath sflx = %q/%v", dest, err)
+	}
+	if _, err := buildStoreExtensionDestPath(
+		dir,
+		" ",
+		"https://registry.example.com/coverage.sflx",
+	); err == nil {
 		t.Fatal("expected invalid extension id")
 	}
 	if err := ClearStoreCacheJSON(); err != nil {

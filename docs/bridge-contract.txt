@@ -6,6 +6,7 @@
 func AllowDownloadDir(path string) {
 func CancelDownload(itemID string) {
 func CheckDuplicate(outputDir, isrc string) (string, error) {
+func CustomSearchWithExtensionJSON(extensionID, query string, optionsJSON string) (string, error) {
 func DownloadByStrategy(requestJSON string) (string, error) {
 func EditFileMetadata(filePath, metadataJSON string) (string, error) {
 func FindURLHandlerJSON(url string) string {
@@ -18,6 +19,7 @@ func GetLyricsLRC(spotifyID, trackName, artistName string, filePath string, dura
 func GetMetadataProviderPriorityJSON() (string, error) {
 func GetProviderMetadataJSON(providerID, resourceType, resourceID string) (string, error) {
 func GetProviderPriorityJSON() (string, error) {
+func GetSearchProvidersJSON() (string, error) {
 func HandleURLWithExtensionJSON(url string) (string, error) {
 func InitExtensionSystem(extensionsDir, dataDir string) error {
 func LoadExtensionFromPath(filePath string) (string, error) {

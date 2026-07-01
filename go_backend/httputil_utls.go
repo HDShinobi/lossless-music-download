@@ -144,13 +144,7 @@ func DoRequestWithCloudflareBypass(req *http.Request) (*http.Response, error) {
 		return resp, nil
 	}
 
-	errStr := strings.ToLower(err.Error())
-	tlsRelated := strings.Contains(errStr, "tls") ||
-		strings.Contains(errStr, "handshake") ||
-		strings.Contains(errStr, "certificate") ||
-		strings.Contains(errStr, "connection reset")
-
-	if tlsRelated {
+	if isTLSHandshakeOrResetError(err) {
 		LogDebug("HTTP", "TLS error detected, retrying with Chrome TLS fingerprint: %v", err)
 
 		reqCopy := req.Clone(req.Context())

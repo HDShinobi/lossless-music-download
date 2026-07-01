@@ -16,9 +16,9 @@ source of truth for *what we inherit, what we changed, and how to sync*.
 | | |
 | --- | --- |
 | Baseline tag | `vendor/spotiflac-base` |
-| Synced to | **v4.6.0** (`7b22bbf2`, "chore: update AltStore source to v4.6.0") |
+| Synced to | **v4.7.0** (`c9fc1c3c`, "Release v4.7.0") |
 | Upstream remote | `upstream` → `https://github.com/spotiflacapp/SpotiFLAC-Mobile.git` |
-| Last sync | 2026-06-26 (initial baseline established) |
+| Last sync | 2026-07-01 (v4.6.0 → v4.7.0, clean 3-way apply, no conflicts) |
 
 `vendor/spotiflac-base` always points at the exact upstream commit our
 inherited code currently matches. **Advance it only after a sync builds and

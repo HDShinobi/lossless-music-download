@@ -2,6 +2,7 @@ package gobackend
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -12,6 +13,8 @@ import (
 	"sync"
 	"time"
 )
+
+var errAppleMusicUnauthorized = errors.New("apple music catalog search unauthorized")
 
 type AppleMusicClient struct {
 	httpClient *http.Client
@@ -188,7 +191,7 @@ func (c *AppleMusicClient) getAppleMusicToken() (string, error) {
 		return "", fmt.Errorf("failed to read apple music script: %w", err)
 	}
 
-	token := regexp.MustCompile(`eyJh[^"' <]+`).FindString(string(jsBody))
+	token := regexp.MustCompile(`eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`).FindString(string(jsBody))
 	if token == "" {
 		return "", fmt.Errorf("apple music token not found")
 	}
@@ -235,7 +238,7 @@ func (c *AppleMusicClient) searchSongWithToken(token, query string) ([]appleMusi
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("apple music catalog search unauthorized")
+		return nil, errAppleMusicUnauthorized
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("apple music catalog search returned HTTP %d", resp.StatusCode)
@@ -281,7 +284,7 @@ func (c *AppleMusicClient) SearchSong(trackName, artistName string, durationSec 
 	}
 
 	searchResp, err := c.searchSongWithToken(token, strings.TrimSpace(query))
-	if err != nil && strings.Contains(strings.ToLower(err.Error()), "unauthorized") {
+	if errors.Is(err, errAppleMusicUnauthorized) {
 		clearAppleMusicToken()
 		token, tokenErr := c.getAppleMusicToken()
 		if tokenErr != nil {

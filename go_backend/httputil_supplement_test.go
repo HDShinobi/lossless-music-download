@@ -1,13 +1,15 @@
 package gobackend
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/pem"
-	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -131,14 +133,23 @@ func TestHTTPUtilityHelpers(t *testing.T) {
 	if getRetryAfterDuration(&http.Response{Header: http.Header{"Retry-After": []string{"bad"}}}) != 0 {
 		t.Fatal("invalid retry-after should be zero")
 	}
-	if isp := IsISPBlocking(errors.New("connection reset by peer"), "https://example.com/x"); isp == nil || !strings.Contains(isp.Error(), "example.com") {
+	resetErr := &net.OpError{Op: "read", Err: syscall.ECONNRESET}
+	if isp := IsISPBlocking(resetErr, "https://example.com/x"); isp == nil || !strings.Contains(isp.Error(), "example.com") {
 		t.Fatalf("IsISPBlocking = %#v", isp)
 	}
-	if !CheckAndLogISPBlocking(errors.New("i/o timeout"), "https://timeout.example/x", "test") {
+	timeoutErr := &net.OpError{Op: "dial", Err: syscall.ETIMEDOUT}
+	if !CheckAndLogISPBlocking(timeoutErr, "https://timeout.example/x", "test") {
 		t.Fatal("expected logged ISP blocking")
 	}
-	if wrapped := WrapErrorWithISPCheck(errors.New("connection refused"), "https://refused.example/x", "test"); wrapped == nil || !strings.Contains(wrapped.Error(), "ISP blocking") {
+	refusedErr := &net.OpError{Op: "dial", Err: syscall.ECONNREFUSED}
+	if wrapped := WrapErrorWithISPCheck(refusedErr, "https://refused.example/x", "test"); wrapped == nil || !strings.Contains(wrapped.Error(), "ISP blocking") {
 		t.Fatalf("WrapErrorWithISPCheck = %v", wrapped)
+	}
+	if !isTransientNetworkError(context.DeadlineExceeded) || isTransientNetworkError(&net.DNSError{IsNotFound: true}) {
+		t.Fatal("isTransientNetworkError mismatch")
+	}
+	if !isConnectivityFailure(&net.DNSError{IsNotFound: true}) || !isConnectivityFailure(context.DeadlineExceeded) {
+		t.Fatal("isConnectivityFailure mismatch")
 	}
 	if WrapErrorWithISPCheck(nil, "", "test") != nil {
 		t.Fatal("nil wrap should stay nil")
