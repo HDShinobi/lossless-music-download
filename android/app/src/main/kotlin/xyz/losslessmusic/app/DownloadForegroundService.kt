@@ -33,6 +33,11 @@ class DownloadForegroundService : Service() {
 
         private const val ACTION_START = "xyz.losslessmusic.app.action.START"
         private const val ACTION_STOP = "xyz.losslessmusic.app.action.STOP"
+        private const val ACTION_UPDATE = "xyz.losslessmusic.app.action.UPDATE"
+        private const val EXTRA_TITLE = "title"
+        private const val EXTRA_TEXT = "text"
+        private const val EXTRA_PROGRESS = "progress"
+        private const val EXTRA_TOTAL = "total"
 
         @Volatile private var isRunning = false
         fun isServiceRunning(): Boolean = isRunning
@@ -52,10 +57,25 @@ class DownloadForegroundService : Service() {
                 Intent(context, DownloadForegroundService::class.java).setAction(ACTION_STOP)
             )
         }
+
+        fun updateNotification(context: Context, title: String, text: String, progress: Long, total: Long) {
+            context.startService(
+                Intent(context, DownloadForegroundService::class.java)
+                    .setAction(ACTION_UPDATE)
+                    .putExtra(EXTRA_TITLE, title)
+                    .putExtra(EXTRA_TEXT, text)
+                    .putExtra(EXTRA_PROGRESS, progress)
+                    .putExtra(EXTRA_TOTAL, total)
+            )
+        }
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var wakeLock: PowerManager.WakeLock? = null
+    private var notifTitle = "Downloading..."
+    private var notifText = ""
+    private var notifProgress = 0L
+    private var notifTotal = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -85,6 +105,17 @@ class DownloadForegroundService : Service() {
         when (intent.action) {
             ACTION_START -> startForegroundService()
             ACTION_STOP -> stopForegroundService()
+            ACTION_UPDATE -> {
+                notifTitle = intent.getStringExtra(EXTRA_TITLE) ?: notifTitle
+                notifText = intent.getStringExtra(EXTRA_TEXT) ?: notifText
+                notifProgress = intent.getLongExtra(EXTRA_PROGRESS, notifProgress)
+                notifTotal = intent.getLongExtra(EXTRA_TOTAL, notifTotal)
+                if (isRunning) {
+                    ensureWakeLock()
+                    getSystemService(NotificationManager::class.java)
+                        .notify(NOTIFICATION_ID, buildNotification())
+                }
+            }
         }
         return START_NOT_STICKY
     }
@@ -138,14 +169,21 @@ class DownloadForegroundService : Service() {
             this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Downloading...")
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(notifTitle)
+            .setContentText(notifText)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+        if (notifTotal > 0) {
+            builder.setProgress(100, (notifProgress * 100 / notifTotal).toInt(), false)
+        } else {
+            builder.setProgress(0, 0, true)
+        }
+        return builder.build()
     }
 
     override fun onDestroy() {
