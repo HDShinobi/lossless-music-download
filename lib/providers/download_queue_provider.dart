@@ -251,17 +251,29 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       // the Dart-only path for every item in it.
       final startedAt = DateTime.now();
       var started = false;
+      // Tracks the last time we merged a valid snapshot; used together with
+      // `startedAt` so the 30s stall watchdog covers both a run that never
+      // starts and a run that goes silent mid-flight (e.g. sustained
+      // getSnapshot() exceptions).
+      var lastSeenAt = DateTime.now();
       while (true) {
         await Future<void>.delayed(const Duration(milliseconds: 500));
-        final snapshot = await worker.getSnapshot();
+        NativeWorkerSnapshot? snapshot;
+        try {
+          snapshot = await worker.getSnapshot();
+        } catch (_) {
+          snapshot = null;
+        }
         if (snapshot == null || snapshot.runId != runId) {
-          if (!started && DateTime.now().difference(startedAt) > const Duration(seconds: 30)) {
+          final stalledSince = started ? lastSeenAt : startedAt;
+          if (DateTime.now().difference(stalledSince) > const Duration(seconds: 30)) {
             fellBackToStartupTimeout = true;
             break;
           }
           continue;
         }
         started = true;
+        lastSeenAt = DateTime.now();
         _mergeNativeSnapshot(snapshot, byItemId);
         if (!snapshot.isRunning) break;
       }
