@@ -118,7 +118,7 @@ class DownloadForegroundService : Service() {
     private var notifText = ""
     private var notifProgress = 0L
     private var notifTotal = 0L
-    private var currentRunId = ""
+    @Volatile private var currentRunId = ""
     private val workerItems = mutableListOf<WorkerItemState>()
     private val workerItemsLock = Any()
     private var workerJob: Job? = null
@@ -277,7 +277,9 @@ class DownloadForegroundService : Service() {
         try {
             val tempFile = File(filesDir, "$SNAPSHOT_FILE.tmp")
             FileOutputStream(tempFile).use { it.write(snapshot.toString().toByteArray(Charsets.UTF_8)) }
-            tempFile.renameTo(File(filesDir, SNAPSHOT_FILE))
+            if (!tempFile.renameTo(File(filesDir, SNAPSHOT_FILE))) {
+                android.util.Log.w("DownloadForegroundService", "Failed to rename snapshot temp file")
+            }
         } catch (e: Exception) {
             android.util.Log.w("DownloadForegroundService", "Failed to write snapshot: ${e.message}")
         }
