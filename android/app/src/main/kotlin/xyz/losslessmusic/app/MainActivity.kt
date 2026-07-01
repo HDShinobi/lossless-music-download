@@ -187,11 +187,16 @@ class MainActivity : FlutterActivity() {
             call.argument<String>("optionsJson") ?: "",
         )
         "getSearchProviders" -> true to Bridge.getSearchProvidersJSON()
-        "startDownloadForegroundService" -> {
-            DownloadForegroundService.start(applicationContext)
+        "startNativeDownloadWorker" -> {
+            DownloadForegroundService.startQueue(
+                applicationContext,
+                call.argument<String>("requestsJson")!!,
+                call.argument<String>("settingsJson") ?: "{}",
+            )
             true to null
         }
-        "stopDownloadForegroundService" -> {
+        "getNativeDownloadWorkerSnapshot" -> true to DownloadForegroundService.readSnapshot(applicationContext)
+        "stopNativeDownloadWorker" -> {
             DownloadForegroundService.stop(applicationContext)
             true to null
         }
