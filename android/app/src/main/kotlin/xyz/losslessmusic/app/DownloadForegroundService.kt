@@ -17,8 +17,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import xyz.losslessmusic.backend.bridge.Bridge
 import java.io.File
 import java.io.FileOutputStream
 
@@ -210,6 +214,13 @@ class DownloadForegroundService : Service() {
 
     @Synchronized
     private fun stopForegroundService() {
+        workerJob?.cancel()
+        workerJob = null
+        val itemId = currentItemId
+        if (itemId.isNotEmpty()) {
+            try { Bridge.cancelDownload(itemId) } catch (_: Exception) {}
+        }
+        currentItemId = ""
         isRunning = false
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -252,6 +263,115 @@ class DownloadForegroundService : Service() {
         }
         startForegroundService()
         writeSnapshot(isRunning = true)
+
+        workerJob?.cancel()
+        workerJob = serviceScope.launch { runWorker(requests) }
+    }
+
+    private fun updateItem(itemId: String, update: (WorkerItemState) -> Unit) {
+        synchronized(workerItemsLock) {
+            workerItems.firstOrNull { it.itemId == itemId }?.let(update)
+        }
+    }
+
+    private suspend fun runWorker(requests: List<WorkerRequest>) {
+        for (request in requests) {
+            if (!serviceScope.isActive) break
+            currentItemId = request.itemId
+            updateItem(request.itemId) { it.status = "downloading" }
+            notifTitle = if (requests.size > 1) "Downloading ${requests.size} tracks" else request.trackName
+            notifText = request.artistName
+            writeSnapshot(isRunning = true)
+
+            // Preflight duplicate check (mirrors the Dart-only path).
+            if (isDuplicate(request.requestJson)) {
+                updateItem(request.itemId) { it.status = "done"; it.progress = 1.0 }
+                writeSnapshot(isRunning = true)
+                continue
+            }
+
+            val progressJob = serviceScope.launch { pollProgress(request.itemId) }
+            val resultJson = try {
+                Bridge.downloadByStrategy(request.requestJson)
+            } catch (e: Exception) {
+                progressJob.cancel()
+                updateItem(request.itemId) { it.status = "failed"; it.error = e.message ?: "download failed" }
+                writeSnapshot(isRunning = true)
+                continue
+            }
+            progressJob.cancel()
+
+            val result = try { JSONObject(resultJson) } catch (_: Exception) { JSONObject() }
+            val failed = !result.optBoolean("success", false)
+            if (failed) {
+                val error = result.optString("error", "unknown")
+                updateItem(request.itemId) { it.status = "failed"; it.error = error }
+                writeSnapshot(isRunning = true)
+                continue
+            }
+
+            updateItem(request.itemId) { it.status = "finalizing" }
+            writeSnapshot(isRunning = true)
+            val filePath = result.optString("file_path", "")
+            if (filePath.isNotEmpty() && NonFlacMetadataEmbedder.isEmbeddable(filePath)) {
+                NonFlacMetadataEmbedder.embed(applicationContext, filePath, request.requestJson)
+            }
+            // FLAC needs no extra step -- go_backend already tagged it natively.
+
+            updateItem(request.itemId) { it.status = "done"; it.progress = 1.0 }
+            writeSnapshot(isRunning = true)
+        }
+        writeSnapshot(isRunning = false)
+        stopForegroundService()
+    }
+
+    private fun isDuplicate(requestJson: String): Boolean {
+        return try {
+            val req = JSONObject(requestJson)
+            val isrc = req.optString("isrc", "")
+            val outputDir = req.optString("output_dir", "")
+            if (isrc.isEmpty() || outputDir.isEmpty()) return false
+            JSONObject(Bridge.checkDuplicate(outputDir, isrc)).optBoolean("exists", false)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private suspend fun pollProgress(itemId: String) {
+        while (serviceScope.isActive) {
+            try {
+                val root = JSONObject(Bridge.getAllDownloadProgress())
+                val items = root.optJSONObject("items")
+                val progress = items?.optJSONObject(itemId)
+                if (progress != null) {
+                    val bytesReceived = progress.optLong("bytes_received", 0L)
+                    val bytesTotal = progress.optLong("bytes_total", 0L)
+                    val progressValue = if (bytesTotal > 0) bytesReceived.toDouble() / bytesTotal else 0.0
+                    updateItem(itemId) {
+                        it.progress = progressValue
+                        it.bytesReceived = bytesReceived
+                        it.bytesTotal = bytesTotal
+                    }
+                    if (bytesTotal > 0) {
+                        // Update fields + renotify directly -- this already runs
+                        // as an instance method inside the service, so there's
+                        // no need to round-trip through a self-addressed Intent
+                        // the way the companion updateNotification() helper does
+                        // for external callers.
+                        notifProgress = bytesReceived
+                        notifTotal = bytesTotal
+                        if (isRunning) {
+                            ensureWakeLock()
+                            getSystemService(NotificationManager::class.java)
+                                .notify(NOTIFICATION_ID, buildNotification())
+                        }
+                    }
+                    writeSnapshot(isRunning = true)
+                }
+            } catch (_: Exception) {
+            }
+            delay(1000)
+        }
     }
 
     private fun writeSnapshot(isRunning: Boolean) {
@@ -312,6 +432,15 @@ class DownloadForegroundService : Service() {
         serviceScope.cancel()
         isRunning = false
         super.onDestroy()
+    }
+
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        // Android 15+ dataSync foreground services get a 6-hour cumulative
+        // runtime limit per 24h. Stop cleanly; unfinished items stay
+        // "downloading" in the last snapshot and are re-queued the next time
+        // the app opens and re-triggers the queue.
+        android.util.Log.w("DownloadForegroundService", "Foreground service timeout reached; stopping.")
+        stopForegroundService()
     }
 
     // Deliberately not overriding onTaskRemoved(): the whole point of this
