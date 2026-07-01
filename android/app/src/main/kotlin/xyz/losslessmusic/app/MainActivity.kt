@@ -187,6 +187,14 @@ class MainActivity : FlutterActivity() {
             call.argument<String>("optionsJson") ?: "",
         )
         "getSearchProviders" -> true to Bridge.getSearchProvidersJSON()
+        "startDownloadForegroundService" -> {
+            DownloadForegroundService.start(applicationContext)
+            true to null
+        }
+        "stopDownloadForegroundService" -> {
+            DownloadForegroundService.stop(applicationContext)
+            true to null
+        }
         else -> false to null
     }
 

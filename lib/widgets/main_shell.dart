@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/download_queue_provider.dart';
 import '../providers/search_provider.dart';
@@ -48,12 +49,22 @@ class _MainShellState extends ConsumerState<MainShell> {
     // One-time startup check for a newer release (fire-and-forget; silent on
     // failure or when already up to date).
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeCheckForUpdate());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRequestNotificationPermission());
   }
 
   Future<void> _maybeCheckForUpdate() async {
     final info = await UpdateChecker().checkForUpdate();
     if (!mounted || info == null) return;
     await showUpdateDialog(context, info);
+  }
+
+  /// Best-effort: notification permission (Android 13+) lets the background
+  /// download service show progress. Downloads still work without it.
+  Future<void> _maybeRequestNotificationPermission() async {
+    final status = await Permission.notification.status;
+    if (!status.isGranted) {
+      await Permission.notification.request();
+    }
   }
 
   Future<void> _handleSharedUrl(String url) async {
