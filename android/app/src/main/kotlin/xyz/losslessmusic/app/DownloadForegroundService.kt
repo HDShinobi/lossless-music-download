@@ -17,6 +17,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 
 /**
  * Foreground service that keeps downloads running when the app is
@@ -38,6 +42,10 @@ class DownloadForegroundService : Service() {
         private const val EXTRA_TEXT = "text"
         private const val EXTRA_PROGRESS = "progress"
         private const val EXTRA_TOTAL = "total"
+        private const val SNAPSHOT_FILE = "native_download_worker_snapshot.json"
+        private const val ACTION_START_QUEUE = "xyz.losslessmusic.app.action.START_QUEUE"
+        private const val EXTRA_REQUESTS_JSON = "requests_json"
+        private const val EXTRA_SETTINGS_JSON = "settings_json"
 
         @Volatile private var isRunning = false
         fun isServiceRunning(): Boolean = isRunning
@@ -68,7 +76,41 @@ class DownloadForegroundService : Service() {
                     .putExtra(EXTRA_TOTAL, total)
             )
         }
+
+        fun startQueue(context: Context, requestsJson: String, settingsJson: String) {
+            val intent = Intent(context, DownloadForegroundService::class.java)
+                .setAction(ACTION_START_QUEUE)
+                .putExtra(EXTRA_REQUESTS_JSON, requestsJson)
+                .putExtra(EXTRA_SETTINGS_JSON, settingsJson)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+
+        fun readSnapshot(context: Context): String {
+            val file = File(context.filesDir, SNAPSHOT_FILE)
+            if (!file.exists()) return ""
+            return try { file.readText() } catch (_: Exception) { "" }
+        }
     }
+
+    private data class WorkerRequest(
+        val itemId: String,
+        val trackName: String,
+        val artistName: String,
+        val requestJson: String,
+    )
+
+    private data class WorkerItemState(
+        val itemId: String,
+        var status: String = "queued",
+        var progress: Double = 0.0,
+        var bytesReceived: Long = 0L,
+        var bytesTotal: Long = 0L,
+        var error: String? = null,
+    )
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var wakeLock: PowerManager.WakeLock? = null
@@ -76,6 +118,11 @@ class DownloadForegroundService : Service() {
     private var notifText = ""
     private var notifProgress = 0L
     private var notifTotal = 0L
+    private var currentRunId = ""
+    private val workerItems = mutableListOf<WorkerItemState>()
+    private val workerItemsLock = Any()
+    private var workerJob: Job? = null
+    @Volatile private var currentItemId = ""
 
     override fun onCreate() {
         super.onCreate()
@@ -115,6 +162,11 @@ class DownloadForegroundService : Service() {
                     getSystemService(NotificationManager::class.java)
                         .notify(NOTIFICATION_ID, buildNotification())
                 }
+            }
+            ACTION_START_QUEUE -> {
+                val requestsJson = intent.getStringExtra(EXTRA_REQUESTS_JSON) ?: "[]"
+                val settingsJson = intent.getStringExtra(EXTRA_SETTINGS_JSON) ?: "{}"
+                startQueueInternal(requestsJson, settingsJson)
             }
         }
         return START_NOT_STICKY
@@ -162,6 +214,73 @@ class DownloadForegroundService : Service() {
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun parseRequests(requestsJson: String): List<WorkerRequest> {
+        val array = JSONArray(requestsJson)
+        val out = ArrayList<WorkerRequest>(array.length())
+        for (i in 0 until array.length()) {
+            val item = array.optJSONObject(i) ?: continue
+            val itemId = item.optString("item_id").trim()
+            val requestJson = item.optString("request_json").trim()
+            if (itemId.isEmpty() || requestJson.isEmpty()) continue
+            out.add(
+                WorkerRequest(
+                    itemId = itemId,
+                    trackName = item.optString("track_name"),
+                    artistName = item.optString("artist_name"),
+                    requestJson = requestJson,
+                )
+            )
+        }
+        return out
+    }
+
+    private fun startQueueInternal(requestsJson: String, settingsJson: String) {
+        val requests = try {
+            parseRequests(requestsJson)
+        } catch (e: Exception) {
+            android.util.Log.w("DownloadForegroundService", "Invalid requests JSON: ${e.message}")
+            return
+        }
+        if (requests.isEmpty()) return
+
+        currentRunId = try { JSONObject(settingsJson).optString("run_id", "") } catch (_: Exception) { "" }
+        synchronized(workerItemsLock) {
+            workerItems.clear()
+            workerItems.addAll(requests.map { WorkerItemState(itemId = it.itemId) })
+        }
+        startForegroundService()
+        writeSnapshot(isRunning = true)
+    }
+
+    private fun writeSnapshot(isRunning: Boolean) {
+        val snapshot = JSONObject()
+            .put("run_id", currentRunId)
+            .put("is_running", isRunning)
+        val items = JSONArray()
+        synchronized(workerItemsLock) {
+            for (item in workerItems) {
+                items.put(
+                    JSONObject()
+                        .put("item_id", item.itemId)
+                        .put("status", item.status)
+                        .put("progress", item.progress)
+                        .put("bytes_received", item.bytesReceived)
+                        .put("bytes_total", item.bytesTotal)
+                        .apply { item.error?.let { put("error", it) } }
+                )
+            }
+        }
+        snapshot.put("items", items)
+
+        try {
+            val tempFile = File(filesDir, "$SNAPSHOT_FILE.tmp")
+            FileOutputStream(tempFile).use { it.write(snapshot.toString().toByteArray(Charsets.UTF_8)) }
+            tempFile.renameTo(File(filesDir, SNAPSHOT_FILE))
+        } catch (e: Exception) {
+            android.util.Log.w("DownloadForegroundService", "Failed to write snapshot: ${e.message}")
+        }
     }
 
     private fun buildNotification(): Notification {
