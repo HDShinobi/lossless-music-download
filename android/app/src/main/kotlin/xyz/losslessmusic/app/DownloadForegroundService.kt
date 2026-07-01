@@ -52,7 +52,6 @@ class DownloadForegroundService : Service() {
         private const val EXTRA_SETTINGS_JSON = "settings_json"
 
         @Volatile private var isRunning = false
-        fun isServiceRunning(): Boolean = isRunning
 
         fun start(context: Context) {
             val intent = Intent(context, DownloadForegroundService::class.java)
@@ -378,6 +377,7 @@ class DownloadForegroundService : Service() {
         }
     }
 
+    @Synchronized
     private fun writeSnapshot(isRunning: Boolean) {
         val snapshot = JSONObject()
             .put("run_id", currentRunId)
@@ -432,6 +432,9 @@ class DownloadForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        if (currentItemId.isNotEmpty()) {
+            try { Bridge.cancelDownload(currentItemId) } catch (_: Exception) {}
+        }
         releaseWakeLock()
         serviceScope.cancel()
         isRunning = false

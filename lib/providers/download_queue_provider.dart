@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -261,7 +262,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         NativeWorkerSnapshot? snapshot;
         try {
           snapshot = await worker.getSnapshot();
-        } catch (_) {
+        } catch (e) {
+          debugPrint('[DownloadQueue] getSnapshot() failed: $e');
           snapshot = null;
         }
         if (snapshot == null || snapshot.runId != runId) {
