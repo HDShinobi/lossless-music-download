@@ -11,6 +11,7 @@ import '../models/installed_extension.dart';
 import '../models/track.dart';
 import '../services/backend_bridge.dart';
 import '../services/ffmpeg_metadata_service.dart';
+import '../services/native_download_worker.dart';
 import '../util/queue_view.dart';
 import '../widgets/track_tile.dart'; // TrackDownloadState
 import 'download_dir_provider.dart';
@@ -130,15 +131,192 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     unawaited(_processQueue());
   }
 
-  // Mirrors SpotiFLAC's _processQueue(): downloads one item at a time.
+  // Mirrors SpotiFLAC's _processQueue(): downloads queued items, preferring
+  // the native background worker (Android) and falling back to the
+  // Dart-only path for anything the native worker can't run.
   Future<void> _processQueue() async {
     if (_isProcessing) return;
-    final next = state.where((e) => e.status == 'queued').firstOrNull;
-    if (next == null) return;
+    final queued = state.where((e) => e.status == 'queued').toList();
+    if (queued.isEmpty) return;
 
     _isProcessing = true;
-    _setStatus(next.itemId, 'downloading');
+    try {
+      final worker = ref.read(nativeDownloadWorkerProvider);
+      if (worker.isAvailable) {
+        await _runNativeBatch(worker, queued);
+      } else {
+        await _runDartFallback(queued.first);
+      }
+    } finally {
+      _isProcessing = false;
+      unawaited(_processQueue());
+    }
+  }
 
+  Future<Map<String, dynamic>?> _buildRequestJson(DownloadEntry entry) async {
+    final dir = await ref.read(downloadDirProvider.future);
+    final dlProviders = (ref.read(extensionsProvider).value ??
+            const <InstalledExtension>[])
+        .where((e) => e.enabled && e.hasDownloadProvider)
+        .map((e) => e.id)
+        .toList();
+
+    // Seed provider priority if it's never been set, same as the existing
+    // Dart fallback path does per-item -- cheap/idempotent to repeat here.
+    try {
+      final bridge = ref.read(backendBridgeProvider);
+      final current = await bridge.getDownloadPriority();
+      if (current.isEmpty && dlProviders.isNotEmpty) {
+        await bridge.setDownloadPriority(dlProviders);
+      }
+    } catch (_) {}
+
+    final resolvedService = (entry.service != null && entry.service!.isNotEmpty)
+        ? entry.service
+        : (dlProviders.isNotEmpty ? dlProviders.first : null);
+
+    String? spotifyId = entry.track.id.isEmpty ? null : entry.track.id;
+    String? qobuzId;
+    String? tidalId;
+    if (entry.track.id.startsWith('qobuz:')) {
+      qobuzId = entry.track.id.substring(6);
+      spotifyId = null;
+    } else if (entry.track.id.startsWith('tidal:')) {
+      tidalId = entry.track.id.substring(6);
+      spotifyId = null;
+    }
+
+    final req = DownloadRequest(
+      trackName: entry.track.name,
+      artistName: entry.track.artists,
+      outputDir: dir,
+      albumName: entry.track.albumName,
+      albumArtist: entry.track.albumArtist,
+      isrc: entry.track.isrc,
+      spotifyId: spotifyId,
+      qobuzId: qobuzId,
+      tidalId: tidalId,
+      coverUrl: entry.track.coverUrl,
+      durationMs: entry.track.durationMs,
+      trackNumber: entry.track.trackNumber,
+      discNumber: entry.track.discNumber,
+      totalTracks: entry.track.totalTracks,
+      totalDiscs: entry.track.totalDiscs,
+      releaseDate: entry.track.releaseDate,
+      composer: entry.track.composer,
+      source: entry.track.source,
+      genre: entry.track.genre,
+      label: entry.track.label,
+      copyright: entry.track.copyright,
+      service: resolvedService,
+      quality: entry.quality,
+      itemId: entry.itemId,
+      embedMetadata: ref.read(embedMetadataProvider),
+      embedMaxQualityCover: ref.read(embedCoverProvider),
+      embedLyrics: ref.read(embedLyricsProvider),
+    );
+    return req.toJson();
+  }
+
+  Future<void> _runNativeBatch(
+    NativeDownloadWorker worker,
+    List<DownloadEntry> queued,
+  ) async {
+    final requests = <Map<String, dynamic>>[];
+    final byItemId = {for (final e in queued) e.itemId: e};
+    for (final entry in queued) {
+      final json = await _buildRequestJson(entry);
+      if (json == null || json['track_name'] == null || json['output_dir'] == null) {
+        continue; // gate rejected -- handled by the Dart fallback below
+      }
+      requests.add(buildNativeWorkerRequest(
+        itemId: entry.itemId,
+        trackName: entry.track.name,
+        artistName: entry.track.artists,
+        requestJson: json,
+      ));
+    }
+
+    final gateRejected =
+        queued.where((e) => !requests.any((r) => r['item_id'] == e.itemId)).toList();
+
+    var fellBackToStartupTimeout = false;
+    if (requests.isNotEmpty) {
+      final runId = 'run_${DateTime.now().microsecondsSinceEpoch}';
+      await worker.start(requests, runId: runId);
+
+      // Poll until the native worker reports it's done with this run. If it
+      // never even starts within 30s (matching upstream's startup timeout),
+      // give up on native execution for this whole batch and fall back to
+      // the Dart-only path for every item in it.
+      final startedAt = DateTime.now();
+      var started = false;
+      while (true) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+        final snapshot = await worker.getSnapshot();
+        if (snapshot == null || snapshot.runId != runId) {
+          if (!started && DateTime.now().difference(startedAt) > const Duration(seconds: 30)) {
+            fellBackToStartupTimeout = true;
+            break;
+          }
+          continue;
+        }
+        started = true;
+        _mergeNativeSnapshot(snapshot, byItemId);
+        if (!snapshot.isRunning) break;
+      }
+      ref.invalidate(libraryProvider);
+    }
+
+    final fallbackEntries = fellBackToStartupTimeout
+        ? [...gateRejected, ...queued.where((e) => requests.any((r) => r['item_id'] == e.itemId))]
+        : gateRejected;
+    for (final entry in fallbackEntries) {
+      await _runDartFallback(entry);
+    }
+  }
+
+  void _mergeNativeSnapshot(
+    NativeWorkerSnapshot snapshot,
+    Map<String, DownloadEntry> byItemId,
+  ) {
+    if (!snapshot.items.any((i) => byItemId.containsKey(i.itemId))) return;
+    state = [
+      for (final entry in state)
+        if (byItemId.containsKey(entry.itemId))
+          _applyNativeItemState(
+            entry,
+            snapshot.items.firstWhere(
+              (i) => i.itemId == entry.itemId,
+              orElse: () => NativeWorkerItemState(
+                itemId: entry.itemId,
+                status: entry.status,
+                progress: entry.progress,
+                bytesReceived: entry.bytesReceived,
+                bytesTotal: entry.totalBytes ?? 0,
+              ),
+            ),
+          )
+        else
+          entry,
+    ];
+  }
+
+  DownloadEntry _applyNativeItemState(DownloadEntry entry, NativeWorkerItemState item) {
+    if (entry.status == 'done' || entry.status == 'failed') return entry;
+    return entry.copyWith(
+      status: item.status,
+      progress: item.progress,
+      bytesReceived: item.bytesReceived,
+      totalBytes: item.bytesTotal > 0 ? item.bytesTotal : entry.totalBytes,
+      error: item.error,
+    );
+  }
+
+  // The original single-item Dart download path -- now the fallback used
+  // for non-Android platforms and any item the native worker's gate rejects.
+  Future<void> _runDartFallback(DownloadEntry next) async {
+    _setStatus(next.itemId, 'downloading');
     try {
       final dir = await ref.read(downloadDirProvider.future);
       final bridge = ref.read(backendBridgeProvider);
@@ -252,10 +430,6 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       // Item skipped — status already set to done above.
     } catch (e) {
       _setStatus(next.itemId, 'failed', error: e.toString());
-    } finally {
-      _isProcessing = false;
-      // Process the next queued item (if any).
-      unawaited(_processQueue());
     }
   }
 
@@ -486,6 +660,9 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     _samples.remove(itemId);
   }
 }
+
+final nativeDownloadWorkerProvider =
+    Provider<NativeDownloadWorker>((ref) => NativeDownloadWorker());
 
 final downloadQueueProvider =
     NotifierProvider<DownloadQueueController, List<DownloadEntry>>(
