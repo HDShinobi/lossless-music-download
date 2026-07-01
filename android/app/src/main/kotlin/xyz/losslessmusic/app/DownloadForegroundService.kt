@@ -314,7 +314,11 @@ class DownloadForegroundService : Service() {
             writeSnapshot(isRunning = true)
             val filePath = result.optString("file_path", "")
             if (filePath.isNotEmpty() && NonFlacMetadataEmbedder.isEmbeddable(filePath)) {
-                NonFlacMetadataEmbedder.embed(applicationContext, filePath, request.requestJson)
+                try {
+                    NonFlacMetadataEmbedder.embed(applicationContext, filePath, request.requestJson)
+                } catch (e: Exception) {
+                    android.util.Log.w("DownloadForegroundService", "Non-FLAC metadata embed failed: ${e.message}")
+                }
             }
             // FLAC needs no extra step -- go_backend already tagged it natively.
 
