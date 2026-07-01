@@ -65,9 +65,9 @@ flutter {
 
 dependencies {
     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
-    // ffmpeg_kit_flutter_new_full depends on this `implementation` (not `api`),
-    // so its classes aren't on app's compile classpath transitively. The actual
-    // .class/.so ship via the plugin's own dependency at assembly time; this is
-    // compileOnly so app doesn't duplicate-package them.
-    compileOnly("com.antonkarpenko:ffmpeg-kit-full:2.1.0")
+    // ffmpeg_kit_flutter_new_full declares this with `implementation` (not `api`),
+    // so its classes aren't on app's compile classpath transitively. We declare it
+    // directly as `implementation` here to guarantee runtime presence, matching
+    // SpotiFLAC-Mobile's proven pattern.
+    implementation("com.antonkarpenko:ffmpeg-kit-full:2.1.0")
 }
