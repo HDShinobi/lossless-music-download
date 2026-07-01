@@ -232,11 +232,18 @@ func normalizeQuickTimeAudioToMP4(data []byte) []byte {
 		return data // already v0 (or v2, left untouched)
 	}
 
-	binary.BigEndian.PutUint16(data[verPos:verPos+2], 0)
 	// The v1 QuickTime sound extension is the 16 bytes following the 20-byte v0
 	// audio fields (samplesPerPacket, bytesPerPacket, bytesPerFrame, bytesPerSample).
 	extStart := entry.body() + 8 + 20
 	extEnd := extStart + 16
+	// LM-FORK: upstream assumed every v1 entry has the full 44 bytes and sliced
+	// data[extEnd:] unconditionally, panicking on a truncated/malformed entry
+	// (reported upstream). Bail out instead of corrupting/crashing.
+	if extEnd > entry.end() {
+		return data
+	}
+	// END LM-FORK
+	binary.BigEndian.PutUint16(data[verPos:verPos+2], 0)
 	delta := int64(-16)
 
 	shiftChunkOffsets(data, loc.chain[0], extStart, delta)
@@ -275,6 +282,13 @@ func EnsureAC4ConfigBox(decryptedPath, sourcePath string) error {
 
 	hdrLen := audioSampleEntryHeaderLen(dst, loc.entry)
 	childStart := loc.entry.body() + hdrLen
+	// LM-FORK: upstream assumed the entry always has room for the fixed audio
+	// header and later sliced dst[:childStart] unconditionally, panicking on a
+	// truncated/malformed entry (reported upstream). Fail loudly instead.
+	if childStart > loc.entry.end() {
+		return fmt.Errorf("ac-4 sample entry too short for its declared version")
+	}
+	// END LM-FORK
 	if _, has := findChildMP4(dst, childStart, loc.entry.end(), "dac4"); has {
 		// Already has dac4; still persist any normalization changes.
 		return os.WriteFile(decryptedPath, dst, 0o644)

@@ -52,6 +52,7 @@ Every edit to an inherited (`go_backend/`) file lives here. These are the
 | `go_backend/embed_after_download_test.go` | **New file** | Tests for the above | n/a |
 | `go_backend/testdata/silence.flac` | **New fixture** | Test asset | n/a |
 | `go_backend/extension_providers.go` | **In-place edit** (~23 lines, all inside `DownloadWithExtensionFallback`) | (1) Added `SetItemDownloading(req.ItemID)` at the two download start points (UI progress state). (2) Replaced the inline genre/label embed block with a single call to `embedMetadataAfterDownload(req, path)` — the embed logic itself was moved out to our own `embed_after_download.go`. | ✅ Wrapped in `// LM-FORK` (4 sites) |
+| `go_backend/ac4_config.go` | **In-place edit** (2 sites, added in v4.7.0) | Upstream's AC-4 MP4 box rewriting (`normalizeQuickTimeAudioToMP4`, `EnsureAC4ConfigBox`) assumed a truncated/malformed `ac-4` sample entry never happens and sliced past the entry/buffer bounds unconditionally — a crafted or corrupt AC-4 download panics (unrecoverable, crashes the app via the native bridge). Added bounds checks that bail out / return an error instead. Reported upstream; remove this patch + registry row once upstream ships a fix. | ✅ Wrapped in `// LM-FORK` (2 sites) — see `go_backend/ac4_config_truncated_entry_test.go` for regression coverage |
 
 The edits are deliberately thin call-sites — the real feature code lives in the
 own-file `embed_after_download.go`, which never conflicts on sync. To list every
