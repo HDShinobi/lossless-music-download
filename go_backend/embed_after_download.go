@@ -20,52 +20,67 @@ var lyricsLRCFetcher = func(spotifyID, trackName, artistName string, durationMs 
 // freshly downloaded local FLAC file using the native Go writer. Non-FLAC
 // formats (Opus/M4A/MP3) are gated out by canEmbedGenreLabel and are tagged
 // on the Dart side via FFmpeg instead.
-func embedMetadataAfterDownload(req DownloadRequest, filePath string) {
-	if !req.EmbedMetadata || !canEmbedGenreLabel(filePath) {
+//
+// Fields prefer resp (the resolved download result) over req (the original
+// request) via firstNonEmptyTrimmed/firstPositiveInt, matching upstream's
+// v4.7.1 embedExtensionDownloadMetadata -- resp reflects what was actually
+// downloaded, which can differ from the pre-download search request.
+func embedMetadataAfterDownload(resp DownloadResponse, req DownloadRequest, alreadyExists bool) {
+	if alreadyExists || !req.EmbedMetadata {
+		return
+	}
+	filePath := strings.TrimSpace(resp.FilePath)
+	if !canEmbedGenreLabel(filePath) {
 		return
 	}
 
 	// 1. Download cover art if available
 	var coverData []byte
-	var coverErr error
-	if req.EmbedMaxQualityCover && req.CoverURL != "" {
-		coverData, coverErr = downloadCoverToMemory(req.CoverURL, true)
-	} else if req.CoverURL != "" {
-		coverData, coverErr = downloadCoverToMemory(req.CoverURL, false)
-	}
-	if coverErr != nil {
-		GoLog("[DownloadWithExtensionFallback] Warning: failed to download cover art: %v\n", coverErr)
+	if coverURL := firstNonEmptyTrimmed(resp.CoverURL, req.CoverURL); coverURL != "" {
+		data, err := downloadCoverToMemory(coverURL, req.EmbedMaxQualityCover)
+		if err != nil {
+			GoLog("[DownloadWithExtensionFallback] Warning: failed to download cover art: %v\n", err)
+		} else {
+			coverData = data
+		}
 	}
 
 	// 2. Build metadata struct
 	metadata := Metadata{
-		Title:         req.TrackName,
-		Artist:        req.ArtistName,
-		Album:         req.AlbumName,
-		AlbumArtist:   req.AlbumArtist,
+		Title:         firstNonEmptyTrimmed(resp.Title, req.TrackName),
+		Artist:        firstNonEmptyTrimmed(resp.Artist, req.ArtistName),
+		Album:         firstNonEmptyTrimmed(resp.Album, req.AlbumName),
+		AlbumArtist:   firstNonEmptyTrimmed(resp.AlbumArtist, req.AlbumArtist),
 		ArtistTagMode: req.ArtistTagMode,
-		Date:          req.ReleaseDate,
-		TrackNumber:   req.TrackNumber,
-		TotalTracks:   req.TotalTracks,
-		DiscNumber:    req.DiscNumber,
-		TotalDiscs:    req.TotalDiscs,
-		ISRC:          req.ISRC,
-		Genre:         req.Genre,
-		Label:         req.Label,
-		Copyright:     req.Copyright,
-		Composer:      req.Composer,
+		Date:          firstNonEmptyTrimmed(resp.ReleaseDate, req.ReleaseDate),
+		TrackNumber:   firstPositiveInt(resp.TrackNumber, req.TrackNumber),
+		TotalTracks:   firstPositiveInt(resp.TotalTracks, req.TotalTracks),
+		DiscNumber:    firstPositiveInt(resp.DiscNumber, req.DiscNumber),
+		TotalDiscs:    firstPositiveInt(resp.TotalDiscs, req.TotalDiscs),
+		ISRC:          firstNonEmptyTrimmed(resp.ISRC, req.ISRC),
+		Genre:         firstNonEmptyTrimmed(resp.Genre, req.Genre),
+		Label:         firstNonEmptyTrimmed(resp.Label, req.Label),
+		Copyright:     firstNonEmptyTrimmed(resp.Copyright, req.Copyright),
+		Composer:      firstNonEmptyTrimmed(resp.Composer, req.Composer),
 	}
 
-	// 2b. Fetch and attach lyrics (LRC) so they are embedded as Vorbis
-	// LYRICS/UNSYNCEDLYRICS comments, matching SpotiFLAC behaviour.
+	// 2b. Attach lyrics (LRC) so they are embedded as Vorbis
+	// LYRICS/UNSYNCEDLYRICS comments, matching SpotiFLAC behaviour. Prefer
+	// lyrics the extension/provider already resolved on resp; only hit our
+	// own lyrics providers when it didn't supply any, so most extensions
+	// (which don't populate LyricsLRC) still get lyrics embedded.
 	if req.EmbedLyrics {
-		if lrc, err := lyricsLRCFetcher(req.SpotifyID, req.TrackName, req.ArtistName, int64(req.DurationMS)); err != nil {
-			GoLog("[DownloadWithExtensionFallback] Warning: failed to fetch lyrics: %v\n", err)
-		} else {
-			lrc = strings.TrimSpace(lrc)
-			if lrc != "" && lrc != "[instrumental:true]" {
-				metadata.Lyrics = lrc
+		lrc := strings.TrimSpace(resp.LyricsLRC)
+		if lrc == "" {
+			fetched, err := lyricsLRCFetcher(req.SpotifyID, req.TrackName, req.ArtistName, int64(req.DurationMS))
+			if err != nil {
+				GoLog("[DownloadWithExtensionFallback] Warning: failed to fetch lyrics: %v\n", err)
+			} else {
+				lrc = strings.TrimSpace(fetched)
 			}
+		}
+		if lrc != "" && lrc != "[instrumental:true]" {
+			metadata.Lyrics = lrc
 		}
 	}
 

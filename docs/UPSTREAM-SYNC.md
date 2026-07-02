@@ -16,9 +16,9 @@ source of truth for *what we inherit, what we changed, and how to sync*.
 | | |
 | --- | --- |
 | Baseline tag | `vendor/spotiflac-base` |
-| Synced to | **v4.7.0** (`c9fc1c3c`, "Release v4.7.0") |
+| Synced to | **v4.7.1** (`a493200a`, "v4.7.1") |
 | Upstream remote | `upstream` → `https://github.com/spotiflacapp/SpotiFLAC-Mobile.git` |
-| Last sync | 2026-07-01 (v4.6.0 → v4.7.0, clean 3-way apply, no conflicts) |
+| Last sync | 2026-07-02 (v4.7.0 → v4.7.1, 3-way apply with conflicts in `ac4_config.go` and `extension_providers.go` — both registry files, resolved manually, see registry below) |
 
 `vendor/spotiflac-base` always points at the exact upstream commit our
 inherited code currently matches. **Advance it only after a sync builds and
@@ -51,8 +51,8 @@ Every edit to an inherited (`go_backend/`) file lives here. These are the
 | `go_backend/embed_after_download.go` | **New file** | FLAC metadata embed after download (Feature 1) | n/a (own file) |
 | `go_backend/embed_after_download_test.go` | **New file** | Tests for the above | n/a |
 | `go_backend/testdata/silence.flac` | **New fixture** | Test asset | n/a |
-| `go_backend/extension_providers.go` | **In-place edit** (~23 lines, all inside `DownloadWithExtensionFallback`) | (1) Added `SetItemDownloading(req.ItemID)` at the two download start points (UI progress state). (2) Replaced the inline genre/label embed block with a single call to `embedMetadataAfterDownload(req, path)` — the embed logic itself was moved out to our own `embed_after_download.go`. | ✅ Wrapped in `// LM-FORK` (4 sites) |
-| `go_backend/ac4_config.go` | **In-place edit** (2 sites, added in v4.7.0) | Upstream's AC-4 MP4 box rewriting (`normalizeQuickTimeAudioToMP4`, `EnsureAC4ConfigBox`) assumed a truncated/malformed `ac-4` sample entry never happens and sliced past the entry/buffer bounds unconditionally — a crafted or corrupt AC-4 download panics (unrecoverable, crashes the app via the native bridge). Added bounds checks that bail out / return an error instead. Reported upstream; remove this patch + registry row once upstream ships a fix. | ✅ Wrapped in `// LM-FORK` (2 sites) — see `go_backend/ac4_config_truncated_entry_test.go` for regression coverage |
+| `go_backend/extension_providers.go` | **In-place edit** (2 sites, inside `DownloadWithExtensionFallback`) | (1) `SetItemDownloading(req.ItemID)` at the two download start points (UI progress state) — unchanged since v4.7.0. (2) Both post-download embed call sites now call our own `embedMetadataAfterDownload(resp, req, alreadyExists)` instead of upstream's v4.7.1 `embedExtensionDownloadMetadata(resp, req, alreadyExists)`. Upstream's function (and its `firstPositiveInt` helper) are left **defined but unused** in the file rather than deleted, so future upstream edits to that function keep applying with a 2-line conflict instead of a full-function one. | ✅ Wrapped in `// LM-FORK` (4 sites) |
+| ~~`go_backend/ac4_config.go`~~ | **Removed 2026-07-02** | Upstream's v4.7.1 shipped an equivalent (and slightly more thorough) bounds-check fix for the same truncated-AC4-entry issue we reported (`audioSampleEntryHeaderLen` now returns `(hdrLen, ok)`; both call sites check `ok`). Our `// LM-FORK` guards at both sites were removed as redundant during the v4.7.0→v4.7.1 sync. Our own regression test (`ac4_config_truncated_entry_test.go`) is kept alongside upstream's new `ac4_config_test.go` for belt-and-suspenders coverage — no action needed unless it starts failing. | n/a (patch retired) |
 
 The edits are deliberately thin call-sites — the real feature code lives in the
 own-file `embed_after_download.go`, which never conflicts on sync. To list every
