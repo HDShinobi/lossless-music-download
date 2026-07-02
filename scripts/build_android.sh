@@ -34,7 +34,13 @@ export PATH="$(go env GOPATH)/bin:$PATH"
 
 # Unified bridge: native/bridge wraps ping + SpotiFLAC go_backend into
 # a single AAR so only one libgojni.so / go.Seq runtime is linked.
+#
+# CGO_LDFLAGS forces the NDK linker to emit 16KB-aligned ELF LOAD segments.
+# gomobile (an unofficial x/ package) doesn't inherit NDK r28's 16KB-by-default
+# behavior on its own -- without this, libgojni.so links at the old 4KB
+# alignment even though every other .so in the APK (ffmpeg-kit) is 16KB-ready.
 ( cd "$ROOT/native/bridge" && go mod tidy && \
+  CGO_LDFLAGS="-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384" \
   "$(go env GOPATH)/bin/gomobile" bind -target=android/arm64 -androidapi 26 \
     -javapkg=xyz.losslessmusic.backend \
     -o "$LIBS/gobackend.aar" . )

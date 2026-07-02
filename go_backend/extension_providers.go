@@ -2605,11 +2605,12 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 					resp.Composer = req.Composer
 				}
 
-				// LM-FORK: route post-download metadata embedding through our helper
-				// (logic lives in embed_after_download.go; see docs/UPSTREAM-SYNC.md)
-				if !alreadyExists {
-					embedMetadataAfterDownload(req, normalizedResult.FilePath)
-				}
+				// LM-FORK: route post-download metadata/cover/lyrics embedding
+				// through our own helper (logic lives in embed_after_download.go;
+				// see docs/UPSTREAM-SYNC.md). Upstream's embedExtensionDownloadMetadata
+				// below is intentionally left unused rather than deleted, so future
+				// syncs to this function keep applying cleanly.
+				embedMetadataAfterDownload(resp, req, alreadyExists)
 				// END LM-FORK
 
 				if !alreadyExists && !isFDOutput(req.OutputFD) && strings.TrimSpace(req.OutputDir) != "" {
@@ -2811,11 +2812,12 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 				}
 				applyExtensionRequestFallbacks(&resp, req)
 
-				// LM-FORK: route post-download metadata embedding through our helper
-				// (logic lives in embed_after_download.go; see docs/UPSTREAM-SYNC.md)
-				if !alreadyExists {
-					embedMetadataAfterDownload(req, normalizedResult.FilePath)
-				}
+				// LM-FORK: route post-download metadata/cover/lyrics embedding
+				// through our own helper (logic lives in embed_after_download.go;
+				// see docs/UPSTREAM-SYNC.md). Upstream's embedExtensionDownloadMetadata
+				// below is intentionally left unused rather than deleted, so future
+				// syncs to this function keep applying cleanly.
+				embedMetadataAfterDownload(resp, req, alreadyExists)
 				// END LM-FORK
 
 				if !alreadyExists && !isFDOutput(req.OutputFD) && strings.TrimSpace(req.OutputDir) != "" {
@@ -3006,6 +3008,78 @@ func canEmbedGenreLabel(filePath string) bool {
 	}
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir() && info.Size() > 0
+}
+
+func embedExtensionDownloadMetadata(resp DownloadResponse, req DownloadRequest, alreadyExists bool) {
+	if alreadyExists || !req.EmbedMetadata {
+		return
+	}
+
+	filePath := strings.TrimSpace(resp.FilePath)
+	if !canEmbedGenreLabel(filePath) {
+		if req.Genre != "" || req.Label != "" || resp.CoverURL != "" || req.CoverURL != "" {
+			GoLog("[DownloadWithExtensionFallback] Skipping metadata/cover embed for non-local FLAC output path: %q\n", filePath)
+		}
+		return
+	}
+
+	coverURL := firstNonEmptyTrimmed(resp.CoverURL, req.CoverURL)
+	var coverData []byte
+	if coverURL != "" {
+		data, err := downloadCoverToMemory(coverURL, req.EmbedMaxQualityCover)
+		if err != nil {
+			GoLog("[DownloadWithExtensionFallback] Warning: failed to download cover for metadata embed: %v\n", err)
+		} else if len(data) > 0 {
+			coverData = data
+		}
+	}
+
+	metadata := Metadata{
+		Title:         firstNonEmptyTrimmed(resp.Title, req.TrackName),
+		Artist:        firstNonEmptyTrimmed(resp.Artist, req.ArtistName),
+		Album:         firstNonEmptyTrimmed(resp.Album, req.AlbumName),
+		AlbumArtist:   firstNonEmptyTrimmed(resp.AlbumArtist, req.AlbumArtist),
+		ArtistTagMode: req.ArtistTagMode,
+		Date:          firstNonEmptyTrimmed(resp.ReleaseDate, req.ReleaseDate),
+		TrackNumber:   firstPositiveInt(resp.TrackNumber, req.TrackNumber),
+		TotalTracks:   firstPositiveInt(resp.TotalTracks, req.TotalTracks),
+		DiscNumber:    firstPositiveInt(resp.DiscNumber, req.DiscNumber),
+		TotalDiscs:    firstPositiveInt(resp.TotalDiscs, req.TotalDiscs),
+		ISRC:          firstNonEmptyTrimmed(resp.ISRC, req.ISRC),
+		Genre:         firstNonEmptyTrimmed(resp.Genre, req.Genre),
+		Label:         firstNonEmptyTrimmed(resp.Label, req.Label),
+		Copyright:     firstNonEmptyTrimmed(resp.Copyright, req.Copyright),
+		Composer:      firstNonEmptyTrimmed(resp.Composer, req.Composer),
+	}
+	if req.EmbedLyrics {
+		metadata.Lyrics = resp.LyricsLRC
+	}
+
+	var err error
+	if len(coverData) > 0 {
+		err = EmbedMetadataWithCoverData(filePath, metadata, coverData)
+	} else {
+		err = EmbedMetadata(filePath, metadata, "")
+	}
+	if err != nil {
+		GoLog("[DownloadWithExtensionFallback] Warning: failed to embed metadata/cover: %v\n", err)
+		return
+	}
+
+	if len(coverData) > 0 {
+		GoLog("[DownloadWithExtensionFallback] Embedded metadata and cover from %q\n", coverURL)
+	} else {
+		GoLog("[DownloadWithExtensionFallback] Embedded metadata without cover\n")
+	}
+}
+
+func firstPositiveInt(values ...int) int {
+	for _, value := range values {
+		if value > 0 {
+			return value
+		}
+	}
+	return 0
 }
 
 func (p *extensionProviderWrapper) CustomSearch(query string, options map[string]interface{}) ([]ExtTrackMetadata, error) {

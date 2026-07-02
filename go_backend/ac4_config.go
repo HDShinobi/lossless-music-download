@@ -87,22 +87,26 @@ func findBoxBySignature(data []byte, start, end int64, typ string) (mp4Box, bool
 }
 
 // audioSampleEntryHeaderLen returns the byte length of the fixed audio sample
-// entry header (from the box body start) before child boxes begin.
-func audioSampleEntryHeaderLen(data []byte, entry mp4Box) int64 {
+// entry header (from the box body start) before child boxes begin. ok is false
+// for malformed/truncated entries whose declared header is not fully present.
+func audioSampleEntryHeaderLen(data []byte, entry mp4Box) (hdrLen int64, ok bool) {
 	// 6 bytes reserved + 2 bytes data_reference_index, then the audio fields.
 	base := entry.body()
 	if base+10 > entry.end() {
-		return 8 + 20
+		return 0, false
 	}
 	version := binary.BigEndian.Uint16(data[base+8 : base+10])
+	hdrLen = 8 + 20
 	switch version {
 	case 1:
-		return 8 + 20 + 16
+		hdrLen += 16
 	case 2:
-		return 8 + 20 + 36
-	default:
-		return 8 + 20
+		hdrLen += 36
 	}
+	if base+hdrLen > entry.end() {
+		return 0, false
+	}
+	return hdrLen, true
 }
 
 type ac4Location struct {
@@ -236,16 +240,12 @@ func normalizeQuickTimeAudioToMP4(data []byte) []byte {
 	// audio fields (samplesPerPacket, bytesPerPacket, bytesPerFrame, bytesPerSample).
 	extStart := entry.body() + 8 + 20
 	extEnd := extStart + 16
-	// LM-FORK: upstream assumed every v1 entry has the full 44 bytes and sliced
-	// data[extEnd:] unconditionally, panicking on a truncated/malformed entry
-	// (reported upstream). Bail out instead of corrupting/crashing.
 	if extEnd > entry.end() {
 		return data
 	}
-	// END LM-FORK
-	binary.BigEndian.PutUint16(data[verPos:verPos+2], 0)
 	delta := int64(-16)
 
+	binary.BigEndian.PutUint16(data[verPos:verPos+2], 0)
 	shiftChunkOffsets(data, loc.chain[0], extStart, delta)
 	for _, b := range loc.chain {
 		growBoxSize(data, b, delta)
@@ -280,15 +280,11 @@ func EnsureAC4ConfigBox(decryptedPath, sourcePath string) error {
 		return nil
 	}
 
-	hdrLen := audioSampleEntryHeaderLen(dst, loc.entry)
-	childStart := loc.entry.body() + hdrLen
-	// LM-FORK: upstream assumed the entry always has room for the fixed audio
-	// header and later sliced dst[:childStart] unconditionally, panicking on a
-	// truncated/malformed entry (reported upstream). Fail loudly instead.
-	if childStart > loc.entry.end() {
-		return fmt.Errorf("ac-4 sample entry too short for its declared version")
+	hdrLen, ok := audioSampleEntryHeaderLen(dst, loc.entry)
+	if !ok {
+		return fmt.Errorf("malformed ac-4 sample entry")
 	}
-	// END LM-FORK
+	childStart := loc.entry.body() + hdrLen
 	if _, has := findChildMP4(dst, childStart, loc.entry.end(), "dac4"); has {
 		// Already has dac4; still persist any normalization changes.
 		return os.WriteFile(decryptedPath, dst, 0o644)
