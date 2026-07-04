@@ -113,6 +113,9 @@ class DownloadForegroundService : Service() {
         var bytesReceived: Long = 0L,
         var bytesTotal: Long = 0L,
         var error: String? = null,
+        // Extension the backend reported for a failed download (its result's
+        // `service` field) — lets Dart open the right verification challenge.
+        var service: String? = null,
     )
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -304,7 +307,12 @@ class DownloadForegroundService : Service() {
             val failed = !result.optBoolean("success", false)
             if (failed) {
                 val error = result.optString("error", "unknown")
-                updateItem(request.itemId) { it.status = "failed"; it.error = error }
+                val service = result.optString("service", "").ifEmpty { null }
+                updateItem(request.itemId) {
+                    it.status = "failed"
+                    it.error = error
+                    it.service = service
+                }
                 writeSnapshot(isRunning = true)
                 continue
             }
@@ -393,6 +401,7 @@ class DownloadForegroundService : Service() {
                         .put("bytes_received", item.bytesReceived)
                         .put("bytes_total", item.bytesTotal)
                         .apply { item.error?.let { put("error", it) } }
+                        .apply { item.service?.let { put("service", it) } }
                 )
             }
         }

@@ -96,6 +96,17 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="music.youtube.com" />
             </intent-filter>
+
+            <!-- Extension signed-session auth grant callback (custom scheme,
+                 not an https App Link; go_backend/extension_signed_session.go
+                 hardcodes this as the default CallbackURL for the browser-based
+                 verification flow some extensions require). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="spotiflac" android:host="session-grant" />
+            </intent-filter>
         </activity>
 
         <service

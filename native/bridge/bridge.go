@@ -146,6 +146,26 @@ func RemoveExtensionByID(id string) error {
 	return gobackend.RemoveExtensionByID(id)
 }
 
+// SetExtensionSessionGrantByID stores a signed-session auth grant (received
+// via the spotiflac://session-grant deep link) for the given extension, so
+// its JS runtime can exchange it for a session via session.completeGrant().
+func SetExtensionSessionGrantByID(extensionID, grant string) {
+	gobackend.SetExtensionSessionGrantByID(extensionID, grant)
+}
+
+// InvokeExtensionActionJSON calls a named action exported by an extension's
+// JS runtime (e.g. "completeGrant") and returns its JSON-encoded result.
+func InvokeExtensionActionJSON(extensionID, actionName string) (string, error) {
+	return gobackend.InvokeExtensionActionJSON(extensionID, actionName)
+}
+
+// GetExtensionPendingAuthJSON returns the pending browser-auth challenge (if
+// any) an extension raised -- {"extension_id","auth_url","callback_url"} -- or
+// an empty string if there's no pending challenge for it.
+func GetExtensionPendingAuthJSON(extensionID string) (string, error) {
+	return gobackend.GetExtensionPendingAuthJSON(extensionID)
+}
+
 // --- Search ---
 
 // SearchTracksWithMetadataProvidersJSON searches for tracks using all

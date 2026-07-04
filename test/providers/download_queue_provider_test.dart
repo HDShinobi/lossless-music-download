@@ -360,5 +360,53 @@ void main() {
         expect(bridge.downloadCalls, hasLength(1));
       });
     });
+
+    // The Go backend reports WHICH extension raised a verification error in
+    // the result's `service` field (it may differ from the user-chosen source
+    // when the error came from a fallback provider, e.g. qobuz-web). The
+    // failed entry must carry it so the UI opens the right challenge.
+    group('verification service from backend result', () {
+      test('failed entry stores backend-reported verification service',
+          () async {
+        final bridge = _FakeBridge()
+          ..downloadResult = {
+            'success': false,
+            'error': 'Download failed: checkAvailability failed: '
+                'Error: VERIFY_REQUIRED at signedJSON',
+            'error_type': 'verification_required',
+            'service': 'qobuz-web',
+          };
+        final container = _makeContainer(bridge);
+        addTearDown(container.dispose);
+
+        await container
+            .read(downloadQueueProvider.notifier)
+            .enqueue(_track, service: 'amazon');
+        await _pump();
+
+        final entry = container.read(downloadQueueProvider).first;
+        expect(entry.status, 'failed');
+        // User intent preserved so retry re-enqueues with the same source.
+        expect(entry.service, 'amazon');
+        expect(entry.verificationService, 'qobuz-web');
+      });
+
+      test('failed entry has null verification service when backend omits it',
+          () async {
+        final bridge = _FakeBridge()
+          ..downloadResult = {'success': false, 'error': 'network error'};
+        final container = _makeContainer(bridge);
+        addTearDown(container.dispose);
+
+        await container
+            .read(downloadQueueProvider.notifier)
+            .enqueue(_track, service: 'amazon');
+        await _pump();
+
+        final entry = container.read(downloadQueueProvider).first;
+        expect(entry.status, 'failed');
+        expect(entry.verificationService, isNull);
+      });
+    });
   });
 }

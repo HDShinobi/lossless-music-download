@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -9,10 +10,64 @@ import '../models/download_progress.dart';
 import '../models/audio_quality.dart';
 import '../models/server_status.dart';
 
+/// Fires when a signed-session browser-auth challenge (see
+/// [BackendBridge.getExtensionPendingAuth]) completes, successfully or not.
+class ExtensionSessionGrantEvent {
+  final String extensionId;
+  final bool success;
+
+  const ExtensionSessionGrantEvent({
+    required this.extensionId,
+    required this.success,
+  });
+}
+
 class BackendBridge {
   BackendBridge([MethodChannel? channel])
       : _c = channel ?? const MethodChannel('xyz.losslessmusic/native');
   final MethodChannel _c;
+
+  StreamController<ExtensionSessionGrantEvent>? _sessionGrantController;
+
+  /// Fires when the native side finishes exchanging a
+  /// spotiflac://session-grant deep link for an extension.
+  ///
+  /// Registers the incoming-call handler lazily (only once something listens)
+  /// rather than in the constructor -- setMethodCallHandler requires a live
+  /// WidgetsFlutterBinding, which many existing unit tests never initialize.
+  Stream<ExtensionSessionGrantEvent> get extensionSessionGrantEvents {
+    var controller = _sessionGrantController;
+    if (controller == null) {
+      controller = StreamController<ExtensionSessionGrantEvent>.broadcast();
+      _sessionGrantController = controller;
+      _c.setMethodCallHandler(_handleNativeCall);
+    }
+    return controller.stream;
+  }
+
+  Future<void> _handleNativeCall(MethodCall call) async {
+    if (call.method != 'extensionSessionGrantCompleted') return;
+    final args = Map<String, dynamic>.from(call.arguments as Map);
+    // Guaranteed non-null: this handler is only ever registered by the
+    // extensionSessionGrantEvents getter, which sets the controller first.
+    _sessionGrantController!.add(ExtensionSessionGrantEvent(
+      extensionId: (args['extension_id'] ?? '').toString(),
+      success: args['success'] == true,
+    ));
+  }
+
+  /// Returns the pending browser-auth challenge for [extensionId] (if any) —
+  /// `{"auth_url": ..., "callback_url": ...}` — or null when there's none.
+  Future<Map<String, dynamic>?> getExtensionPendingAuth(
+    String extensionId,
+  ) async {
+    final raw = await _c.invokeMethod<String>(
+      'getExtensionPendingAuth',
+      {'extensionId': extensionId},
+    );
+    if (raw == null || raw.isEmpty) return null;
+    return Map<String, dynamic>.from(jsonDecode(raw));
+  }
 
   static const _progressChannel = EventChannel('xyz.losslessmusic/progress');
 

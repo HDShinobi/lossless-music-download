@@ -239,6 +239,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String discLabel(int number) {
+    return 'Disc $number';
+  }
+
+  @override
   String albumTrackCount(int count) {
     return '$count tracks';
   }
@@ -477,6 +482,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shareUrlNotRecognized => 'Link not recognized';
+
+  @override
+  String get extensionVerificationOpened =>
+      'Opened browser to verify this source — try downloading again after signing in';
+
+  @override
+  String get extensionVerificationSucceeded =>
+      'Verification complete — you can try downloading again';
+
+  @override
+  String get extensionVerificationFailed =>
+      'Verification failed — please try again';
 
   @override
   String get recentSearches => 'Recent searches';

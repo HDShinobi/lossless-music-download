@@ -1,7 +1,9 @@
 package xyz.losslessmusic.app
 
 import android.content.Context
+import android.content.Intent
 import android.net.wifi.WifiManager
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
@@ -25,6 +27,72 @@ class MainActivity : FlutterActivity() {
     private val bridgeExecutor = Executors.newFixedThreadPool(4)
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    // Set once configureFlutterEngine runs; used by handleSessionGrantIntent to
+    // notify Dart. A cold start's deep link can arrive before this is set, so
+    // events raised before then are queued in pendingSessionGrantEvents.
+    private var backendChannel: MethodChannel? = null
+    private val pendingSessionGrantEvents = mutableListOf<Map<String, Any>>()
+
+    // Flutter's default deep-link handling would otherwise try to route
+    // spotiflac:// intents through go_router (as a path) before
+    // handleSessionGrantIntent gets a chance to consume them, producing a
+    // "no routes for location" error screen. We handle these intents
+    // ourselves, so tell Flutter not to.
+    override fun shouldHandleDeeplinking(): Boolean = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        handleSessionGrantIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleSessionGrantIntent(intent)
+    }
+
+    /**
+     * Delivers a signed-session auth grant (from the spotiflac://session-grant
+     * browser redirect) to the extension runtime and completes the exchange.
+     * See go_backend/extension_signed_session.go for the flow this closes.
+     */
+    private fun handleSessionGrantIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (!uri.scheme.equals("spotiflac", ignoreCase = true) ||
+            !uri.host.equals("session-grant", ignoreCase = true)
+        ) {
+            return
+        }
+        val grant = (uri.getQueryParameter("grant") ?: uri.getQueryParameter("code"))
+            ?.trim().orEmpty()
+        val extensionId = uri.getQueryParameter("state")?.trim().orEmpty()
+        if (grant.isEmpty() || extensionId.isEmpty()) {
+            android.util.Log.w("MainActivity", "session-grant redirect missing grant/state")
+            return
+        }
+        intent.data = null
+        bridgeExecutor.execute {
+            try {
+                Bridge.setExtensionSessionGrantByID(extensionId, grant)
+                Bridge.invokeExtensionActionJSON(extensionId, "completeGrant")
+                mainHandler.post { notifySessionGrantCompleted(extensionId, true) }
+            } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "session-grant exchange failed: ${e.message}")
+                mainHandler.post { notifySessionGrantCompleted(extensionId, false) }
+            }
+        }
+    }
+
+    private fun notifySessionGrantCompleted(extensionId: String, success: Boolean) {
+        val payload = mapOf("extension_id" to extensionId, "success" to success)
+        val ch = backendChannel
+        if (ch == null) {
+            pendingSessionGrantEvents.add(payload)
+            return
+        }
+        ch.invokeMethod("extensionSessionGrantCompleted", payload)
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         // Set the app version so the Go backend sends the correct User-Agent
@@ -35,8 +103,8 @@ class MainActivity : FlutterActivity() {
             packageManager.getPackageInfo(packageName, 0).versionName ?: ""
         } catch (_: Exception) { "" }
         Bridge.setAppVersion(versionName)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
-            .setMethodCallHandler { call, result ->
+        val methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
+        methodChannel.setMethodCallHandler { call, result ->
                 bridgeExecutor.execute {
                     try {
                         val (handled, value) = dispatch(call)
@@ -48,6 +116,14 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             }
+        backendChannel = methodChannel
+        if (pendingSessionGrantEvents.isNotEmpty()) {
+            val events = pendingSessionGrantEvents.toList()
+            pendingSessionGrantEvents.clear()
+            for (event in events) {
+                methodChannel.invokeMethod("extensionSessionGrantCompleted", event)
+            }
+        }
 
         // Real-time download progress stream (~300 ms push interval).
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, "xyz.losslessmusic/progress")
@@ -187,6 +263,9 @@ class MainActivity : FlutterActivity() {
             call.argument<String>("optionsJson") ?: "",
         )
         "getSearchProviders" -> true to Bridge.getSearchProvidersJSON()
+        "getExtensionPendingAuth" -> true to Bridge.getExtensionPendingAuthJSON(
+            call.argument<String>("extensionId")!!
+        )
         "startNativeDownloadWorker" -> {
             DownloadForegroundService.startQueue(
                 applicationContext,

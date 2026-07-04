@@ -47,6 +47,11 @@ class DownloadEntry {
   final String? service;
   final String? quality;
 
+  /// Extension that raised a verification_required error, as reported by the
+  /// backend result's `service` field. May differ from [service] when the
+  /// error came from a fallback provider (e.g. qobuz-web behind amazon).
+  final String? verificationService;
+
   const DownloadEntry({
     required this.track,
     required this.itemId,
@@ -59,6 +64,7 @@ class DownloadEntry {
     this.error,
     this.service,
     this.quality,
+    this.verificationService,
   });
 
   DownloadEntry copyWith({
@@ -69,6 +75,7 @@ class DownloadEntry {
     double? speedBytesPerSec,
     Duration? eta,
     String? error,
+    String? verificationService,
   }) {
     return DownloadEntry(
       track: track,
@@ -82,6 +89,7 @@ class DownloadEntry {
       error: error ?? this.error,
       service: service,
       quality: quality,
+      verificationService: verificationService ?? this.verificationService,
     );
   }
 }
@@ -324,6 +332,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       bytesReceived: item.bytesReceived,
       totalBytes: item.bytesTotal > 0 ? item.bytesTotal : entry.totalBytes,
       error: item.error,
+      verificationService: item.service,
     );
   }
 
@@ -421,11 +430,14 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
           (res['status']?.toString().toLowerCase().contains('fail') ?? false) ||
           (res['status']?.toString().toLowerCase().contains('cancel') ?? false);
       final err = res['error']?.toString() ?? res['error_type']?.toString();
+      final resultService = res['service']?.toString();
       _setStatus(
         next.itemId,
         failed ? 'failed' : 'done',
         progressIfDone: failed ? null : 1.0,
         error: failed ? (err?.isNotEmpty == true ? err : 'unknown') : null,
+        verificationService:
+            failed && (resultService?.isNotEmpty ?? false) ? resultService : null,
       );
       if (!failed) {
         // FLAC is tagged natively in the Go backend. Non-FLAC downloads
@@ -655,7 +667,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   }
 
   void _setStatus(String itemId, String status,
-      {double? progressIfDone, String? error}) {
+      {double? progressIfDone, String? error, String? verificationService}) {
     state = [
       for (final e in state)
         if (e.itemId == itemId)
@@ -663,6 +675,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
             status: status,
             progress: progressIfDone ?? e.progress,
             error: error,
+            verificationService: verificationService,
           )
         else
           e,

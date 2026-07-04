@@ -95,6 +95,14 @@
       }
     }
   },
+  "discLabel": "Disc {number}",
+  "@discLabel": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
   "albumTrackCount": "{count} tracks",
   "@albumTrackCount": {
     "placeholders": {
@@ -197,6 +205,12 @@
   "@loadingSharedLink": {"description": "Snackbar shown when resolving a shared music URL"},
   "shareUrlNotRecognized": "Link not recognized",
   "@shareUrlNotRecognized": {"description": "Shown when a shared URL cannot be resolved to tracks"},
+  "extensionVerificationOpened": "Opened browser to verify this source — try downloading again after signing in",
+  "@extensionVerificationOpened": {"description": "Snackbar shown when a browser tab opens for an extension's signed-session verification"},
+  "extensionVerificationSucceeded": "Verification complete — you can try downloading again",
+  "@extensionVerificationSucceeded": {"description": "Snackbar shown when an extension's browser verification succeeds"},
+  "extensionVerificationFailed": "Verification failed — please try again",
+  "@extensionVerificationFailed": {"description": "Snackbar shown when an extension's browser verification fails"},
   "recentSearches": "Recent searches",
   "recentSearchesClear": "Clear all",
   "searchSourceAll": "All",

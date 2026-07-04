@@ -12,6 +12,10 @@ class NativeWorkerItemState {
   final int bytesTotal;
   final String? error;
 
+  /// Extension that raised a verification_required error, as reported by the
+  /// backend download result's `service` field. Null for other failures.
+  final String? service;
+
   const NativeWorkerItemState({
     required this.itemId,
     required this.status,
@@ -19,6 +23,7 @@ class NativeWorkerItemState {
     required this.bytesReceived,
     required this.bytesTotal,
     this.error,
+    this.service,
   });
 
   factory NativeWorkerItemState.fromJson(Map<String, dynamic> j) => NativeWorkerItemState(
@@ -28,6 +33,7 @@ class NativeWorkerItemState {
         bytesReceived: (j['bytes_received'] as num?)?.toInt() ?? 0,
         bytesTotal: (j['bytes_total'] as num?)?.toInt() ?? 0,
         error: j['error']?.toString(),
+        service: j['service']?.toString(),
       );
 }
 

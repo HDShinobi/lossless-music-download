@@ -542,6 +542,12 @@ abstract class AppLocalizations {
   /// **'{count} tracks to other devices'**
   String serveBannerSubtitle(int count);
 
+  /// No description provided for @discLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Disc {number}'**
+  String discLabel(int number);
+
   /// No description provided for @albumTrackCount.
   ///
   /// In en, this message translates to:
@@ -997,6 +1003,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Link not recognized'**
   String get shareUrlNotRecognized;
+
+  /// Snackbar shown when a browser tab opens for an extension's signed-session verification
+  ///
+  /// In en, this message translates to:
+  /// **'Opened browser to verify this source — try downloading again after signing in'**
+  String get extensionVerificationOpened;
+
+  /// Snackbar shown when an extension's browser verification succeeds
+  ///
+  /// In en, this message translates to:
+  /// **'Verification complete — you can try downloading again'**
+  String get extensionVerificationSucceeded;
+
+  /// Snackbar shown when an extension's browser verification fails
+  ///
+  /// In en, this message translates to:
+  /// **'Verification failed — please try again'**
+  String get extensionVerificationFailed;
 
   /// No description provided for @recentSearches.
   ///

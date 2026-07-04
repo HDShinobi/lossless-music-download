@@ -239,6 +239,11 @@ class AppLocalizationsVi extends AppLocalizations {
   }
 
   @override
+  String discLabel(int number) {
+    return 'Đĩa $number';
+  }
+
+  @override
   String albumTrackCount(int count) {
     return '$count bài';
   }
@@ -475,6 +480,18 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get shareUrlNotRecognized => 'Không nhận ra link này';
+
+  @override
+  String get extensionVerificationOpened =>
+      'Đã mở trình duyệt để xác thực nguồn này — đăng nhập xong hãy thử tải lại';
+
+  @override
+  String get extensionVerificationSucceeded =>
+      'Xác thực xong — bạn có thể thử tải lại';
+
+  @override
+  String get extensionVerificationFailed =>
+      'Xác thực thất bại — vui lòng thử lại';
 
   @override
   String get recentSearches => 'Tìm kiếm gần đây';

@@ -95,6 +95,14 @@
       }
     }
   },
+  "discLabel": "Đĩa {number}",
+  "@discLabel": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
   "albumTrackCount": "{count} bài",
   "@albumTrackCount": {
     "placeholders": {
@@ -197,6 +205,12 @@
   "@loadingSharedLink": {"description": "Thanh thông báo khi đang xử lý URL nhạc đã chia sẻ"},
   "shareUrlNotRecognized": "Không nhận ra link này",
   "@shareUrlNotRecognized": {"description": "Hiển thị khi URL đã chia sẻ không thể phân giải thành bài hát"},
+  "extensionVerificationOpened": "Đã mở trình duyệt để xác thực nguồn này — đăng nhập xong hãy thử tải lại",
+  "@extensionVerificationOpened": {"description": "Thanh thông báo khi mở trình duyệt để xác thực signed-session của extension"},
+  "extensionVerificationSucceeded": "Xác thực xong — bạn có thể thử tải lại",
+  "@extensionVerificationSucceeded": {"description": "Thanh thông báo khi xác thực trình duyệt của extension thành công"},
+  "extensionVerificationFailed": "Xác thực thất bại — vui lòng thử lại",
+  "@extensionVerificationFailed": {"description": "Thanh thông báo khi xác thực trình duyệt của extension thất bại"},
   "recentSearches": "Tìm kiếm gần đây",
   "recentSearchesClear": "Xóa tất cả",
   "searchSourceAll": "Tất cả",

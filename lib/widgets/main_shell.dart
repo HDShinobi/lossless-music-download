@@ -5,9 +5,13 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/download_queue_provider.dart';
+import '../providers/extensions_provider.dart';
 import '../providers/search_provider.dart';
+import '../services/backend_bridge.dart';
 import '../services/update_checker.dart';
 import '../theme/app_tokens.dart';
+import '../utils/extension_auth_launcher.dart';
+import '../utils/extension_verification_coordinator.dart';
 import '../vendor/spotiflac/share_intent_service.dart';
 import 'update_dialog.dart';
 
@@ -21,11 +25,31 @@ class MainShell extends ConsumerStatefulWidget {
 
 class _MainShellState extends ConsumerState<MainShell> {
   StreamSubscription<String>? _shareSub;
+  StreamSubscription<ExtensionSessionGrantEvent>? _grantSub;
   String? _handledInitialUrl;
+
+  // Opens the browser challenge for the extension a failed download actually
+  // needs (backend-reported, not the user-chosen source), throttles duplicate
+  // tabs, expires abandoned challenges, and auto-retries after a grant.
+  late final ExtensionVerificationCoordinator _verification =
+      ExtensionVerificationCoordinator(
+    openVerification: _openVerification,
+    retryItem: (itemId) =>
+        ref.read(downloadQueueProvider.notifier).retry(itemId),
+  );
 
   @override
   void initState() {
     super.initState();
+    ref.listenManual<List<DownloadEntry>>(
+      downloadQueueProvider,
+      _verification.onQueueChanged,
+    );
+    _grantSub = ref
+        .read(backendBridgeProvider)
+        .extensionSessionGrantEvents
+        .listen(_onSessionGrantCompleted);
+
     final svc = ShareIntentService();
     svc.initialize().then((_) {
       if (!mounted) return;
@@ -67,6 +91,33 @@ class _MainShellState extends ConsumerState<MainShell> {
     }
   }
 
+  Future<bool> _openVerification(String extensionId) async {
+    final bridge = ref.read(backendBridgeProvider);
+    final opened = await openPendingExtensionVerification(bridge, extensionId);
+    if (!mounted || !opened) return opened;
+    final t = AppLocalizations.of(context);
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(t.extensionVerificationOpened)));
+    return opened;
+  }
+
+  void _onSessionGrantCompleted(ExtensionSessionGrantEvent event) {
+    _verification.onGrantCompleted(
+      event.extensionId,
+      event.success,
+      ref.read(downloadQueueProvider),
+    );
+    if (!mounted) return;
+    final t = AppLocalizations.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        event.success
+            ? t.extensionVerificationSucceeded
+            : t.extensionVerificationFailed,
+      ),
+    ));
+  }
+
   Future<void> _handleSharedUrl(String url) async {
     widget.shell.goBranch(0, initialLocation: widget.shell.currentIndex == 0);
     if (!context.mounted) return;
@@ -84,6 +135,8 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   void dispose() {
     _shareSub?.cancel();
+    _grantSub?.cancel();
+    _verification.dispose();
     super.dispose();
   }
 
