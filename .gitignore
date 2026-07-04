@@ -23,3 +23,6 @@ go_backend/.gomobile/
 .remember/logs/
 # Added by code-review-graph
 .code-review-graph/
+
+# spec-harden: generated deployment symlink (https://github.com/HDShinobi/spec-harden)
+.agents/skills/spec-harden

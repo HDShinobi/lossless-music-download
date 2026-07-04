@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.3.0+3
+version: 0.4.0+4
 
 environment:
   sdk: ^3.11.5
@@ -53,6 +53,8 @@ dependencies:
   # In-app update: read current version + open the downloaded APK installer.
   package_info_plus: ^8.0.0
   open_filex: ^4.5.0
+  # Opens the browser for extension signed-session auth challenges.
+  url_launcher: ^6.3.1
   # Cached, resized cover-art thumbnails (avoids perpetual reload spinners).
   cached_network_image: ^3.4.1
   # Android SDK level detection (storage-permission flow differs <30 vs >=30).
@@ -64,6 +66,7 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   archive: ^3.6.0
+  fake_async: ^1.3.1
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

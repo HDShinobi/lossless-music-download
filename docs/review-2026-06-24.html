@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LosslessMusic-v2 — Expert Review</title>
+</head>
+<body>
+<style>
+  :root {
+    --bg: #0B0D11;
+    --surface: #13161E;
+    --surface2: #1C2130;
+    --border: #252C3F;
+    --text: #DDE1F0;
+    --muted: #6A718C;
+    --accent: #1DB954;
+    --bug: #E04F4F;
+    --gap: #E09A2A;
+    --cleanup: #5B8DD9;
+    --good: #1DB954;
+    --mono: 'SF Mono','Fira Code','Cascadia Code',ui-monospace,monospace;
+    --sans: -apple-system,'Helvetica Neue',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6}
+  .wrap{max-width:1080px;margin:0 auto;padding:48px 28px 80px}
+
+  /* Header */
+  .hd{border-bottom:1px solid var(--border);padding-bottom:24px;margin-bottom:36px}
+  .hd-eye{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+  .hd-title{font-size:28px;font-weight:700;letter-spacing:-.025em;line-height:1.15}
+  .hd-sub{margin-top:6px;color:var(--muted);font-size:13px}
+
+  /* At-a-glance */
+  .glance{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:40px}
+  .gc{background:var(--surface);border:1px solid var(--border);padding:14px 18px;min-width:110px}
+  .gc .n{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+  .gc .l{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-top:3px}
+  .gc.bug .n{color:var(--bug)}
+  .gc.gap .n{color:var(--gap)}
+  .gc.cl  .n{color:var(--cleanup)}
+  .gc.ux  .n{color:var(--accent)}
+
+  /* Section label */
+  .slabel{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:16px}
+
+  /* Strengths grid */
+  .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:8px;margin-bottom:40px}
+  .si{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);padding:9px 13px;font-size:13px}
+  .si .pill{display:block;font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:.06em;margin-bottom:2px}
+
+  /* Table */
+  .tw{overflow-x:auto;margin-bottom:48px}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:680px}
+  th{text-align:left;font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--border);font-weight:400;white-space:nowrap}
+  td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+  tbody tr:hover td{background:var(--surface)}
+  .rk{font-family:var(--mono);color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;flex-shrink:0;position:relative;top:1px}
+  .dbug{background:var(--bug)} .dgap{background:var(--gap)} .dcl{background:var(--cleanup)}
+  .ep{display:inline-block;font-family:var(--mono);font-size:10px;padding:2px 7px;border:1px solid}
+  .es{color:var(--accent);border-color:var(--accent)}
+  .em{color:var(--gap);border-color:var(--gap)}
+  .el{color:var(--bug);border-color:var(--bug)}
+  code{font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--surface2);padding:1px 5px}
+  .src{font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+  /* Area sections */
+  .area{margin-bottom:44px}
+  .ah{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+  .an{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .at{font-size:16px;font-weight:600}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:680px){.row2{grid-template-columns:1fr}}
+  .rc{background:var(--surface);border:1px solid var(--border);padding:16px 18px}
+  .rlabel{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:12px}
+  .fi{display:flex;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+  .fi:last-child{border-bottom:none}
+  .ft{flex-shrink:0;font-family:var(--mono);font-size:10px;padding:2px 6px;border:1px solid;height:fit-content;margin-top:2px;white-space:nowrap}
+  .fbug{color:var(--bug);border-color:var(--bug)}
+  .fgap{color:var(--gap);border-color:var(--gap)}
+  .fcl{color:var(--cleanup);border-color:var(--cleanup)}
+  .fgood{color:var(--good);border-color:var(--good)}
+  .fb{flex:1;line-height:1.5}
+  .ff{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:3px}
+
+  hr{border:none;border-top:1px solid var(--border);margin:40px 0}
+</style>
+
+<div class="wrap">
+
+  <div class="hd">
+    <div class="hd-eye">Expert Audit · June 2026</div>
+    <div class="hd-title">LosslessMusic-v2 Review</div>
+    <div class="hd-sub">Technical + UI/UX · vs SpotiFLAC-Mobile · 2 senior reviewers · 5 functional areas</div>
+  </div>
+
+  <div class="glance">
+    <div class="gc bug"><div class="n">5</div><div class="l">Bugs</div></div>
+    <div class="gc gap"><div class="n">7</div><div class="l">Feature gaps</div></div>
+    <div class="gc cl"><div class="n">3</div><div class="l">Cleanup</div></div>
+    <div class="gc ux"><div class="n">8</div><div class="l">UX issues</div></div>
+  </div>
+
+  <div class="slabel">Strengths vs SpotiFLAC — keep these</div>
+  <div class="sg">
+    <div class="si"><span class="pill">UI ✓</span>Source filter pill in search</div>
+    <div class="si"><span class="pill">UI ✓</span>Recent search history</div>
+    <div class="si"><span class="pill">UI ✓</span>Multi-select batch download</div>
+    <div class="si"><span class="pill">UI ✓</span>Artist hero screen</div>
+    <div class="si"><span class="pill">UI ✓</span>Format / quality badges in library</div>
+    <div class="si"><span class="pill">UI ✓</span>Persistent download bar strip</div>
+    <div class="si"><span class="pill">UI ✓</span>Shimmer skeleton + stagger anims</div>
+    <div class="si"><span class="pill">DATA ✓</span>ATMOS badge in track tile</div>
+  </div>
+
+  <div class="slabel">Unified Priority Matrix</div>
+  <div class="tw">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Severity</th><th>Area</th><th>Issue</th><th>Fix</th><th>Effort</th><th>From</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="rk">01</td>
+          <td><span class="dot dbug"></span>Bug</td>
+          <td>Settings</td>
+          <td>"Ask before download" toggle does nothing</td>
+          <td>Read <code>askBeforeDownloadProvider</code> in <code>_onDownload()</code></td>
+          <td><span class="ep es">S</span></td>
+          <td class="src">Dev</td>
+        </tr>
+        <tr>
+          <td class="rk">02</td>
+          <td><span class="dot dbug"></span>Bug</td>
+          <td>Queue</td>
+          <td>No per-tile state — button identical before &amp; after queuing</td>
+          <td>Swap icon to spinner → checkmark on enqueue, match SpotiFLAC</td>
+          <td><span class="ep em">M</span></td>
+          <td class="src">UX</td>
+        </tr>
+        <tr>
+          <td class="rk">03</td>
+          <td><span class="dot dgap"></span>Gap</td>
+          <td>Library</td>
+          <td>No search or filter — grows unusable at scale</td>
+          <td>Add <code>TextField</code> above list, filter by title/artist in-memory</td>
+          <td><span class="ep em">M</span></td>
+          <td class="src">UX</td>
+        </tr>
+        <tr>
+          <td class="rk">04</td>
+          <td><span class="dot dbug"></span>Bug</td>
+          <td>Download</td>
+          <td>Batch download silently uses wrong source / quality</td>
+          <td>Show picker once before batch loop in <code>search_screen.dart:97</code></td>
+          <td><span class="ep em">M</span></td>
+          <td class="src">Dev</td>
+        </tr>
+        <tr>
+          <td class="rk">05</td>
+          <td><span class="dot dbug"></span>Bug</td>
+          <td>Library</td>
+          <td>ALAC files marked unverified (only FLAC passes check)</td>
+          <td><code>ext == 'FLAC' || ext == 'ALAC'</code> in <code>library_provider.dart:108</code></td>
+          <td><span class="ep es">S</span></td>
+          <td class="src">Dev</td>
+        </tr>
+        <tr>
+          <td class="rk">06</td>
+          <td><span class="dot dgap"></span>Gap</td>
+          <td>Nav</td>
+          <td>Library is tab 4 — too far after every successful download</td>
+          <td>Reorder: Search → Library → Queue → Server → Settings</td>
+          <td><span class="ep es">S</span></td>
+          <td class="src">UX</td>
+        </tr>
+        <tr>
+          <td class="rk">07</td>
+          <td><span class="dot dbug"></span>Bug</td>
+          <td>Library</td>
+          <td>Album tiles have no <code>onTap</code> — tapping does nothing</td>
+          <td>Add <code>onTap</code> → album detail in <code>library_screen.dart _AlbumTile</code></td>
+          <td><span class="ep es">S</span></td>
+          <td class="src">UX</td>
+        </tr>
+        <tr>
+          <td class="rk">08</td>
+          <td><span class="dot dgap"></span>Gap</td>
+          <td>Download</td>
+          <td>Quality options hardcoded — extension capabilities ignored</td>
+          <td>Build sheet from <code>extension.qualityOptions</code></td>
+          <td><span class="ep es">S</span></td>
+          <td class="src">Dev</td>
+        </tr>
+        <tr>
+          <td class="rk">09</td>
+          <td><span class="dot dgap"></span>Gap</td>
+          <td>Settings</td>
+          <td>No download folder display, no default quality config</td>
+          <td>Add folder display + picker, quality default dropdown</td>
+          <td><span class="ep em">M</span></td>
+          <td class="src">Dev + UX</td>
+        </tr>
+        <tr>
+          <td class="rk">10</td>
+          <td><span class="dot dgap"></span>Gap</td>
+          <td>Queue</td>
+          <td>Queue not persisted — lost on restart, dupe check broken</td>
+          <td>Persist completed entries to <code>SharedPreferences</code> as JSON</td>
+          <td><span class="ep em">M</span></td>
+          <td class="src">Dev</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr>
+
+  <div class="slabel">Area Breakdown</div>
+
+  <!-- 01 -->
+  <div class="area">
+    <div class="ah"><span class="an">01</span><span class="at">Download from Sources</span></div>
+    <div class="row2">
+      <div class="rc">
+        <div class="rlabel">Senior Developer</div>
+        <div class="fi">
+          <span class="ft fbug">BUG</span>
+          <div class="fb">Batch download calls <code>queue.enqueue(track)</code> with no service/quality — silently falls through to <code>dlProviders.first</code><div class="ff">lib/screens/search_screen.dart:97–113</div></div>
+        </div>
+        <div class="fi">
+          <span class="ft fbug">BUG</span>
+          <div class="fb">Quality options are 3 hardcoded radios — extension quality caps not read at all<div class="ff">lib/widgets/download_sheet.dart:18–22</div></div>
+        </div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">No error classification — <code>error_type</code> is raw string, never mapped to enum. SpotiFLAC has <code>DownloadErrorType</code> driving distinct user messages<div class="ff">lib/providers/download_queue_provider.dart:212–217</div></div>
+        </div>
+      </div>
+      <div class="rc">
+        <div class="rlabel">Senior UI/UX</div>
+        <div class="fi">
+          <span class="ft fgood">GOOD</span>
+          <div class="fb">Source filter pill is excellent — better than SpotiFLAC's approach. Keep as-is.</div>
+        </div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">No confirmation of which source/quality was used after a successful download. User has no feedback that the right version was fetched.</div>
+        </div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">Error messages don't explain what went wrong or offer next steps (retry, switch source, contact support).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 02 -->
+  <div class="area">
+    <div class="ah"><span class="an">02</span><span class="at">Download Process / Queue</span></div>
+    <div class="row2">
+      <div class="rc">
+        <div class="rlabel">Senior Developer</div>
+        <div class="fi">
+          <span class="ft fbug">BUG</span>
+          <div class="fb">Status-mapping logic duplicated verbatim in two places<div class="ff">provider:312 · widget:252 — extract one shared utility</div></div>
+        </div>
+        <div class="fi">
+          <span class="ft fbug">BUG</span>
+          <div class="fb"><code>progressStream()</code> uses <code>.handleError((_){})</code> — deserialization errors silently swallowed, no fallback re-subscription<div class="ff">lib/services/backend_bridge.dart:92–95</div></div>
+        </div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">Queue in-memory only — lost on restart, cross-session duplicate detection broken. Fix: persist completed entries to SharedPreferences.</div>
+        </div>
+        <div class="fi">
+          <span class="ft fcl">CLEANUP</span>
+          <div class="fb">EventChannel busy-loop runs unconditionally even when nothing is downloading<div class="ff">android/MainActivity.kt:57–67</div></div>
+        </div>
+      </div>
+      <div class="rc">
+        <div class="rlabel">Senior UI/UX</div>
+        <div class="fi">
+          <span class="ft fbug">BUG</span>
+          <div class="fb">Highest-impact UX issue: download button shows no state change after queuing. SpotiFLAC swaps to spinner → checkmark. Users can't tell if tap registered.</div>
+        </div>
+        <div class="fi">
+          <span class="ft fgood">GOOD</span>
+          <div class="fb">Persistent <code>_DownloadBar</code> strip is excellent — better than SpotiFLAC's modal queue approach. Keep.</div>
+        </div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">No pause / cancel per-track from the queue view. Users can dismiss but cannot re-order or retry inline.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 03 -->
+  <div class="area">
+    <div class="ah"><span class="an">03</span><span class="at">Library</span></div>
+    <div class="row2">
+      <div class="rc">
+        <div class="rlabel">Senior Developer</div>
+        <div class="fi">
+          <span class="ft fbug">BUG</span>
+          <div class="fb">ALAC files from Tidal marked unverified — <code>verified: ext == 'FLAC'</code> misses ALAC<div class="ff">library_provider.dart:108 — add <code>|| ext == 'ALAC'</code></div></div>
+        </div>
+        <div class="fi">
+          <span class="ft fbug">BUG</span>
+          <div class="fb"><code>File.lengthSync()</code> called synchronously for every entry. <code>sizeBytes</code> is not even rendered in the UI — remove or make async<div class="ff">lib/providers/library_provider.dart:100–102</div></div>
+        </div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">Full re-scan on every library open. Backend supports incremental but Flutter always passes a fresh call. Migrate to NotifierProvider with incremental scans.</div>
+        </div>
+      </div>
+      <div class="rc">
+        <div class="rlabel">Senior UI/UX</div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">No search or filter in library — the single largest daily-use gap. SpotiFLAC has search + sort + advanced filter. A growing collection is unusable without it.</div>
+        </div>
+        <div class="fi">
+          <span class="ft fbug">BUG</span>
+          <div class="fb">Album grid tiles have no <code>onTap</code>. Tapping an album does nothing — breaks the core browsing expectation<div class="ff">lib/screens/library_screen.dart _AlbumTile</div></div>
+        </div>
+        <div class="fi">
+          <span class="ft fgood">GOOD</span>
+          <div class="fb">Format/quality badges (FLAC/M4A/ALAC) and the verified checkmark are better information density than SpotiFLAC's library tiles.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 04 -->
+  <div class="area">
+    <div class="ah"><span class="an">04</span><span class="at">Metadata Embedding</span></div>
+    <div class="row2">
+      <div class="rc">
+        <div class="rlabel">Senior Developer</div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">Embed flags (<code>embedMetadata</code>, <code>embedMaxQualityCover</code>, <code>embedLyrics</code>) hardcoded <code>true</code> — no user control. Add 3 toggles to settings backed by SharedPreferences.</div>
+        </div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">Filename format hardcoded as <code>{"{artist}/{album} ({year})/{track}. {title}"}</code>. Make it user-editable with live preview in settings.</div>
+        </div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">No ReplayGain support. SpotiFLAC-Module-Version has this capability in its Python backend.</div>
+        </div>
+      </div>
+      <div class="rc">
+        <div class="rlabel">Senior UI/UX</div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">No metadata editor in library. SpotiFLAC has long-press → edit tags. Power users expect this for fixing incorrect metadata from the source.</div>
+        </div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">No feedback after metadata write — user can't confirm tags were embedded correctly without opening a third-party player.</div>
+        </div>
+        <div class="fi">
+          <span class="ft fgood">GOOD</span>
+          <div class="fb">ATMOS badge in track tile is a meaningful differentiator — not present in SpotiFLAC.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 05 -->
+  <div class="area">
+    <div class="ah"><span class="an">05</span><span class="at">Settings</span></div>
+    <div class="row2">
+      <div class="rc">
+        <div class="rlabel">Senior Developer</div>
+        <div class="fi">
+          <span class="ft fbug">BUG</span>
+          <div class="fb">"Ask before download" toggle never read by download flow — sheet always appears regardless<div class="ff">settings_screen.dart:23–30 vs search_screen.dart:89–91</div></div>
+        </div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">No download directory picker — path auto-resolved by <code>AppDirs.downloadDir()</code>, not user-configurable.</div>
+        </div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">Download/metadata provider priority has no UI despite bridge already supporting it at <code>download_queue_provider.dart:144–149</code>.</div>
+        </div>
+      </div>
+      <div class="rc">
+        <div class="rlabel">Senior UI/UX</div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">Settings has only 2 items. No download folder display, no default quality, no app version. Users genuinely cannot tell where files are saved.</div>
+        </div>
+        <div class="fi">
+          <span class="ft fgap">GAP</span>
+          <div class="fb">No grouping. SpotiFLAC groups into Download / Audio / About sections. Even minimal settings benefit from a grouped structure and an About footer (version + storage used).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body></html>
