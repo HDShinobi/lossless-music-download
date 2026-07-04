@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'package:lossless_music_download/providers/library_provider.dart';
+import 'package:lossless_music_download/screens/library_album_screen.dart';
 import 'package:lossless_music_download/widgets/library_track_tile.dart';
 import 'package:lossless_music_download/widgets/serve_banner.dart';
 
@@ -189,7 +190,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           album: album,
           tracks: tracks,
           coverEntry: coverEntry,
-          onTap: () => context.go('/library/verified', extra: tracks.first),
+          onTap: () => context.push(
+            '/library/album',
+            extra: LibraryAlbumRouteArgs(artistName: artist, albumName: album),
+          ),
         );
       },
     );

@@ -31,6 +31,9 @@ class LibraryEntry {
   /// True when artist/album were inferred from the folder path because the
   /// embedded audio tags could not be read (e.g. M4A missing ilst atom).
   final bool tagsFromFallback;
+  /// Position within the album, from embedded tags. Null when untagged.
+  final int? trackNumber;
+  final int? discNumber;
 
   const LibraryEntry({
     required this.path,
@@ -44,6 +47,8 @@ class LibraryEntry {
     required this.format,
     required this.verified,
     this.tagsFromFallback = false,
+    this.trackNumber,
+    this.discNumber,
   });
 }
 
@@ -105,6 +110,8 @@ final libraryProvider = FutureProvider<List<LibraryEntry>>((ref) async {
       format: ext,
       verified: ext == 'FLAC' || ext == 'ALAC',
       tagsFromFallback: tagsFromFallback,
+      trackNumber: (item['trackNumber'] as num?)?.toInt(),
+      discNumber: (item['discNumber'] as num?)?.toInt(),
     );
   }).toList()
     ..sort((a, b) => (a.title ?? a.name).compareTo(b.title ?? b.name));

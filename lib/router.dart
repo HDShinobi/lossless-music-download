@@ -7,6 +7,7 @@ import 'screens/artist_screen.dart';
 import 'screens/album_screen.dart';
 import 'screens/queue_screen.dart';
 import 'screens/server_screen.dart';
+import 'screens/library_album_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/sources_screen.dart';
@@ -59,6 +60,16 @@ final appRouter = GoRouter(
                 path: 'verified',
                 builder: (c, s) =>
                     VerifiedScreen(entry: s.extra as LibraryEntry),
+              ),
+              GoRoute(
+                path: 'album',
+                builder: (c, s) {
+                  final args = s.extra as LibraryAlbumRouteArgs;
+                  return LibraryAlbumScreen(
+                    artistName: args.artistName,
+                    albumName: args.albumName,
+                  );
+                },
               ),
             ],
           ),
