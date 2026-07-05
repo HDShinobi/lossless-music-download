@@ -59,6 +59,8 @@ dependencies:
   cached_network_image: ^3.4.1
   # Android SDK level detection (storage-permission flow differs <30 vs >=30).
   device_info_plus: ^10.1.0
+  # XML parsing for TTML lyrics format
+  xml: ^6.5.0
 
 dev_dependencies:
   flutter_test:
