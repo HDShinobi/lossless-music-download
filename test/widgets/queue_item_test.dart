@@ -272,5 +272,47 @@ void main() {
       // itemId shown when no track
       expect(find.text('dl_no_track_xyz'), findsOneWidget);
     });
+
+    testWidgets('done item with fallback shows winning provider + fallback note',
+        (tester) async {
+      final bridge = _FakeBridge();
+      final view = QueueItemView(
+        progress: const DownloadProgress(
+          itemId: 'track-fallback-1',
+          status: 'completed',
+          progress: 1.0,
+          bytesReceived: 327155712,
+        ),
+        track: track,
+        service: 'amazon',
+        resolvedService: 'qobuz',
+      );
+
+      await _pumpView(tester, view, bridge);
+
+      expect(find.textContaining('qobuz'), findsOneWidget);
+      expect(find.textContaining('fallback'), findsOneWidget);
+    });
+
+    testWidgets('done item without fallback shows plain provider line only',
+        (tester) async {
+      final bridge = _FakeBridge();
+      final view = QueueItemView(
+        progress: const DownloadProgress(
+          itemId: 'track-noFallback-1',
+          status: 'completed',
+          progress: 1.0,
+          bytesReceived: 327155712,
+        ),
+        track: track,
+        service: 'qobuz',
+        resolvedService: 'qobuz',
+      );
+
+      await _pumpView(tester, view, bridge);
+
+      expect(find.textContaining('qobuz'), findsOneWidget);
+      expect(find.textContaining('fallback'), findsNothing);
+    });
   });
 }

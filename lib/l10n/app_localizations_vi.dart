@@ -607,4 +607,14 @@ class AppLocalizationsVi extends AppLocalizations {
   @override
   String get fallbackSourcesHeader =>
       'Các nguồn bỏ chọn sẽ không được dùng khi tải dự phòng.';
+
+  @override
+  String queueDownloadedVia(String service) {
+    return 'Đã tải qua $service';
+  }
+
+  @override
+  String queueDownloadedViaFallback(String service, String original) {
+    return 'Đã tải qua $service (dự phòng từ $original)';
+  }
 }

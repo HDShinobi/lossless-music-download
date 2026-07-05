@@ -609,4 +609,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get fallbackSourcesHeader =>
       'Unchecked sources are skipped during fallback.';
+
+  @override
+  String queueDownloadedVia(String service) {
+    return 'Downloaded via $service';
+  }
+
+  @override
+  String queueDownloadedViaFallback(String service, String original) {
+    return 'Downloaded via $service (fallback from $original)';
+  }
 }

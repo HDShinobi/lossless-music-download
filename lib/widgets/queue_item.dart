@@ -73,6 +73,22 @@ class QueueItem extends ConsumerWidget {
         statusLine = item.status;
     }
 
+    // Winning-provider line, shown only once the download is done. Indicates
+    // a fallback when the delivering provider differs from the one the user
+    // originally requested.
+    String? providerLine;
+    if (state == _ItemState.done &&
+        view.resolvedService != null &&
+        view.resolvedService!.isNotEmpty) {
+      final resolved = view.resolvedService!;
+      final requested = view.service;
+      providerLine = (requested != null &&
+              requested.isNotEmpty &&
+              requested != resolved)
+          ? t.queueDownloadedViaFallback(resolved, requested)
+          : t.queueDownloadedVia(resolved);
+    }
+
     // Trailing action
     Widget trailing;
     switch (state) {
@@ -160,6 +176,18 @@ class QueueItem extends ConsumerWidget {
                     color: statusColor,
                   ),
                 ),
+                if (providerLine != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    providerLine,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tokens.mono.copyWith(
+                      fontSize: 10,
+                      color: tokens.muted2,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

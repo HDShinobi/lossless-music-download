@@ -1237,6 +1237,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unchecked sources are skipped during fallback.'**
   String get fallbackSourcesHeader;
+
+  /// Subtitle on a completed queue item showing which provider delivered the file
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded via {service}'**
+  String queueDownloadedVia(String service);
+
+  /// Subtitle on a completed queue item when the winning provider differs from the originally requested one
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded via {service} (fallback from {original})'**
+  String queueDownloadedViaFallback(String service, String original);
 }
 
 class _AppLocalizationsDelegate

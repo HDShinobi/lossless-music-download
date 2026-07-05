@@ -11,6 +11,13 @@ class QueueItemView {
   final Duration? eta;
   final String? error;
 
+  /// Download intent (originally requested provider) and the provider that
+  /// actually delivered the file. Set by the queue screen from
+  /// [DownloadEntry.service] / [DownloadEntry.resolvedService] so a completed
+  /// item can show which source won (and whether it was a fallback).
+  final String? service;
+  final String? resolvedService;
+
   const QueueItemView({
     required this.progress,
     this.track,
@@ -18,6 +25,8 @@ class QueueItemView {
     this.speedBytesPerSec,
     this.eta,
     this.error,
+    this.service,
+    this.resolvedService,
   });
 }
 

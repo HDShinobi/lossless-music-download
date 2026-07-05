@@ -261,5 +261,20 @@
   "fallbackSourcesTitle": "Nguồn dự phòng",
   "@fallbackSourcesTitle": {"description": "Tiêu đề màn hình cài đặt để chọn nguồn nào được dùng khi tải dự phòng"},
   "fallbackSourcesHeader": "Các nguồn bỏ chọn sẽ không được dùng khi tải dự phòng.",
-  "@fallbackSourcesHeader": {"description": "Đoạn giải thích ở đầu màn hình cài đặt nguồn dự phòng"}
+  "@fallbackSourcesHeader": {"description": "Đoạn giải thích ở đầu màn hình cài đặt nguồn dự phòng"},
+  "queueDownloadedVia": "Đã tải qua {service}",
+  "@queueDownloadedVia": {
+    "description": "Dòng phụ trên một mục hàng đợi đã hoàn tất, cho biết nguồn nào đã tải file",
+    "placeholders": {
+      "service": {"type": "String"}
+    }
+  },
+  "queueDownloadedViaFallback": "Đã tải qua {service} (dự phòng từ {original})",
+  "@queueDownloadedViaFallback": {
+    "description": "Dòng phụ khi nguồn thắng khác với nguồn được yêu cầu ban đầu",
+    "placeholders": {
+      "service": {"type": "String"},
+      "original": {"type": "String"}
+    }
+  }
 }

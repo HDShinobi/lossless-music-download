@@ -261,5 +261,20 @@
   "fallbackSourcesTitle": "Fallback sources",
   "@fallbackSourcesTitle": {"description": "Settings screen title for choosing which sources are used during download fallback"},
   "fallbackSourcesHeader": "Unchecked sources are skipped during fallback.",
-  "@fallbackSourcesHeader": {"description": "Explanatory header text on the fallback-sources settings screen"}
+  "@fallbackSourcesHeader": {"description": "Explanatory header text on the fallback-sources settings screen"},
+  "queueDownloadedVia": "Downloaded via {service}",
+  "@queueDownloadedVia": {
+    "description": "Subtitle on a completed queue item showing which provider delivered the file",
+    "placeholders": {
+      "service": {"type": "String"}
+    }
+  },
+  "queueDownloadedViaFallback": "Downloaded via {service} (fallback from {original})",
+  "@queueDownloadedViaFallback": {
+    "description": "Subtitle on a completed queue item when the winning provider differs from the originally requested one",
+    "placeholders": {
+      "service": {"type": "String"},
+      "original": {"type": "String"}
+    }
+  }
 }
