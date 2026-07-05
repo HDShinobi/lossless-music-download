@@ -80,3 +80,7 @@ final embedCoverProvider = NotifierProvider<_BoolPrefNotifier, bool>(
 final embedLyricsProvider = NotifierProvider<_BoolPrefNotifier, bool>(
   () => _BoolPrefNotifier('embed_lyrics', true),
 );
+
+final autoFallbackProvider = NotifierProvider<_BoolPrefNotifier, bool>(
+  () => _BoolPrefNotifier('auto_fallback', true),
+);

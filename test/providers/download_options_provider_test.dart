@@ -69,4 +69,23 @@ void main() {
       expect(container.read(askBeforeDownloadProvider), isTrue);
     });
   });
+
+  group('autoFallbackProvider', () {
+    test('default state is true', () {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      expect(container.read(autoFallbackProvider), isTrue);
+    });
+
+    test('set(false) updates state and persists', () async {
+      SharedPreferences.setMockInitialValues({});
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      await container.read(autoFallbackProvider.notifier).set(false);
+      expect(container.read(autoFallbackProvider), isFalse);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('auto_fallback'), isFalse);
+    });
+  });
 }
