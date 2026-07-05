@@ -585,6 +585,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingEmbedLyricsDesc => 'Include synced lyrics in file tags';
 
   @override
+  String get lrcSidecarTitle => 'Write .lrc lyrics file';
+
+  @override
+  String get lrcSidecarSubtitle =>
+      'Save synced lyrics next to each download for external players';
+
+  @override
   String get settingDownloadFolderChange => 'Tap to change';
 
   @override

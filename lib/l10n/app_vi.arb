@@ -252,6 +252,8 @@
   "settingEmbedCoverDesc": "Nhúng ảnh bìa album vào thẻ file",
   "settingEmbedLyrics": "Ghi lời bài hát",
   "settingEmbedLyricsDesc": "Nhúng lời bài hát đồng bộ vào file",
+  "lrcSidecarTitle": "Ghi file lời .lrc",
+  "lrcSidecarSubtitle": "Lưu lời đồng bộ cạnh mỗi bản tải cho trình phát ngoài",
   "settingDownloadFolderChange": "Chạm để đổi",
   "settingDownloadFolderUpdated": "Đã cập nhật thư mục tải về",
   "settingStoragePermissionTitle": "Cần quyền truy cập bộ nhớ",

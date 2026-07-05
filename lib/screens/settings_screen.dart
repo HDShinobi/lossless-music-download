@@ -97,6 +97,7 @@ class SettingsScreen extends ConsumerWidget {
     final embedMeta = ref.watch(embedMetadataProvider);
     final embedCover = ref.watch(embedCoverProvider);
     final embedLyrics = ref.watch(embedLyricsProvider);
+    final writeLrcSidecar = ref.watch(writeLrcSidecarProvider);
     final folderAsync = ref.watch(downloadDirProvider);
 
     return Scaffold(
@@ -199,6 +200,16 @@ class SettingsScreen extends ConsumerWidget {
             value: embedLyrics,
             onChanged: (v) =>
                 ref.read(embedLyricsProvider.notifier).set(v),
+          ),
+
+          // Write .lrc lyrics sidecar
+          SwitchListTile(
+            secondary: const Icon(Icons.subtitles_outlined),
+            title: Text(t.lrcSidecarTitle),
+            subtitle: Text(t.lrcSidecarSubtitle),
+            value: writeLrcSidecar,
+            onChanged: (v) =>
+                ref.read(writeLrcSidecarProvider.notifier).set(v),
           ),
         ],
       ),

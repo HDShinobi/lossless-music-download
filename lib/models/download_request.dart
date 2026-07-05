@@ -5,7 +5,7 @@ class DownloadRequest {
       filenameFormat;
   final int? durationMs, trackNumber, discNumber, totalTracks, totalDiscs;
   final bool useExtensions, useFallback, embedMetadata, embedMaxQualityCover,
-      embedLyrics;
+      embedLyrics, writeLrcSidecar;
 
   // SpotiFLAC metadata fields for embedding into audio file tags.
   final String? genre;
@@ -30,6 +30,7 @@ class DownloadRequest {
     this.embedMetadata = true,
     this.embedMaxQualityCover = true,
     this.embedLyrics = true,
+    this.writeLrcSidecar = false,
     this.genre,
     this.label,
     this.copyright,
@@ -70,6 +71,7 @@ class DownloadRequest {
         'embed_metadata': embedMetadata,
         'embed_max_quality_cover': embedMaxQualityCover,
         'embed_lyrics': embedLyrics,
+        'write_lrc_sidecar': writeLrcSidecar,
         'artist_tag_mode': artistTagMode,
         'lyrics_mode': lyricsMode,
         'songlink_region': songLinkRegion,

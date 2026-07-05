@@ -583,6 +583,13 @@ class AppLocalizationsVi extends AppLocalizations {
   String get settingEmbedLyricsDesc => 'Nhúng lời bài hát đồng bộ vào file';
 
   @override
+  String get lrcSidecarTitle => 'Ghi file lời .lrc';
+
+  @override
+  String get lrcSidecarSubtitle =>
+      'Lưu lời đồng bộ cạnh mỗi bản tải cho trình phát ngoài';
+
+  @override
   String get settingDownloadFolderChange => 'Chạm để đổi';
 
   @override

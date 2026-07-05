@@ -112,5 +112,19 @@ void main() {
       expect(j.containsKey('label'), isFalse);
       expect(j.containsKey('copyright'), isFalse);
     });
+
+    test('writeLrcSidecar serializes to write_lrc_sidecar', () {
+      final json = const DownloadRequest(
+        trackName: 't', artistName: 'a', outputDir: '/d',
+        writeLrcSidecar: true,
+      ).toJson();
+      expect(json['write_lrc_sidecar'], isTrue);
+    });
+
+    test('write_lrc_sidecar defaults false', () {
+      final json = const DownloadRequest(
+        trackName: 't', artistName: 'a', outputDir: '/d').toJson();
+      expect(json['write_lrc_sidecar'], isFalse);
+    });
   });
 }

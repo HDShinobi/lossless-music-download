@@ -1190,6 +1190,18 @@ abstract class AppLocalizations {
   /// **'Include synced lyrics in file tags'**
   String get settingEmbedLyricsDesc;
 
+  /// No description provided for @lrcSidecarTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Write .lrc lyrics file'**
+  String get lrcSidecarTitle;
+
+  /// No description provided for @lrcSidecarSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save synced lyrics next to each download for external players'**
+  String get lrcSidecarSubtitle;
+
   /// No description provided for @settingDownloadFolderChange.
   ///
   /// In en, this message translates to:

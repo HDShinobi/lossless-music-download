@@ -88,4 +88,13 @@ void main() {
       expect(prefs.getBool('auto_fallback'), isFalse);
     });
   });
+
+  group('writeLrcSidecarProvider', () {
+    test('default is false', () {
+      SharedPreferences.setMockInitialValues({});
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      expect(c.read(writeLrcSidecarProvider), isFalse);
+    });
+  });
 }

@@ -252,6 +252,8 @@
   "settingEmbedCoverDesc": "Include album artwork in file tags",
   "settingEmbedLyrics": "Embed lyrics",
   "settingEmbedLyricsDesc": "Include synced lyrics in file tags",
+  "lrcSidecarTitle": "Write .lrc lyrics file",
+  "lrcSidecarSubtitle": "Save synced lyrics next to each download for external players",
   "settingDownloadFolderChange": "Tap to change",
   "settingDownloadFolderUpdated": "Download folder updated",
   "settingStoragePermissionTitle": "Storage access needed",
