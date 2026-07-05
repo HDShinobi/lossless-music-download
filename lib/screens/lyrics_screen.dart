@@ -9,15 +9,32 @@ import '../util/lyrics_parser.dart';
 /// Static lyrics viewer for a downloaded track. Fetches LRC via the backend
 /// (embedded first, then online) and renders it as a scrollable list. There
 /// is no in-app player, so lyrics do not auto-scroll or highlight.
-class LyricsScreen extends ConsumerWidget {
+class LyricsScreen extends ConsumerStatefulWidget {
   const LyricsScreen({super.key, required this.entry});
   final LibraryEntry entry;
+
+  @override
+  ConsumerState<LyricsScreen> createState() => _LyricsScreenState();
+}
+
+class _LyricsScreenState extends ConsumerState<LyricsScreen> {
+  late final Future<(ParsedLyrics, bool)> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    // Created once here (not in build()) so framework-driven rebuilds — e.g.
+    // system theme/locale changes — don't reset the screen to a spinner and
+    // re-issue the backend fetch(es).
+    _future = _load();
+  }
 
   // Returns (parsed lyrics, isInstrumental). The backend sentinel
   // `[instrumental:true]` is NOT LRC, so the parser must not special-case it —
   // the viewer detects it here and shows a distinct state.
-  Future<(ParsedLyrics, bool)> _load(WidgetRef ref) async {
+  Future<(ParsedLyrics, bool)> _load() async {
     final bridge = ref.read(backendBridgeProvider);
+    final entry = widget.entry;
     final name = entry.title ?? entry.name;
     final artist = entry.artistName ?? '';
     // Embedded first (works offline for downloaded files); fall back to online.
@@ -34,12 +51,12 @@ class LyricsScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(t.lyricsTitle)),
       body: FutureBuilder<(ParsedLyrics, bool)>(
-        future: _load(ref),
+        future: _future,
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
