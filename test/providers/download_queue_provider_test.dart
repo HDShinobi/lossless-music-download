@@ -429,6 +429,28 @@ void main() {
       });
     });
 
+    // On a successful download, the Go backend reports which provider it
+    // actually pulled the track from in the result's `service` field (may
+    // differ from the user-chosen source after a fallback). The finished
+    // entry must carry it so the UI can show the winning provider.
+    group('resolved service from backend result', () {
+      test('done entry stores backend-reported winning provider', () async {
+        final bridge = _FakeBridge()
+          ..downloadResult = {'success': true, 'service': 'qobuz'};
+        final container = _makeContainer(bridge);
+        addTearDown(container.dispose);
+
+        await container
+            .read(downloadQueueProvider.notifier)
+            .enqueue(_track, service: 'amazon');
+        await _pump();
+
+        final entry = container.read(downloadQueueProvider).first;
+        expect(entry.status, 'done');
+        expect(entry.resolvedService, 'qobuz');
+      });
+    });
+
     test('copyWith carries resolvedService', () {
       const e = DownloadEntry(
         track: _track,

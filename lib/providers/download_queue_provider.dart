@@ -447,6 +447,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         error: failed ? (err?.isNotEmpty == true ? err : 'unknown') : null,
         verificationService:
             failed && (resultService?.isNotEmpty ?? false) ? resultService : null,
+        resolvedService:
+            !failed && (resultService?.isNotEmpty ?? false) ? resultService : null,
       );
       if (!failed) {
         // FLAC is tagged natively in the Go backend. Non-FLAC downloads
