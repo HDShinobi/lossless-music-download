@@ -480,6 +480,7 @@ void main() {
           if (tmpDir.existsSync()) tmpDir.deleteSync(recursive: true);
         });
         final tmpFile = '${tmpDir.path}/song.flac';
+        File(tmpFile).writeAsStringSync('fake audio bytes');
 
         final bridge = _FakeBridge()
           ..downloadResult = {'success': true, 'file_path': tmpFile}
@@ -524,6 +525,31 @@ void main() {
         await _pump();
 
         expect(File('${tmpDir.path}/song.lrc').existsSync(), isFalse);
+      });
+
+      test(
+          'does not write an orphan .lrc sidecar when the reported audio '
+          'file does not exist on disk', () async {
+        final tmpDir = Directory.systemTemp.createTempSync('lrc_sidecar_');
+        addTearDown(() {
+          if (tmpDir.existsSync()) tmpDir.deleteSync(recursive: true);
+        });
+        // Deliberately never created on disk -- simulates downloadByStrategy
+        // reporting success with a file_path that isn't actually there.
+        final tmpFile = '${tmpDir.path}/missing.flac';
+
+        final bridge = _FakeBridge()
+          ..downloadResult = {'success': true, 'file_path': tmpFile}
+          ..lyricsLrcResult = '[00:01.00]hi';
+        final container = _makeContainer(bridge);
+        addTearDown(container.dispose);
+
+        await container.read(writeLrcSidecarProvider.notifier).set(true);
+
+        await container.read(downloadQueueProvider.notifier).enqueue(_track);
+        await _pump();
+
+        expect(File('${tmpDir.path}/missing.lrc').existsSync(), isFalse);
       });
     });
 

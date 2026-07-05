@@ -564,6 +564,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
           filePath.startsWith('/proc/self/fd/')) {
         return;
       }
+      if (!await File(filePath).exists()) return;
       final isProviderId =
           track.id.startsWith('qobuz:') || track.id.startsWith('tidal:');
       // CRITICAL: fetch ONLINE (no filePath). The Go GetLyricsLRC only reads
