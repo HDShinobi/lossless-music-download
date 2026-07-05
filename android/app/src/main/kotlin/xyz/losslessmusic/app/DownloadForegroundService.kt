@@ -485,26 +485,32 @@ class DownloadForegroundService : Service() {
 private object LrcSidecarWriter {
 
     fun maybeWrite(filePath: String, requestJson: String) {
-        val request = try { JSONObject(requestJson) } catch (_: Exception) { return }
-        if (!request.optBoolean("write_lrc_sidecar", false)) return
-        if (filePath.isEmpty() || filePath.startsWith("content://")) return
-        if (!File(filePath).exists()) return
-
-        val lrc = try { fetchLyricsOnline(request) } catch (_: Exception) { return }
-        val trimmed = lrc.trim()
-        if (trimmed.isEmpty() || trimmed == "[instrumental:true]") return
-
-        // Strip only a real extension: the last '.' must come after the last
-        // path separator, otherwise a dotted directory name would get
-        // truncated instead of the file's own extension.
-        val slash = filePath.lastIndexOf('/')
-        val dot = filePath.lastIndexOf('.')
-        val base = if (dot > slash) filePath.substring(0, dot) else filePath
-
+        // Entire body is guarded by one outer try/catch: this writer is
+        // best-effort and must NEVER throw into the caller's per-item
+        // coroutine, since an uncaught exception here would abort the whole
+        // remaining download batch. Even innocuous-looking calls like
+        // File.exists() can throw SecurityException on rare storage edge
+        // cases, so nothing here is left unguarded.
         try {
+            val request = try { JSONObject(requestJson) } catch (_: Exception) { return }
+            if (!request.optBoolean("write_lrc_sidecar", false)) return
+            if (filePath.isEmpty() || filePath.startsWith("content://")) return
+            if (!File(filePath).exists()) return
+
+            val lrc = try { fetchLyricsOnline(request) } catch (_: Exception) { return }
+            val trimmed = lrc.trim()
+            if (trimmed.isEmpty() || trimmed == "[instrumental:true]") return
+
+            // Strip only a real extension: the last '.' must come after the last
+            // path separator, otherwise a dotted directory name would get
+            // truncated instead of the file's own extension.
+            val slash = filePath.lastIndexOf('/')
+            val dot = filePath.lastIndexOf('.')
+            val base = if (dot > slash) filePath.substring(0, dot) else filePath
+
             File("$base.lrc").writeText(trimmed, Charsets.UTF_8)
         } catch (e: Exception) {
-            android.util.Log.w("LrcSidecarWriter", "sidecar write failed: ${e.message}")
+            android.util.Log.w("LrcSidecarWriter", "sidecar skipped: ${e.message}")
         }
     }
 
