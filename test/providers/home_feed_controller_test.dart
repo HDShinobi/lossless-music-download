@@ -183,5 +183,25 @@ void main() {
       expect(after, isNotNull);
       expect(after!.first.title, 'Refreshed');
     });
+
+    test(
+        'refresh() keeps the previously-visible sections when the forced '
+        'fetch throws (does not wipe the feed to [])', () async {
+      final bridge = _FakeBridge()..envelope = _envelope('Trending');
+      final container = _makeContainer(bridge: bridge, exts: [_ext1]);
+      addTearDown(container.dispose);
+
+      final initial = await container.read(homeFeedControllerProvider.future);
+      expect(initial, hasLength(1));
+      expect(initial.first.title, 'Trending');
+
+      bridge.throwOnFetch = true;
+      await container.read(homeFeedControllerProvider.notifier).refresh();
+
+      final after = container.read(homeFeedControllerProvider).value;
+      expect(after, isNotNull);
+      expect(after, hasLength(1));
+      expect(after!.first.title, 'Trending');
+    });
   });
 }
