@@ -116,6 +116,8 @@ class DownloadForegroundService : Service() {
         // Extension the backend reported for a failed download (its result's
         // `service` field) — lets Dart open the right verification challenge.
         var service: String? = null,
+        // Winning provider reported by a successful download's result JSON.
+        var resolvedService: String? = null,
     )
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -318,6 +320,8 @@ class DownloadForegroundService : Service() {
             }
 
             updateItem(request.itemId) { it.status = "finalizing" }
+            val winning = result.optString("service", "").ifEmpty { null }
+            updateItem(request.itemId) { it.resolvedService = winning }
             writeSnapshot(isRunning = true)
             val filePath = result.optString("file_path", "")
             if (filePath.isNotEmpty() && NonFlacMetadataEmbedder.isEmbeddable(filePath)) {
@@ -402,6 +406,7 @@ class DownloadForegroundService : Service() {
                         .put("bytes_total", item.bytesTotal)
                         .apply { item.error?.let { put("error", it) } }
                         .apply { item.service?.let { put("service", it) } }
+                        .apply { item.resolvedService?.let { put("resolved_service", it) } }
                 )
             }
         }
