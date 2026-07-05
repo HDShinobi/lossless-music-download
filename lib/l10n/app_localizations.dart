@@ -1250,6 +1250,30 @@ abstract class AppLocalizations {
   /// **'Unchecked sources are skipped during fallback.'**
   String get fallbackSourcesHeader;
 
+  /// Settings screen title for choosing which extension supplies the Search suggestions feed
+  ///
+  /// In en, this message translates to:
+  /// **'Suggestions source'**
+  String get homeFeedSourceTitle;
+
+  /// Settings screen subtitle explaining the suggestions source setting
+  ///
+  /// In en, this message translates to:
+  /// **'Extension that supplies the Search suggestions feed'**
+  String get homeFeedSourceSubtitle;
+
+  /// Chooser option: automatically use the first enabled extension that supports suggestions
+  ///
+  /// In en, this message translates to:
+  /// **'Auto (first available)'**
+  String get homeFeedSourceAuto;
+
+  /// Chooser option: disable the Search suggestions feed
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get homeFeedSourceOffLabel;
+
   /// Subtitle on a completed queue item showing which provider delivered the file
   ///
   /// In en, this message translates to:

@@ -618,6 +618,19 @@ class AppLocalizationsEn extends AppLocalizations {
       'Unchecked sources are skipped during fallback.';
 
   @override
+  String get homeFeedSourceTitle => 'Suggestions source';
+
+  @override
+  String get homeFeedSourceSubtitle =>
+      'Extension that supplies the Search suggestions feed';
+
+  @override
+  String get homeFeedSourceAuto => 'Auto (first available)';
+
+  @override
+  String get homeFeedSourceOffLabel => 'Off';
+
+  @override
   String queueDownloadedVia(String service) {
     return 'Downloaded via $service';
   }

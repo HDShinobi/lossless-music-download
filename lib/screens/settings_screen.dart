@@ -7,8 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../models/installed_extension.dart';
 import '../providers/download_dir_provider.dart';
 import '../providers/download_options_provider.dart';
+import '../providers/extensions_provider.dart';
+import '../providers/home_feed_provider.dart';
 import '../services/update_checker.dart';
 import '../widgets/update_dialog.dart';
 
@@ -90,6 +93,61 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
+  /// Resolves the label shown on the "Nguồn gợi ý" tile for the current
+  /// [source] selection, falling back to the auto label if the previously
+  /// selected extension is no longer capable (removed/disabled).
+  String _homeFeedSourceLabel(
+    AppLocalizations t,
+    String? source,
+    List<InstalledExtension> capable,
+  ) {
+    if (source == homeFeedSourceOff) return t.homeFeedSourceOffLabel;
+    if (source == null || source.isEmpty) return t.homeFeedSourceAuto;
+    final ext = capable.where((e) => e.id == source).firstOrNull;
+    return ext?.displayName ?? t.homeFeedSourceAuto;
+  }
+
+  Future<void> _showHomeFeedSourceChooser(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations t,
+    String? current,
+    List<InstalledExtension> capable,
+  ) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(t.homeFeedSourceTitle),
+        children: [
+          RadioGroup<String?>(
+            groupValue: current,
+            onChanged: (v) {
+              ref.read(homeFeedSourceProvider.notifier).set(v);
+              Navigator.pop(ctx);
+            },
+            child: Column(
+              children: [
+                RadioListTile<String?>(
+                  title: Text(t.homeFeedSourceAuto),
+                  value: null,
+                ),
+                for (final ext in capable)
+                  RadioListTile<String?>(
+                    title: Text(ext.displayName),
+                    value: ext.id,
+                  ),
+                RadioListTile<String?>(
+                  title: Text(t.homeFeedSourceOffLabel),
+                  value: homeFeedSourceOff,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context);
@@ -99,6 +157,10 @@ class SettingsScreen extends ConsumerWidget {
     final embedLyrics = ref.watch(embedLyricsProvider);
     final writeLrcSidecar = ref.watch(writeLrcSidecarProvider);
     final folderAsync = ref.watch(downloadDirProvider);
+    final homeFeedSource = ref.watch(homeFeedSourceProvider);
+    final extensions = ref.watch(extensionsProvider).value ?? const [];
+    final homeFeedCapable =
+        extensions.where((e) => e.enabled && e.hasHomeFeed).toList();
 
     return Scaffold(
       appBar: AppBar(title: Text(t.tabSettings)),
@@ -118,6 +180,30 @@ class SettingsScreen extends ConsumerWidget {
             title: Text(t.fallbackSourcesTitle),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.go('/settings/fallback-sources'),
+          ),
+
+          // Home feed ("Nguồn gợi ý") source selector
+          ListTile(
+            leading: const Icon(Icons.dynamic_feed_outlined),
+            title: Text(t.homeFeedSourceTitle),
+            subtitle: Text(
+              homeFeedCapable.isEmpty
+                  ? t.homeFeedSourceSubtitle
+                  : _homeFeedSourceLabel(t, homeFeedSource, homeFeedCapable),
+            ),
+            enabled: homeFeedCapable.isNotEmpty,
+            trailing: homeFeedCapable.isEmpty
+                ? null
+                : const Icon(Icons.chevron_right),
+            onTap: homeFeedCapable.isEmpty
+                ? null
+                : () => _showHomeFeedSourceChooser(
+                      context,
+                      ref,
+                      t,
+                      homeFeedSource,
+                      homeFeedCapable,
+                    ),
           ),
 
           // Check for app updates (GitHub Releases)

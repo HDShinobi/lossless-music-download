@@ -616,6 +616,18 @@ class AppLocalizationsVi extends AppLocalizations {
       'Các nguồn bỏ chọn sẽ không được dùng khi tải dự phòng.';
 
   @override
+  String get homeFeedSourceTitle => 'Nguồn gợi ý';
+
+  @override
+  String get homeFeedSourceSubtitle => 'Extension cung cấp gợi ý ở màn Tìm';
+
+  @override
+  String get homeFeedSourceAuto => 'Tự động (nguồn đầu tiên)';
+
+  @override
+  String get homeFeedSourceOffLabel => 'Tắt';
+
+  @override
   String queueDownloadedVia(String service) {
     return 'Đã tải qua $service';
   }
