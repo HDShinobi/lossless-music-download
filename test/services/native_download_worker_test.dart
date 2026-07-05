@@ -42,6 +42,14 @@ void main() {
       expect(state.bytesReceived, 0);
       expect(state.bytesTotal, 0);
     });
+
+    test('parses resolved_service from snapshot item', () {
+      final item = NativeWorkerItemState.fromJson({
+        'item_id': 'i1', 'status': 'done', 'progress': 1.0,
+        'bytes_received': 10, 'bytes_total': 10, 'resolved_service': 'qobuz',
+      });
+      expect(item.resolvedService, 'qobuz');
+    });
   });
 
   group('NativeWorkerSnapshot.fromJson', () {

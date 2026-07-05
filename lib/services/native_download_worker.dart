@@ -16,6 +16,10 @@ class NativeWorkerItemState {
   /// backend download result's `service` field. Null for other failures.
   final String? service;
 
+  /// Service resolved during download, as populated by the native worker.
+  /// Reflects the actual service that was used for the download.
+  final String? resolvedService;
+
   const NativeWorkerItemState({
     required this.itemId,
     required this.status,
@@ -24,6 +28,7 @@ class NativeWorkerItemState {
     required this.bytesTotal,
     this.error,
     this.service,
+    this.resolvedService,
   });
 
   factory NativeWorkerItemState.fromJson(Map<String, dynamic> j) => NativeWorkerItemState(
@@ -34,6 +39,7 @@ class NativeWorkerItemState {
         bytesTotal: (j['bytes_total'] as num?)?.toInt() ?? 0,
         error: j['error']?.toString(),
         service: j['service']?.toString(),
+        resolvedService: j['resolved_service']?.toString(),
       );
 }
 
