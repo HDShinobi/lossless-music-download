@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -231,6 +232,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       embedMaxQualityCover: ref.read(embedCoverProvider),
       embedLyrics: ref.read(embedLyricsProvider),
       useFallback: ref.read(autoFallbackProvider),
+      writeLrcSidecar: ref.read(writeLrcSidecarProvider),
     );
     return req.toJson();
   }
@@ -431,6 +433,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         embedMaxQualityCover: embedCover,
         embedLyrics: embedLyrics,
         useFallback: ref.read(autoFallbackProvider),
+        writeLrcSidecar: ref.read(writeLrcSidecarProvider),
       );
 
       final res = await bridge.downloadByStrategy(req);
@@ -462,6 +465,9 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
           embedCover: embedCover,
           embedLyrics: embedLyrics,
         );
+        if (ref.read(writeLrcSidecarProvider)) {
+          await _writeLrcSidecar(bridge, res, next.track);
+        }
         ref.invalidate(libraryProvider);
       }
     } on _DuplicateSkipped {
@@ -544,6 +550,42 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
           await File(coverPath).delete();
         } catch (_) {}
       }
+    }
+  }
+
+  /// Writes a `.lrc` sidecar next to the downloaded file, using lyrics
+  /// fetched online. Best-effort: never fails the download.
+  Future<void> _writeLrcSidecar(
+      BackendBridge bridge, Map<String, dynamic> res, Track track) async {
+    try {
+      final filePath = res['file_path']?.toString() ?? '';
+      if (filePath.isEmpty ||
+          filePath.startsWith('content://') ||
+          filePath.startsWith('/proc/self/fd/')) {
+        return;
+      }
+      final isProviderId =
+          track.id.startsWith('qobuz:') || track.id.startsWith('tidal:');
+      // CRITICAL: fetch ONLINE (no filePath). The Go GetLyricsLRC only reads
+      // already-embedded lyrics when filePath is set and returns "" on miss —
+      // and nothing is embedded yet at this point — so passing filePath here
+      // would make the sidecar silently never write. Empty filePath = online.
+      final lrc = await bridge.getLyricsLRC(
+        spotifyId: isProviderId ? '' : track.id,
+        trackName: track.name,
+        artistName: track.artists,
+        durationMs: track.durationMs ?? 0,
+      );
+      final trimmed = lrc.trim();
+      if (trimmed.isEmpty || trimmed == '[instrumental:true]') return;
+      // Strip only a real extension: the last '.' must come after the last '/'
+      // (a dotted directory name with an extensionless file must not corrupt the path).
+      final slash = filePath.lastIndexOf('/');
+      final dot = filePath.lastIndexOf('.');
+      final base = dot > slash ? filePath.substring(0, dot) : filePath;
+      await File('$base.lrc').writeAsString(trimmed, encoding: utf8);
+    } catch (_) {
+      // Sidecar is best-effort; never fail the download.
     }
   }
 

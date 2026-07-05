@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,6 +27,23 @@ class _FakeBridge extends BackendBridge {
 
   // Returns exists:true when duplicateIsrc is set and matches.
   String? duplicateIsrc;
+
+  // Records the `filePath` arg of every getLyricsLRC call, and the value to
+  // return from it (used to drive the .lrc sidecar writer).
+  final List<String> lyricsFilePathCalls = [];
+  String lyricsLrcResult = '';
+
+  @override
+  Future<String> getLyricsLRC({
+    String spotifyId = '',
+    required String trackName,
+    required String artistName,
+    String filePath = '',
+    int durationMs = 0,
+  }) async {
+    lyricsFilePathCalls.add(filePath);
+    return lyricsLrcResult;
+  }
 
   @override
   Future<Map<String, dynamic>> checkDuplicate(
@@ -448,6 +467,63 @@ void main() {
         final entry = container.read(downloadQueueProvider).first;
         expect(entry.status, 'done');
         expect(entry.resolvedService, 'qobuz');
+      });
+    });
+
+    // Task 4: Dart-path `.lrc` sidecar writer.
+    group('.lrc sidecar (Dart path)', () {
+      test(
+          'writes an online-fetched .lrc sidecar next to the downloaded '
+          'file when enabled', () async {
+        final tmpDir = Directory.systemTemp.createTempSync('lrc_sidecar_');
+        addTearDown(() {
+          if (tmpDir.existsSync()) tmpDir.deleteSync(recursive: true);
+        });
+        final tmpFile = '${tmpDir.path}/song.flac';
+
+        final bridge = _FakeBridge()
+          ..downloadResult = {'success': true, 'file_path': tmpFile}
+          ..lyricsLrcResult = '[00:01.00]hi';
+        final container = _makeContainer(bridge);
+        addTearDown(container.dispose);
+
+        await container.read(writeLrcSidecarProvider.notifier).set(true);
+
+        await container.read(downloadQueueProvider.notifier).enqueue(_track);
+        await _pump();
+
+        final lrcFile = File('${tmpDir.path}/song.lrc');
+        expect(lrcFile.existsSync(), isTrue);
+        expect(await lrcFile.readAsString(encoding: utf8), contains('hi'));
+
+        // Pinned: the sidecar fetch must be ONLINE (empty filePath). The Go
+        // backend's getLyricsLRC only reads already-embedded lyrics when
+        // filePath is set and returns "" on miss -- nothing is embedded yet
+        // at this point in the Dart-fallback path -- so a regression back to
+        // filePath-mode would silently stop the sidecar from ever writing.
+        expect(bridge.lyricsFilePathCalls, isNotEmpty);
+        expect(bridge.lyricsFilePathCalls.last, '');
+      });
+
+      test('does not write a sidecar for instrumental tracks', () async {
+        final tmpDir = Directory.systemTemp.createTempSync('lrc_sidecar_');
+        addTearDown(() {
+          if (tmpDir.existsSync()) tmpDir.deleteSync(recursive: true);
+        });
+        final tmpFile = '${tmpDir.path}/song.flac';
+
+        final bridge = _FakeBridge()
+          ..downloadResult = {'success': true, 'file_path': tmpFile}
+          ..lyricsLrcResult = '[instrumental:true]';
+        final container = _makeContainer(bridge);
+        addTearDown(container.dispose);
+
+        await container.read(writeLrcSidecarProvider.notifier).set(true);
+
+        await container.read(downloadQueueProvider.notifier).enqueue(_track);
+        await _pump();
+
+        expect(File('${tmpDir.path}/song.lrc').existsSync(), isFalse);
       });
     });
 
