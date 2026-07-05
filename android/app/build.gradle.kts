@@ -23,6 +23,10 @@ android {
 
     defaultConfig {
         applicationId = "xyz.losslessmusic.app"
+        // Kept at Android 8.0. Lowering was investigated (ffmpeg needs only 24)
+        // but rejected: Android < 7.1.1 lacks the ISRG Root X1 CA, breaking
+        // HTTPS to Let's Encrypt hosts, and 7.x ships a frozen WebView too old
+        // to render the signed-session verification challenge.
         minSdk = 26
         targetSdk = flutter.targetSdkVersion
         // Read from pubspec (via Flutter) so the installed app reports its real
