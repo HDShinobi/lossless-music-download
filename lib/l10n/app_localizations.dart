@@ -1249,6 +1249,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Downloaded via {service} (fallback from {original})'**
   String queueDownloadedViaFallback(String service, String original);
+
+  /// Lyrics viewer screen title
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics'**
+  String get lyricsTitle;
+
+  /// Empty state when a track has no lyrics
+  ///
+  /// In en, this message translates to:
+  /// **'No lyrics found for this track.'**
+  String get lyricsNotFound;
+
+  /// Shown when the track is instrumental (backend returns [instrumental:true])
+  ///
+  /// In en, this message translates to:
+  /// **'Instrumental track'**
+  String get lyricsInstrumental;
+
+  /// Track-detail menu action to open the lyrics viewer
+  ///
+  /// In en, this message translates to:
+  /// **'View lyrics'**
+  String get viewLyrics;
 }
 
 class _AppLocalizationsDelegate

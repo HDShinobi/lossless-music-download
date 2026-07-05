@@ -14,6 +14,7 @@ import 'screens/sources_screen.dart';
 import 'screens/extension_detail_screen.dart';
 import 'screens/verified_screen.dart';
 import 'screens/fallback_sources_screen.dart';
+import 'screens/lyrics_screen.dart';
 
 GoRoute _r(String path, Widget child) =>
     GoRoute(path: path, builder: (c, s) => child);
@@ -61,6 +62,11 @@ final appRouter = GoRouter(
                 path: 'verified',
                 builder: (c, s) =>
                     VerifiedScreen(entry: s.extra as LibraryEntry),
+              ),
+              GoRoute(
+                path: 'lyrics',
+                builder: (c, s) =>
+                    LyricsScreen(entry: s.extra as LibraryEntry),
               ),
               GoRoute(
                 path: 'album',

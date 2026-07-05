@@ -166,6 +166,8 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
               switch (v) {
                 case 'edit':
                   _edit(context);
+                case 'lyrics':
+                  context.push('/library/lyrics', extra: entry);
                 case 'reenrich':
                   _reEnrich(context);
                 case 'replaygain':
@@ -182,6 +184,14 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
                 child: ListTile(
                   leading: const Icon(Icons.edit_outlined),
                   title: Text(t.manageEdit),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'lyrics',
+                child: ListTile(
+                  leading: const Icon(Icons.lyrics_outlined),
+                  title: Text(t.viewLyrics),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),

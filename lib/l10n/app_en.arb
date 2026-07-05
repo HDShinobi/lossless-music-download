@@ -276,5 +276,13 @@
       "service": {"type": "String"},
       "original": {"type": "String"}
     }
-  }
+  },
+  "lyricsTitle": "Lyrics",
+  "@lyricsTitle": { "description": "Lyrics viewer screen title" },
+  "lyricsNotFound": "No lyrics found for this track.",
+  "@lyricsNotFound": { "description": "Empty state when a track has no lyrics" },
+  "lyricsInstrumental": "Instrumental track",
+  "@lyricsInstrumental": { "description": "Shown when the track is instrumental (backend returns [instrumental:true])" },
+  "viewLyrics": "View lyrics",
+  "@viewLyrics": { "description": "Track-detail menu action to open the lyrics viewer" }
 }

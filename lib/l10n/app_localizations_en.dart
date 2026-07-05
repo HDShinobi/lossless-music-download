@@ -619,4 +619,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String queueDownloadedViaFallback(String service, String original) {
     return 'Downloaded via $service (fallback from $original)';
   }
+
+  @override
+  String get lyricsTitle => 'Lyrics';
+
+  @override
+  String get lyricsNotFound => 'No lyrics found for this track.';
+
+  @override
+  String get lyricsInstrumental => 'Instrumental track';
+
+  @override
+  String get viewLyrics => 'View lyrics';
 }

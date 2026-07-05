@@ -276,5 +276,13 @@
       "service": {"type": "String"},
       "original": {"type": "String"}
     }
-  }
+  },
+  "lyricsTitle": "Lời bài hát",
+  "@lyricsTitle": { "description": "Lyrics viewer screen title" },
+  "lyricsNotFound": "Không tìm thấy lời cho bài này.",
+  "@lyricsNotFound": { "description": "Empty state when a track has no lyrics" },
+  "lyricsInstrumental": "Bản nhạc không lời",
+  "@lyricsInstrumental": { "description": "Shown when the track is instrumental (backend returns [instrumental:true])" },
+  "viewLyrics": "Xem lời bài hát",
+  "@viewLyrics": { "description": "Track-detail menu action to open the lyrics viewer" }
 }

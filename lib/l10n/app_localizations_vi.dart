@@ -617,4 +617,16 @@ class AppLocalizationsVi extends AppLocalizations {
   String queueDownloadedViaFallback(String service, String original) {
     return 'Đã tải qua $service (dự phòng từ $original)';
   }
+
+  @override
+  String get lyricsTitle => 'Lời bài hát';
+
+  @override
+  String get lyricsNotFound => 'Không tìm thấy lời cho bài này.';
+
+  @override
+  String get lyricsInstrumental => 'Bản nhạc không lời';
+
+  @override
+  String get viewLyrics => 'Xem lời bài hát';
 }
