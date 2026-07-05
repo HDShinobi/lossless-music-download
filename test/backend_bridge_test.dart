@@ -51,4 +51,10 @@ void main() {
     expect(c.arguments['query'], 'hello');
     expect(c.arguments['limit'], 5);
   });
+
+  test('setDownloadFallbackProviderIds sends JSON-encoded ids', () async {
+    await bridge.setDownloadFallbackProviderIds(['qobuz', 'tidal']);
+    final c = calls.firstWhere((c) => c.method == 'setDownloadFallbackProviderIds');
+    expect(jsonDecode(c.arguments['idsJson']), ['qobuz', 'tidal']);
+  });
 }

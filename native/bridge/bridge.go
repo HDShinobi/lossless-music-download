@@ -298,6 +298,13 @@ func SetMetadataProviderPriorityJSON(j string) error {
 	return gobackend.SetMetadataProviderPriorityJSON(j)
 }
 
+// SetExtensionFallbackProviderIDsJSON sets the fallback provider/extension ID
+// pool (used for auto-fallback on download failure) from a JSON-encoded
+// array of provider/extension IDs.
+func SetExtensionFallbackProviderIDsJSON(idsJSON string) error {
+	return gobackend.SetExtensionFallbackProviderIDsJSON(idsJSON)
+}
+
 // --- Duplicate detection ---
 
 // CheckDuplicate checks whether a track identified by isrc already exists

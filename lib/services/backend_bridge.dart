@@ -315,6 +315,9 @@ class BackendBridge {
   Future<void> setMetadataPriority(List<String> ids) =>
       _c.invokeMethod('setMetadataPriority', {'priorityJson': jsonEncode(ids)});
 
+  Future<void> setDownloadFallbackProviderIds(List<String> ids) =>
+      _c.invokeMethod('setDownloadFallbackProviderIds', {'idsJson': jsonEncode(ids)});
+
   Future<ServerStatus> startMediaServer(String rootDir, String name) async {
     final raw = await _c.invokeMethod<String>(
       'startMediaServer',

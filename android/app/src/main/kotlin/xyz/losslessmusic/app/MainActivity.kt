@@ -217,6 +217,10 @@ class MainActivity : FlutterActivity() {
             Bridge.setMetadataProviderPriorityJSON(call.argument<String>("priorityJson")!!)
             true to null
         }
+        "setDownloadFallbackProviderIds" -> {
+            Bridge.setExtensionFallbackProviderIDsJSON(call.argument<String>("idsJson")!!)
+            true to null
+        }
         "startMediaServer" -> {
             val status = Bridge.startMediaServer(
                 call.argument<String>("rootDir")!!,
