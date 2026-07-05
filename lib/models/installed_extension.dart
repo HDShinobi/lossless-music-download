@@ -3,6 +3,7 @@ class InstalledExtension {
   final String? iconPath;
   final bool enabled, hasMetadataProvider, hasDownloadProvider, hasLyricsProvider;
   final List<String> types, permissions;
+  final Map<String, dynamic> capabilities;
 
   const InstalledExtension({
     required this.id,
@@ -18,7 +19,10 @@ class InstalledExtension {
     required this.hasMetadataProvider,
     required this.hasDownloadProvider,
     required this.hasLyricsProvider,
+    this.capabilities = const {},
   });
+
+  bool get hasHomeFeed => capabilities['homeFeed'] == true;
 
   factory InstalledExtension.fromJson(Map<String, dynamic> j) => InstalledExtension(
         id: (j['id'] ?? '').toString(),
@@ -34,5 +38,6 @@ class InstalledExtension {
         hasMetadataProvider: j['has_metadata_provider'] == true,
         hasDownloadProvider: j['has_download_provider'] == true,
         hasLyricsProvider: j['has_lyrics_provider'] == true,
+        capabilities: (j['capabilities'] as Map?)?.cast<String, dynamic>() ?? const {},
       );
 }
