@@ -324,6 +324,7 @@ class DownloadForegroundService : Service() {
             updateItem(request.itemId) { it.resolvedService = winning }
             writeSnapshot(isRunning = true)
             val filePath = result.optString("file_path", "")
+            LrcSidecarWriter.maybeWrite(filePath, request.requestJson)
             if (filePath.isNotEmpty() && NonFlacMetadataEmbedder.isEmbeddable(filePath)) {
                 try {
                     NonFlacMetadataEmbedder.embed(applicationContext, filePath, request.requestJson)
@@ -468,4 +469,57 @@ class DownloadForegroundService : Service() {
     // service is that downloads keep running after the user swipes the app
     // away from Recent Apps. The default Service behavior (keep running) is
     // exactly what's wanted here.
+}
+
+/**
+ * Writes a `.lrc` sidecar beside a downloaded audio file when the request
+ * opted in via `write_lrc_sidecar`. Lyrics are fetched ONLINE through the
+ * same `Bridge.getLyricsLRC(...)` export `NonFlacMetadataEmbedder.fetchLyrics`
+ * uses -- no local file path is passed, since the Go backend's file-path mode
+ * only reads lyrics already embedded in the file (nothing is embedded yet at
+ * this point in the pipeline) and would return empty, so the sidecar would
+ * never write. Runs on BOTH FLAC and non-FLAC downloads (unlike
+ * [NonFlacMetadataEmbedder], which only tags lossy formats). Best-effort:
+ * failures are logged, never thrown.
+ */
+private object LrcSidecarWriter {
+
+    fun maybeWrite(filePath: String, requestJson: String) {
+        val request = try { JSONObject(requestJson) } catch (_: Exception) { return }
+        if (!request.optBoolean("write_lrc_sidecar", false)) return
+        if (filePath.isEmpty() || filePath.startsWith("content://")) return
+        if (!File(filePath).exists()) return
+
+        val lrc = try { fetchLyricsOnline(request) } catch (_: Exception) { return }
+        val trimmed = lrc.trim()
+        if (trimmed.isEmpty() || trimmed == "[instrumental:true]") return
+
+        // Strip only a real extension: the last '.' must come after the last
+        // path separator, otherwise a dotted directory name would get
+        // truncated instead of the file's own extension.
+        val slash = filePath.lastIndexOf('/')
+        val dot = filePath.lastIndexOf('.')
+        val base = if (dot > slash) filePath.substring(0, dot) else filePath
+
+        try {
+            File("$base.lrc").writeText(trimmed, Charsets.UTF_8)
+        } catch (e: Exception) {
+            android.util.Log.w("LrcSidecarWriter", "sidecar write failed: ${e.message}")
+        }
+    }
+
+    // Mirrors NonFlacMetadataEmbedder.fetchLyrics verbatim: spotify_id +
+    // track_name + artist_name + an empty filePath (forces the online fetch
+    // path in go_backend) + duration_ms. No qobuz/tidal id routing exists in
+    // that reference call, so none is invented here.
+    private fun fetchLyricsOnline(request: JSONObject): String {
+        val spotifyId = request.optString("spotify_id", "")
+        return Bridge.getLyricsLRC(
+            spotifyId,
+            request.optString("track_name", ""),
+            request.optString("artist_name", ""),
+            "",
+            request.optLong("duration_ms", 0L),
+        )
+    }
 }
