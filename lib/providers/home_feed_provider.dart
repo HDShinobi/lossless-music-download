@@ -43,13 +43,18 @@ final homeFeedSourceProvider =
     NotifierProvider<HomeFeedSourceNotifier, String?>(HomeFeedSourceNotifier.new);
 
 /// Resolves the active home-feed source, fetches its feed, and caches the
-/// result (`home_feed_cache` + `home_feed_cache_ts`, 6h TTL) so cold starts
-/// can show something instantly while a stale cache refreshes in the
-/// background.
+/// result per extension id (`home_feed_cache_<extId>` +
+/// `home_feed_cache_ts_<extId>`, 6h TTL) so cold starts can show something
+/// instantly while a stale cache refreshes in the background, without
+/// leaking one extension's cached sections onto another after a source
+/// switch.
 class HomeFeedController extends AsyncNotifier<List<HomeFeedSection>> {
-  static const _cacheKey = 'home_feed_cache';
-  static const _cacheTsKey = 'home_feed_cache_ts';
+  static const _cacheKeyPrefix = 'home_feed_cache_';
+  static const _cacheTsKeyPrefix = 'home_feed_cache_ts_';
   static const _ttl = Duration(hours: 6);
+
+  static String _cacheKeyFor(String extId) => '$_cacheKeyPrefix$extId';
+  static String _cacheTsKeyFor(String extId) => '$_cacheTsKeyPrefix$extId';
 
   @override
   Future<List<HomeFeedSection>> build() async {
@@ -60,8 +65,8 @@ class HomeFeedController extends AsyncNotifier<List<HomeFeedSection>> {
     if (ext == null) return const [];
 
     final p = await SharedPreferences.getInstance();
-    final cached = _readCache(p);
-    final ts = p.getInt(_cacheTsKey) ?? 0;
+    final cached = _readCache(p, ext.id);
+    final ts = p.getInt(_cacheTsKeyFor(ext.id)) ?? 0;
     final cachedAt = DateTime.fromMillisecondsSinceEpoch(ts);
     final fresh = ts != 0 && DateTime.now().difference(cachedAt) < _ttl;
 
@@ -78,7 +83,10 @@ class HomeFeedController extends AsyncNotifier<List<HomeFeedSection>> {
     if (source == homeFeedSourceOff) return null;
     final capable = exts.where((e) => e.enabled && e.hasHomeFeed).toList();
     if (source != null && source.isNotEmpty) {
-      return capable.where((e) => e.id == source).firstOrNull;
+      final match = capable.where((e) => e.id == source).firstOrNull;
+      // A stale/unknown specific id falls back to "auto" — matches the
+      // settings label and the spec's error-handling contract.
+      return match ?? capable.firstOrNull;
     }
     return capable.firstOrNull;
   }
@@ -89,8 +97,8 @@ class HomeFeedController extends AsyncNotifier<List<HomeFeedSection>> {
       final sections = parseHomeFeed(env);
       if (sections.isNotEmpty) {
         final p = await SharedPreferences.getInstance();
-        await p.setString(_cacheKey, jsonEncode(env));
-        await p.setInt(_cacheTsKey, DateTime.now().millisecondsSinceEpoch);
+        await p.setString(_cacheKeyFor(extId), jsonEncode(env));
+        await p.setInt(_cacheTsKeyFor(extId), DateTime.now().millisecondsSinceEpoch);
         state = AsyncData(sections);
       }
       return sections;
@@ -99,8 +107,8 @@ class HomeFeedController extends AsyncNotifier<List<HomeFeedSection>> {
     }
   }
 
-  List<HomeFeedSection> _readCache(SharedPreferences p) {
-    final raw = p.getString(_cacheKey);
+  List<HomeFeedSection> _readCache(SharedPreferences p, String extId) {
+    final raw = p.getString(_cacheKeyFor(extId));
     if (raw == null || raw.isEmpty) return const [];
     try {
       return parseHomeFeed(Map<String, dynamic>.from(jsonDecode(raw)));

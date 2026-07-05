@@ -39,6 +39,7 @@ class _FakeExtensionsController extends ExtensionsController {
 // ---------------------------------------------------------------------------
 class _FakeSearchNotifier extends SearchNotifier {
   final List<Track> _results;
+  int searchCalls = 0;
   _FakeSearchNotifier(this._results);
 
   @override
@@ -46,6 +47,7 @@ class _FakeSearchNotifier extends SearchNotifier {
 
   @override
   Future<void> search(String q) async {
+    searchCalls++;
     final query = q.trim();
     state = AsyncData(
       query.isEmpty ? SearchResults.empty : SearchResults(tracks: _results),
@@ -82,6 +84,7 @@ Future<void> _pumpSearchScreen(
   List<HomeFeedSection> feedSections = const [],
   List<Track> searchResults = const [],
   List<InstalledExtension> extensions = const [_homeFeedExt],
+  _FakeSearchNotifier? fakeSearchNotifier,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -89,7 +92,8 @@ Future<void> _pumpSearchScreen(
         extensionsProvider.overrideWith(() => _FakeExtensionsController(extensions)),
         homeFeedControllerProvider
             .overrideWith(() => _FakeHomeFeedController(feedSections)),
-        searchProvider.overrideWith(() => _FakeSearchNotifier(searchResults)),
+        searchProvider.overrideWith(
+            () => fakeSearchNotifier ?? _FakeSearchNotifier(searchResults)),
       ],
       child: MaterialApp(
         theme: appTheme(),
@@ -120,20 +124,49 @@ void main() {
     });
 
     testWidgets(
-        'typing a query hides the feed and shows search results instead',
-        (tester) async {
-      const resultTrack = Track(id: 'r1', name: 'Result Song', artists: 'X');
+        'typing a query hides the feed immediately (gate reacts to '
+        'onChanged) even before the query is submitted', (tester) async {
+      final fakeSearch = _FakeSearchNotifier(const []);
       await _pumpSearchScreen(
         tester,
         feedSections: const [
           HomeFeedSection(title: 'New releases', items: [_feedTrackItem]),
         ],
-        searchResults: const [resultTrack],
+        fakeSearchNotifier: fakeSearch,
       );
 
       await tester.enterText(find.byType(TextField), 'query');
       await tester.pumpAndSettle();
 
+      // Gate flips as soon as the field is non-empty...
+      expect(find.text('New releases'), findsNothing);
+      expect(find.text('Feed Track One'), findsNothing);
+      // ...but onChanged alone must not have triggered a search (which would
+      // pollute persisted recent searches on every keystroke).
+      expect(fakeSearch.searchCalls, 0);
+    });
+
+    testWidgets(
+        'submitting a query calls search exactly once and shows results',
+        (tester) async {
+      const resultTrack = Track(id: 'r1', name: 'Result Song', artists: 'X');
+      final fakeSearch = _FakeSearchNotifier(const [resultTrack]);
+      await _pumpSearchScreen(
+        tester,
+        feedSections: const [
+          HomeFeedSection(title: 'New releases', items: [_feedTrackItem]),
+        ],
+        fakeSearchNotifier: fakeSearch,
+      );
+
+      await tester.enterText(find.byType(TextField), 'query');
+      await tester.pumpAndSettle();
+      expect(fakeSearch.searchCalls, 0);
+
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(fakeSearch.searchCalls, 1);
       expect(find.text('New releases'), findsNothing);
       expect(find.text('Feed Track One'), findsNothing);
       expect(find.text('Result Song'), findsOneWidget);

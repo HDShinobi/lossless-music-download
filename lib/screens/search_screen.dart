@@ -314,7 +314,6 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               onSubmitted: (v) =>
                   ref.read(searchProvider.notifier).search(v),
               onChanged: (v) {
-                ref.read(searchProvider.notifier).search(v);
                 setState(() => _queryEmpty = v.trim().isEmpty);
               },
             ),
