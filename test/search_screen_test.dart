@@ -122,6 +122,13 @@ void main() {
         extensions: [],
       );
 
+      // A non-empty query is required to reach the search-results-empty
+      // branch: an empty query renders the home feed instead. The fake
+      // notifier returns SearchResults(tracks: _tracks) for any non-empty
+      // query, and _tracks is empty here, so 'x' still yields empty results.
+      await tester.enterText(find.byType(TextField), 'x');
+      await tester.pumpAndSettle();
+
       expect(
         find.text('No sources yet. Install one in Discover.'),
         findsOneWidget,
@@ -136,6 +143,13 @@ void main() {
         tracks: const [],
         extensions: [_fakeExt(id: 'source1')],
       );
+
+      // A non-empty query is required to reach the search-results-empty
+      // branch: an empty query renders the home feed instead. The fake
+      // notifier returns SearchResults(tracks: _tracks) for any non-empty
+      // query, and _tracks is empty here, so 'x' still yields empty results.
+      await tester.enterText(find.byType(TextField), 'x');
+      await tester.pumpAndSettle();
 
       expect(find.text('No results.'), findsOneWidget);
     });
