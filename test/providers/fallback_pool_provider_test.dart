@@ -68,6 +68,30 @@ void main() {
     expect(c.read(fallbackPoolProvider), ['tidal']);
     expect(pushed.last, ['tidal']);
   });
+
+  test(
+      'cold-start pushCurrent with no persisted pool and no extensions '
+      'loaded yet must never push an empty list to native '
+      '(regression: "[]" at the Go JSON boundary disables fallback for '
+      'every provider, not "all" — see SetExtensionFallbackProviderIDsJSON, '
+      'which only resets to "all" on a blank string)', () async {
+    // No persisted pool in SharedPreferences (set in outer setUp), and no
+    // override for extensionsProvider, so it stays in its default/loading
+    // state (value == null) — exactly the cold-start race window described
+    // in pushCurrent()'s doc comment.
+    final pushed = <List<String>>[];
+    final c = ProviderContainer(overrides: [
+      backendBridgeProvider.overrideWithValue(
+        _FakeBridge(onSetFallback: (ids) => pushed.add(ids)),
+      ),
+    ]);
+    addTearDown(c.dispose);
+    await c.read(fallbackPoolProvider.notifier).pushCurrent();
+    expect(pushed, isEmpty,
+        reason: 'an empty list must never reach the bridge: native treats '
+            'JSON "[]" as "fallback pool = nobody", not "all providers" '
+            '(only a blank string resets to the "all" default)');
+  });
 }
 
 class _FakeBridge extends BackendBridge {

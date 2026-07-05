@@ -59,8 +59,18 @@ class FallbackPoolNotifier extends Notifier<List<String>?> {
   /// the engine has a concrete list; this is non-fatal on failure since the
   /// engine keeps its last-known pool / default otherwise.
   Future<void> _pushToNative(List<String>? normalized) async {
-    final bridge = ref.read(backendBridgeProvider);
     final toPush = normalized ?? _allEnabledDownloadProviderIds();
+    // Never push an empty list to native. At the Go JSON boundary
+    // (SetExtensionFallbackProviderIDsJSON), "[]" is NOT the same as "all":
+    // it unmarshals to a non-nil empty slice, which the engine treats as
+    // "no provider is in the fallback pool" and disables fallback for
+    // everyone. Only a blank string resets the engine to its nil/"all"
+    // default. `toPush` is empty here exactly when we have no explicit user
+    // pool AND extensions haven't loaded yet (cold start) — in that case the
+    // engine is still at its correct nil/"all" default, so skipping this
+    // push is a no-op, not a lost update. Do NOT "simplify" this guard away.
+    if (toPush.isEmpty) return;
+    final bridge = ref.read(backendBridgeProvider);
     try {
       await bridge.setDownloadFallbackProviderIds(toPush);
     } catch (_) {
