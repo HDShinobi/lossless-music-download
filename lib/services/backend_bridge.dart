@@ -315,6 +315,17 @@ class BackendBridge {
   Future<void> setMetadataPriority(List<String> ids) =>
       _c.invokeMethod('setMetadataPriority', {'priorityJson': jsonEncode(ids)});
 
+  /// Fetches the home feed for [extensionId]. Returns the decoded envelope
+  /// (`{success, sections, ...}`) or null when the native side returns empty.
+  Future<Map<String, dynamic>?> getExtensionHomeFeed(String extensionId) async {
+    final raw = await _c.invokeMethod<String>(
+      'getExtensionHomeFeed',
+      {'extensionId': extensionId},
+    );
+    if (raw == null || raw.isEmpty) return null;
+    return Map<String, dynamic>.from(jsonDecode(raw));
+  }
+
   Future<void> setDownloadFallbackProviderIds(List<String> ids) =>
       _c.invokeMethod('setDownloadFallbackProviderIds', {'idsJson': jsonEncode(ids)});
 

@@ -31,6 +31,8 @@ void main() {
               {'id': 't1', 'name': 'Song', 'artists': 'A'}
             ]
           });
+        case 'getExtensionHomeFeed':
+          return jsonEncode({'success': true, 'sections': []});
         default:
           return null;
       }
@@ -56,5 +58,13 @@ void main() {
     await bridge.setDownloadFallbackProviderIds(['qobuz', 'tidal']);
     final c = calls.firstWhere((c) => c.method == 'setDownloadFallbackProviderIds');
     expect(jsonDecode(c.arguments['idsJson']), ['qobuz', 'tidal']);
+  });
+
+  test('getExtensionHomeFeed sends id + decodes envelope', () async {
+    final res = await bridge.getExtensionHomeFeed('ytmusic-spotiflac');
+    expect(res, isNotNull);
+    expect(res!['success'], true);
+    final c = calls.firstWhere((c) => c.method == 'getExtensionHomeFeed');
+    expect(c.arguments['extensionId'], 'ytmusic-spotiflac');
   });
 }

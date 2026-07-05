@@ -217,6 +217,7 @@ class MainActivity : FlutterActivity() {
             Bridge.setMetadataProviderPriorityJSON(call.argument<String>("priorityJson")!!)
             true to null
         }
+        "getExtensionHomeFeed" -> true to Bridge.getExtensionHomeFeedJSON(call.argument<String>("extensionId")!!)
         "setDownloadFallbackProviderIds" -> {
             Bridge.setExtensionFallbackProviderIDsJSON(call.argument<String>("idsJson")!!)
             true to null

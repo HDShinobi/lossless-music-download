@@ -166,6 +166,11 @@ func GetExtensionPendingAuthJSON(extensionID string) (string, error) {
 	return gobackend.GetExtensionPendingAuthJSON(extensionID)
 }
 
+// GetExtensionHomeFeedJSON re-exports the go_backend home-feed fetch.
+func GetExtensionHomeFeedJSON(extensionID string) (string, error) {
+	return gobackend.GetExtensionHomeFeedJSON(extensionID)
+}
+
 // --- Search ---
 
 // SearchTracksWithMetadataProvidersJSON searches for tracks using all
