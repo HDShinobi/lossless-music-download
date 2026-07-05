@@ -52,6 +52,10 @@ class DownloadEntry {
   /// error came from a fallback provider (e.g. qobuz-web behind amazon).
   final String? verificationService;
 
+  /// The provider that actually delivered the file (from the backend result's
+  /// `service`). Differs from [service] when a fallback provider won.
+  final String? resolvedService;
+
   const DownloadEntry({
     required this.track,
     required this.itemId,
@@ -65,6 +69,7 @@ class DownloadEntry {
     this.service,
     this.quality,
     this.verificationService,
+    this.resolvedService,
   });
 
   DownloadEntry copyWith({
@@ -76,6 +81,7 @@ class DownloadEntry {
     Duration? eta,
     String? error,
     String? verificationService,
+    String? resolvedService,
   }) {
     return DownloadEntry(
       track: track,
@@ -90,6 +96,7 @@ class DownloadEntry {
       service: service,
       quality: quality,
       verificationService: verificationService ?? this.verificationService,
+      resolvedService: resolvedService ?? this.resolvedService,
     );
   }
 }
@@ -669,7 +676,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   }
 
   void _setStatus(String itemId, String status,
-      {double? progressIfDone, String? error, String? verificationService}) {
+      {double? progressIfDone, String? error, String? verificationService,
+      String? resolvedService}) {
     state = [
       for (final e in state)
         if (e.itemId == itemId)
@@ -678,6 +686,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
             progress: progressIfDone ?? e.progress,
             error: error,
             verificationService: verificationService,
+            resolvedService: resolvedService,
           )
         else
           e,

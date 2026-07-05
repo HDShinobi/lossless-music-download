@@ -428,5 +428,17 @@ void main() {
         expect(entry.verificationService, isNull);
       });
     });
+
+    test('copyWith carries resolvedService', () {
+      const e = DownloadEntry(
+        track: _track,
+        itemId: 'i1',
+        status: 'queued',
+        progress: 0,
+        bytesReceived: 0,
+      );
+      final e2 = e.copyWith(status: 'done', resolvedService: 'qobuz');
+      expect(e2.resolvedService, 'qobuz');
+    });
   });
 }
