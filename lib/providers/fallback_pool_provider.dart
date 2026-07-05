@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'extensions_provider.dart';
 
 /// The user-chosen fallback provider-id pool. `null` means "all enabled
 /// download providers" (the Go engine's default when no explicit pool is set).
@@ -17,6 +18,12 @@ class FallbackPoolNotifier extends Notifier<List<String>?> {
       final raw = p.getString(_key);
       if (raw == null) return;
       state = (jsonDecode(raw) as List).map((e) => e.toString()).toList();
+      // The startup push (see pushCurrent) may have already fired before this
+      // persisted value finished loading (it deliberately doesn't set
+      // _explicitlySet so it can't suppress this load) — push again now that
+      // we know the real persisted pool, so native doesn't stay stuck on the
+      // interim "all" push.
+      await _pushToNative(state);
     });
     return null;
   }
@@ -33,7 +40,39 @@ class FallbackPoolNotifier extends Notifier<List<String>?> {
     } else {
       await p.setString(_key, jsonEncode(normalized));
     }
+    await _pushToNative(normalized);
   }
+
+  /// Re-pushes the current pool to native without changing it. Used at
+  /// startup so the engine reflects the pool as soon as possible.
+  ///
+  /// Deliberately does NOT go through [set] / set [_explicitlySet]: at app
+  /// boot this typically runs before build()'s async persisted-value load
+  /// (above) has resolved, so `state` here may still be the initial `null`.
+  /// If we routed through [set], its synchronous `_explicitlySet = true`
+  /// would win the race and permanently block the persisted load from ever
+  /// applying, silently discarding the user's saved pool on every launch.
+  Future<void> pushCurrent() => _pushToNative(state);
+
+  /// Pushes to native so the Go engine's fallback pool matches the UI. For
+  /// "all" (null) we resolve the current enabled-download-provider ids so
+  /// the engine has a concrete list; this is non-fatal on failure since the
+  /// engine keeps its last-known pool / default otherwise.
+  Future<void> _pushToNative(List<String>? normalized) async {
+    final bridge = ref.read(backendBridgeProvider);
+    final toPush = normalized ?? _allEnabledDownloadProviderIds();
+    try {
+      await bridge.setDownloadFallbackProviderIds(toPush);
+    } catch (_) {
+      // Non-fatal: engine keeps its last-known pool / default.
+    }
+  }
+
+  List<String> _allEnabledDownloadProviderIds() =>
+      (ref.read(extensionsProvider).value ?? const [])
+          .where((e) => e.enabled && e.hasDownloadProvider)
+          .map((e) => e.id)
+          .toList();
 }
 
 final fallbackPoolProvider =

@@ -6,6 +6,7 @@ import 'providers/locale_provider.dart';
 import 'providers/discover_provider.dart';
 import 'providers/download_dir_provider.dart';
 import 'providers/download_options_provider.dart';
+import 'providers/fallback_pool_provider.dart';
 import 'router.dart';
 
 void main() async {
@@ -14,6 +15,10 @@ void main() async {
   await container.read(localeProvider.notifier).load();
   await container.read(aggregatorUrlProvider.notifier).load();
   await container.read(askBeforeDownloadProvider.notifier).load();
+  // Best-effort: push the persisted fallback pool to native so the download
+  // engine starts in sync with the UI (pushCurrent already swallows bridge
+  // errors internally; failures must not block app boot).
+  await container.read(fallbackPoolProvider.notifier).pushCurrent();
   // Best-effort: wire download directory at startup; failures must not block app boot.
   try {
     await container.read(downloadDirProvider.future);
