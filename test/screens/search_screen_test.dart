@@ -201,6 +201,10 @@ void main() {
         buildSearchScreen(results: [_track1], bridge: bridge),
       );
       await tester.pumpAndSettle();
+      // A non-empty query is required to see search results: an empty query
+      // now renders the home feed (or its empty state) instead.
+      await tester.enterText(find.byType(TextField), 'x');
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byIcon(Icons.download_outlined));
       await tester.pumpAndSettle();
@@ -213,6 +217,8 @@ void main() {
       await tester.pumpWidget(
         buildSearchScreen(results: [_track1, _track2]),
       );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'x');
       await tester.pumpAndSettle();
 
       // Long-press the first track tile
@@ -234,6 +240,8 @@ void main() {
           extensions: [_fakeExt],
         ),
       );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'x');
       await tester.pumpAndSettle();
 
       // Long-press track 1 to enter selection mode (track 1 selected)
@@ -260,6 +268,8 @@ void main() {
         buildSearchScreen(results: [_track1]),
       );
       await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'x');
+      await tester.pumpAndSettle();
 
       // Enter selection mode
       await tester.longPress(find.text('Song One'));
@@ -283,6 +293,8 @@ void main() {
           extensions: [_fakeExt],
         ),
       );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'x');
       await tester.pumpAndSettle();
 
       // Enter selection mode (1 track selected)
@@ -346,6 +358,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'x');
+      await tester.pumpAndSettle();
 
       // With askBefore=false, tapping download must NOT show a bottom sheet.
       await tester.tap(find.byIcon(Icons.download_outlined));
@@ -367,6 +381,8 @@ void main() {
           extensions: [_fakeExt],
         ),
       );
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'x');
       await tester.pumpAndSettle();
 
       // Long-press track 1 to enter selection mode

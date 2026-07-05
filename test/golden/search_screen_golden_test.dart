@@ -1,12 +1,14 @@
 import 'package:alchemist/alchemist.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/screens/search_screen.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
 import 'package:lossless_music_download/theme/app_theme.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _EmptyBridge extends BackendBridge {
   @override
@@ -36,6 +38,12 @@ Widget _wrap(Locale locale) => ProviderScope(
     );
 
 void main() {
+  // homeFeedControllerProvider's source setting reads SharedPreferences on
+  // build (via a background microtask); mock it so that read succeeds
+  // instead of throwing MissingPluginException while empty-query search
+  // now renders the home feed (or its empty state) by default.
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   goldenTest(
     'SearchScreen renders',
     fileName: 'search_screen',

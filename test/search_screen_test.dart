@@ -20,6 +20,13 @@ class _FakeSearchNotifier extends sp.SearchNotifier {
 
   @override
   SearchResults build() => SearchResults(tracks: _tracks);
+
+  @override
+  Future<void> search(String q) async {
+    state = AsyncData(
+      q.trim().isEmpty ? SearchResults.empty : SearchResults(tracks: _tracks),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -96,6 +103,11 @@ void main() {
         tracks: const [Track(id: '1', name: 'Song', artists: 'A')],
         extensions: [_fakeExt(id: 'source1')],
       );
+
+      // A non-empty query is required to see search results: an empty query
+      // now renders the home feed (or its empty state) instead.
+      await tester.enterText(find.byType(TextField), 'song');
+      await tester.pumpAndSettle();
 
       expect(find.text('Song'), findsOneWidget);
       expect(find.byIcon(Icons.download_outlined), findsOneWidget);
