@@ -341,6 +341,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       totalBytes: item.bytesTotal > 0 ? item.bytesTotal : entry.totalBytes,
       error: item.error,
       verificationService: item.service,
+      resolvedService: item.resolvedService,
     );
   }
 

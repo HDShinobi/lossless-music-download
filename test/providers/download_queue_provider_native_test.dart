@@ -129,4 +129,33 @@ void main() {
     expect(entry.service, 'amazon');
     expect(entry.verificationService, 'qobuz-web');
   });
+
+  test('done native item propagates resolved service to the entry', () async {
+    final nativeWorker = _FakeNativeWorker()
+      ..failItemsWith = (itemId) => NativeWorkerItemState(
+            itemId: itemId,
+            status: 'done',
+            progress: 1.0,
+            bytesReceived: 100,
+            bytesTotal: 100,
+            resolvedService: 'qobuz',
+          );
+    final container = ProviderContainer(
+      overrides: [
+        backendBridgeProvider.overrideWithValue(_UnusedBridge()),
+        downloadDirPathProvider.overrideWithValue(Future.value('/fake/downloads')),
+        nativeDownloadWorkerProvider.overrideWithValue(nativeWorker),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container
+        .read(downloadQueueProvider.notifier)
+        .enqueue(_track, service: 'amazon');
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+
+    final entry = container.read(downloadQueueProvider).first;
+    expect(entry.status, 'done');
+    expect(entry.resolvedService, 'qobuz');
+  });
 }
