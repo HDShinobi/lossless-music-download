@@ -6,6 +6,7 @@ import 'package:lossless_music_download/models/download_progress.dart';
 import 'package:lossless_music_download/models/download_request.dart';
 import 'package:lossless_music_download/models/track.dart';
 import 'package:lossless_music_download/providers/download_dir_provider.dart';
+import 'package:lossless_music_download/providers/download_options_provider.dart';
 import 'package:lossless_music_download/providers/download_queue_provider.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
@@ -224,6 +225,25 @@ void main() {
       expect(json['use_fallback'], isTrue);
       expect(json['service'], 'mysource');
       expect(json['quality'], 'lossless');
+    });
+
+    // Task 2: autoFallbackProvider must drive DownloadRequest.useFallback.
+    test('enqueue reads autoFallback setting into useFallback', () async {
+      final bridge = _FakeBridge()..downloadResult = {};
+      final container = _makeContainer(bridge);
+      addTearDown(container.dispose);
+
+      // set() writes state synchronously (before its SharedPreferences
+      // await) and marks the value as explicit, so the reload microtask in
+      // build() won't clobber it — see download_options_provider_test.dart.
+      await container.read(autoFallbackProvider.notifier).set(false);
+
+      await container.read(downloadQueueProvider.notifier).enqueue(_track);
+      await _pump();
+
+      expect(bridge.downloadCalls, hasLength(1));
+      final capturedRequest = bridge.downloadCalls.first;
+      expect(capturedRequest.useFallback, isFalse);
     });
 
     test('enqueue maps the track id to the right backend identifier', () async {

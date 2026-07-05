@@ -223,6 +223,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       embedMetadata: ref.read(embedMetadataProvider),
       embedMaxQualityCover: ref.read(embedCoverProvider),
       embedLyrics: ref.read(embedLyricsProvider),
+      useFallback: ref.read(autoFallbackProvider),
     );
     return req.toJson();
   }
@@ -421,6 +422,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         embedMetadata: embedMetadata,
         embedMaxQualityCover: embedCover,
         embedLyrics: embedLyrics,
+        useFallback: ref.read(autoFallbackProvider),
       );
 
       final res = await bridge.downloadByStrategy(req);
