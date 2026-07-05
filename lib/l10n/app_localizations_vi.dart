@@ -600,4 +600,11 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get commonCancel => 'Huỷ';
+
+  @override
+  String get fallbackSourcesTitle => 'Nguồn dự phòng';
+
+  @override
+  String get fallbackSourcesHeader =>
+      'Các nguồn bỏ chọn sẽ không được dùng khi tải dự phòng.';
 }

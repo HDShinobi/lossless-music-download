@@ -1225,6 +1225,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get commonCancel;
+
+  /// Settings screen title for choosing which sources are used during download fallback
+  ///
+  /// In en, this message translates to:
+  /// **'Fallback sources'**
+  String get fallbackSourcesTitle;
+
+  /// Explanatory header text on the fallback-sources settings screen
+  ///
+  /// In en, this message translates to:
+  /// **'Unchecked sources are skipped during fallback.'**
+  String get fallbackSourcesHeader;
 }
 
 class _AppLocalizationsDelegate

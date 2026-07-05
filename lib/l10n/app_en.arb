@@ -257,5 +257,9 @@
   "settingStoragePermissionTitle": "Storage access needed",
   "settingStoragePermissionBody": "To save downloads to a folder you choose, allow \"All files access\" for Lossless Music in system settings.",
   "settingStoragePermissionOpen": "Open settings",
-  "commonCancel": "Cancel"
+  "commonCancel": "Cancel",
+  "fallbackSourcesTitle": "Fallback sources",
+  "@fallbackSourcesTitle": {"description": "Settings screen title for choosing which sources are used during download fallback"},
+  "fallbackSourcesHeader": "Unchecked sources are skipped during fallback.",
+  "@fallbackSourcesHeader": {"description": "Explanatory header text on the fallback-sources settings screen"}
 }

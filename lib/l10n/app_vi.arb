@@ -257,5 +257,9 @@
   "settingStoragePermissionTitle": "Cần quyền truy cập bộ nhớ",
   "settingStoragePermissionBody": "Để lưu file vào thư mục bạn chọn, hãy cấp quyền \"Truy cập tất cả tệp\" cho Lossless Music trong cài đặt hệ thống.",
   "settingStoragePermissionOpen": "Mở cài đặt",
-  "commonCancel": "Huỷ"
+  "commonCancel": "Huỷ",
+  "fallbackSourcesTitle": "Nguồn dự phòng",
+  "@fallbackSourcesTitle": {"description": "Tiêu đề màn hình cài đặt để chọn nguồn nào được dùng khi tải dự phòng"},
+  "fallbackSourcesHeader": "Các nguồn bỏ chọn sẽ không được dùng khi tải dự phòng.",
+  "@fallbackSourcesHeader": {"description": "Đoạn giải thích ở đầu màn hình cài đặt nguồn dự phòng"}
 }

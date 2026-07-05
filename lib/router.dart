@@ -13,6 +13,7 @@ import 'screens/settings_screen.dart';
 import 'screens/sources_screen.dart';
 import 'screens/extension_detail_screen.dart';
 import 'screens/verified_screen.dart';
+import 'screens/fallback_sources_screen.dart';
 
 GoRoute _r(String path, Widget child) =>
     GoRoute(path: path, builder: (c, s) => child);
@@ -94,6 +95,10 @@ final appRouter = GoRouter(
                         ExtensionDetailScreen(id: s.pathParameters['id']!),
                   ),
                 ],
+              ),
+              GoRoute(
+                path: 'fallback-sources',
+                builder: (c, s) => const FallbackSourcesScreen(),
               ),
             ],
           ),

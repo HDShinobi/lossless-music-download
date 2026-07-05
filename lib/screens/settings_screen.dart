@@ -111,6 +111,14 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => context.go('/settings/sources'),
           ),
 
+          // Fallback sources
+          ListTile(
+            leading: const Icon(Icons.swap_horiz_outlined),
+            title: Text(t.fallbackSourcesTitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.go('/settings/fallback-sources'),
+          ),
+
           // Check for app updates (GitHub Releases)
           ListTile(
             leading: const Icon(Icons.system_update_outlined),

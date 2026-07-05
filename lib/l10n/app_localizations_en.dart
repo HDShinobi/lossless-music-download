@@ -602,4 +602,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonCancel => 'Cancel';
+
+  @override
+  String get fallbackSourcesTitle => 'Fallback sources';
+
+  @override
+  String get fallbackSourcesHeader =>
+      'Unchecked sources are skipped during fallback.';
 }
