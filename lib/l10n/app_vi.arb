@@ -317,6 +317,8 @@
   "@extensionUpdateAll": { "description": "Action to update every extension with an available update" },
   "extensionUpdateTo": "Cập nhật lên v{version}",
   "@extensionUpdateTo": { "description": "Per-extension update button label", "placeholders": { "version": { "type": "String" } } },
+  "extensionUpdateNote": "Có bản mới v{version}",
+  "@extensionUpdateNote": { "description": "Note shown under an installed extension when a newer version exists", "placeholders": { "version": { "type": "String" } } },
   "extensionUpdating": "Đang cập nhật extension…",
   "@extensionUpdating": { "description": "Snackbar while extension updates are being applied" },
   "extensionUpdated": "Đã cập nhật extension",

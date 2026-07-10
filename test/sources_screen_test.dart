@@ -206,6 +206,8 @@ void main() {
       expect(find.text('1 extension update available'), findsOneWidget);
       expect(find.text('Update all'), findsOneWidget);
       expect(find.text('Update to v2.0.0'), findsOneWidget);
+      // Installed tab shows a "new version" note next to the update button.
+      expect(find.text('New version v2.0.0 available'), findsOneWidget);
     });
 
     // Regression: registry min_app_version is SpotiFLAC's scheme (unrelated to

@@ -317,6 +317,8 @@
   "@extensionUpdateAll": { "description": "Action to update every extension with an available update" },
   "extensionUpdateTo": "Update to v{version}",
   "@extensionUpdateTo": { "description": "Per-extension update button label", "placeholders": { "version": { "type": "String" } } },
+  "extensionUpdateNote": "New version v{version} available",
+  "@extensionUpdateNote": { "description": "Note shown under an installed extension when a newer version exists", "placeholders": { "version": { "type": "String" } } },
   "extensionUpdating": "Updating extensions…",
   "@extensionUpdating": { "description": "Snackbar while extension updates are being applied" },
   "extensionUpdated": "Extensions updated",

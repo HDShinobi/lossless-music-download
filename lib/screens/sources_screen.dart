@@ -152,18 +152,40 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
   }
 
   Widget _updateRow(AppLocalizations t, ExtensionUpdate update) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: TextButton.icon(
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          minimumSize: const Size(0, 32),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    final accent = Theme.of(context).colorScheme.primary;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.fiber_new, size: 16, color: accent),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  t.extensionUpdateNote(update.toVersion),
+                  style: TextStyle(color: accent, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
         ),
-        onPressed: _updating ? null : () => _runUpdate(t, [update]),
-        icon: const Icon(Icons.system_update_alt, size: 16),
-        label: Text(t.extensionUpdateTo(update.toVersion)),
-      ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: _updating ? null : () => _runUpdate(t, [update]),
+            icon: const Icon(Icons.system_update_alt, size: 16),
+            label: Text(t.extensionUpdateTo(update.toVersion)),
+          ),
+        ),
+      ],
     );
   }
 

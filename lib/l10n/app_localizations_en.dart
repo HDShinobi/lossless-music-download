@@ -699,6 +699,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String extensionUpdateNote(String version) {
+    return 'New version v$version available';
+  }
+
+  @override
   String get extensionUpdating => 'Updating extensions…';
 
   @override

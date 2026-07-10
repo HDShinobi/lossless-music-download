@@ -1376,6 +1376,12 @@ abstract class AppLocalizations {
   /// **'Update to v{version}'**
   String extensionUpdateTo(String version);
 
+  /// Note shown under an installed extension when a newer version exists
+  ///
+  /// In en, this message translates to:
+  /// **'New version v{version} available'**
+  String extensionUpdateNote(String version);
+
   /// Snackbar while extension updates are being applied
   ///
   /// In en, this message translates to:

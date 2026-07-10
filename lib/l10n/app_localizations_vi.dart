@@ -695,6 +695,11 @@ class AppLocalizationsVi extends AppLocalizations {
   }
 
   @override
+  String extensionUpdateNote(String version) {
+    return 'Có bản mới v$version';
+  }
+
+  @override
   String get extensionUpdating => 'Đang cập nhật extension…';
 
   @override
