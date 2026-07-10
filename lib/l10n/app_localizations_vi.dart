@@ -695,11 +695,6 @@ class AppLocalizationsVi extends AppLocalizations {
   }
 
   @override
-  String extensionUpdateIncompatible(String version) {
-    return 'Cần app v$version';
-  }
-
-  @override
   String get extensionUpdating => 'Đang cập nhật extension…';
 
   @override

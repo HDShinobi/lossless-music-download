@@ -22,16 +22,15 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
-    // Watching this warms the catalog + app version on screen open, so updates
-    // are detected without the user visiting the Discover tab first.
+    // Watching this warms the catalog on screen open, so updates are detected
+    // without the user visiting the Discover tab first.
     final updates = ref.watch(extensionUpdatesProvider);
-    final compatible = updates.where((u) => u.compatible).toList();
 
     return Scaffold(
       appBar: AppBar(title: Text(t.sourcesTitle)),
       body: Column(
         children: [
-          if (compatible.isNotEmpty) _updatesBanner(t, compatible),
+          if (updates.isNotEmpty) _updatesBanner(t, updates),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: SegmentedButton<int>(
@@ -50,7 +49,7 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
     );
   }
 
-  Widget _updatesBanner(AppLocalizations t, List<ExtensionUpdate> compatible) {
+  Widget _updatesBanner(AppLocalizations t, List<ExtensionUpdate> updates) {
     return Container(
       width: double.infinity,
       color: Theme.of(context).colorScheme.secondaryContainer,
@@ -61,7 +60,7 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              t.extensionUpdatesAvailable(compatible.length),
+              t.extensionUpdatesAvailable(updates.length),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
@@ -70,7 +69,7 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                   width: 20, height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2))
               : FilledButton(
-                  onPressed: () => _runUpdate(t, compatible),
+                  onPressed: () => _runUpdate(t, updates),
                   child: Text(t.extensionUpdateAll),
                 ),
         ],
@@ -153,25 +152,6 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
   }
 
   Widget _updateRow(AppLocalizations t, ExtensionUpdate update) {
-    if (!update.compatible) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.warning_amber_rounded,
-                size: 16, color: Theme.of(context).colorScheme.error),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                t.extensionUpdateIncompatible(update.storeExt.minAppVersion ?? ''),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
     return Align(
       alignment: Alignment.centerLeft,
       child: TextButton.icon(

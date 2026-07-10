@@ -1376,12 +1376,6 @@ abstract class AppLocalizations {
   /// **'Update to v{version}'**
   String extensionUpdateTo(String version);
 
-  /// Warning shown when an extension update requires a newer app version
-  ///
-  /// In en, this message translates to:
-  /// **'Needs app v{version}'**
-  String extensionUpdateIncompatible(String version);
-
   /// Snackbar while extension updates are being applied
   ///
   /// In en, this message translates to:

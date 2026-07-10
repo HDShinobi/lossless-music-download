@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import '../models/store_extension.dart';
 import '../providers/discover_provider.dart';
+import '../providers/extension_updates_provider.dart';
 import '../providers/extensions_provider.dart';
 
 /// The "Khám phá" (Discover) tab — shows the extension catalog from the
@@ -38,6 +39,9 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
             ?.map((e) => e.id)
             .toSet() ??
         const <String>{};
+    final updatesById = {
+      for (final u in ref.watch(extensionUpdatesProvider)) u.id: u
+    };
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,7 +75,9 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
                   ext: filtered[i],
                   isInstalled: installedIds.contains(filtered[i].id),
                   isInstalling: _installing.contains(filtered[i].id),
+                  update: updatesById[filtered[i].id],
                   onInstall: () => _installExtension(context, t, filtered[i]),
+                  onUpdate: () => _updateExtension(context, t, filtered[i]),
                 ),
               );
             },
@@ -99,6 +105,25 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
           SnackBar(content: Text(t.installFailed)),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() => _installing.remove(ext.id));
+      }
+    }
+  }
+
+  Future<void> _updateExtension(
+    BuildContext context,
+    AppLocalizations t,
+    StoreExtension ext,
+  ) async {
+    setState(() => _installing.add(ext.id));
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(discoverProvider.notifier).updateExtension(ext);
+      messenger.showSnackBar(SnackBar(content: Text(t.extensionUpdated)));
+    } catch (_) {
+      messenger.showSnackBar(SnackBar(content: Text(t.extensionUpdateFailed)));
     } finally {
       if (mounted) {
         setState(() => _installing.remove(ext.id));
@@ -238,12 +263,16 @@ class _ExtensionTile extends StatelessWidget {
     required this.isInstalled,
     required this.isInstalling,
     required this.onInstall,
+    required this.onUpdate,
+    this.update,
   });
 
   final StoreExtension ext;
   final bool isInstalled;
   final bool isInstalling;
+  final ExtensionUpdate? update;
   final VoidCallback onInstall;
+  final VoidCallback onUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -251,15 +280,20 @@ class _ExtensionTile extends StatelessWidget {
     final subtitle = '${ext.category} · ${ext.sourceName} · v${ext.version}';
 
     Widget trailing;
-    if (isInstalled) {
-      trailing = TextButton(
-        onPressed: null,
-        child: Text(t.installed),
-      );
-    } else if (isInstalling) {
+    if (isInstalling) {
       trailing = TextButton(
         onPressed: null,
         child: Text(t.installing),
+      );
+    } else if (update != null) {
+      trailing = FilledButton.tonal(
+        onPressed: onUpdate,
+        child: Text(t.extensionUpdateTo(update!.toVersion)),
+      );
+    } else if (isInstalled) {
+      trailing = TextButton(
+        onPressed: null,
+        child: Text(t.installed),
       );
     } else {
       trailing = TextButton(

@@ -5,7 +5,6 @@ import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/models/store_extension.dart';
 import 'package:lossless_music_download/providers/discover_provider.dart';
-import 'package:lossless_music_download/providers/extension_updates_provider.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/providers/priority_provider.dart';
 import 'package:lossless_music_download/screens/sources_screen.dart';
@@ -90,7 +89,6 @@ Future<void> pumpSourcesScreen(
   WidgetTester tester,
   List<InstalledExtension> exts, {
   List<StoreExtension> catalogExts = const [],
-  String? appVersion,
 }) async {
   final fake = _FakeBridge(exts);
   await tester.pumpWidget(
@@ -103,8 +101,6 @@ Future<void> pumpSourcesScreen(
         discoverProvider.overrideWith(() => _FakeDiscoverController(catalogExts)),
         aggregatorUrlProvider.overrideWith(() => _FakeAggregatorUrlNotifier()),
         priorityProvider.overrideWith(() => _FakePriorityController()),
-        if (appVersion != null)
-          appVersionProvider.overrideWith((ref) async => appVersion),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -205,7 +201,6 @@ void main() {
         tester,
         [_fakeExt(id: 'amazon', displayName: 'Amazon')], // installed v1.2.3
         catalogExts: [_fakeStore('amazon', '2.0.0')],
-        appVersion: '0.5.0',
       );
 
       expect(find.text('1 extension update available'), findsOneWidget);
@@ -213,19 +208,19 @@ void main() {
       expect(find.text('Update to v2.0.0'), findsOneWidget);
     });
 
+    // Regression: registry min_app_version is SpotiFLAC's scheme (unrelated to
+    // this fork's version) and must NOT suppress the update.
     testWidgets(
-        'shows incompatible warning and no banner when update needs a newer app',
+        'still offers the update even when min_app_version is set high',
         (tester) async {
       await pumpSourcesScreen(
         tester,
         [_fakeExt(id: 'qobuz', displayName: 'Qobuz')], // installed v1.2.3
-        catalogExts: [_fakeStore('qobuz', '2.0.0', minApp: '9.9.0')],
-        appVersion: '0.5.0',
+        catalogExts: [_fakeStore('qobuz', '2.0.0', minApp: '4.7.0')],
       );
 
-      expect(find.text('Needs app v9.9.0'), findsOneWidget);
-      expect(find.text('Update all'), findsNothing);
-      expect(find.text('Update to v2.0.0'), findsNothing);
+      expect(find.text('1 extension update available'), findsOneWidget);
+      expect(find.text('Update to v2.0.0'), findsOneWidget);
     });
   });
 }

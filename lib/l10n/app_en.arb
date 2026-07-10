@@ -317,8 +317,6 @@
   "@extensionUpdateAll": { "description": "Action to update every extension with an available update" },
   "extensionUpdateTo": "Update to v{version}",
   "@extensionUpdateTo": { "description": "Per-extension update button label", "placeholders": { "version": { "type": "String" } } },
-  "extensionUpdateIncompatible": "Needs app v{version}",
-  "@extensionUpdateIncompatible": { "description": "Warning shown when an extension update requires a newer app version", "placeholders": { "version": { "type": "String" } } },
   "extensionUpdating": "Updating extensions…",
   "@extensionUpdating": { "description": "Snackbar while extension updates are being applied" },
   "extensionUpdated": "Extensions updated",

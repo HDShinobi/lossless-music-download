@@ -270,5 +270,19 @@ void main() {
         expect(find.byType(TextField), findsNothing); // dialog closed
       },
     );
+
+    testWidgets(
+      'shows an Update button (not "Installed") when an installed extension has a newer catalog version',
+      (tester) async {
+        await pumpDiscoverTab(
+          tester,
+          catalog: [_fakeStoreExt(id: 'test-ext', version: '2.0.0')],
+          installed: [_fakeInstalledExt(id: 'test-ext')], // v1.0.0
+        );
+
+        expect(find.text('Update to v2.0.0'), findsOneWidget);
+        expect(find.text('Installed'), findsNothing);
+      },
+    );
   });
 }

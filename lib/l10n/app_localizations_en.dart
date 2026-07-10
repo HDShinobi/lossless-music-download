@@ -699,11 +699,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String extensionUpdateIncompatible(String version) {
-    return 'Needs app v$version';
-  }
-
-  @override
   String get extensionUpdating => 'Updating extensions…';
 
   @override
