@@ -651,4 +651,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get viewLyrics => 'View lyrics';
+
+  @override
+  String get extensionVerificationHelpTitleManual => 'Verify this source';
+
+  @override
+  String get extensionVerificationHelpTitleWaiting =>
+      'Waiting for verification';
+
+  @override
+  String get extensionVerificationHelpMessageManual =>
+      'We couldn\'t open the browser automatically. Copy the link below and open it to finish verification, then try downloading again.';
+
+  @override
+  String get extensionVerificationHelpMessageWaiting =>
+      'Finish the verification in your browser, then come back and try downloading again. If the page didn\'t open, use the link below.';
+
+  @override
+  String get extensionVerificationCopyLink => 'Copy link';
+
+  @override
+  String get extensionVerificationOpenBrowser => 'Open in browser';
+
+  @override
+  String get extensionVerificationClose => 'Close';
+
+  @override
+  String get extensionVerificationLinkCopied => 'Link copied';
 }

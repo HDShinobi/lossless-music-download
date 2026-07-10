@@ -294,5 +294,21 @@
   "lyricsInstrumental": "Instrumental track",
   "@lyricsInstrumental": { "description": "Shown when the track is instrumental (backend returns [instrumental:true])" },
   "viewLyrics": "View lyrics",
-  "@viewLyrics": { "description": "Track-detail menu action to open the lyrics viewer" }
+  "@viewLyrics": { "description": "Track-detail menu action to open the lyrics viewer" },
+  "extensionVerificationHelpTitleManual": "Verify this source",
+  "@extensionVerificationHelpTitleManual": { "description": "Title of the help dialog shown when the verification browser could not be opened automatically" },
+  "extensionVerificationHelpTitleWaiting": "Waiting for verification",
+  "@extensionVerificationHelpTitleWaiting": { "description": "Title of the help dialog shown while waiting for the user to finish browser verification" },
+  "extensionVerificationHelpMessageManual": "We couldn't open the browser automatically. Copy the link below and open it to finish verification, then try downloading again.",
+  "@extensionVerificationHelpMessageManual": { "description": "Body of the verification help dialog when the browser could not be launched" },
+  "extensionVerificationHelpMessageWaiting": "Finish the verification in your browser, then come back and try downloading again. If the page didn't open, use the link below.",
+  "@extensionVerificationHelpMessageWaiting": { "description": "Body of the verification help dialog while waiting for the grant to complete" },
+  "extensionVerificationCopyLink": "Copy link",
+  "@extensionVerificationCopyLink": { "description": "Verification help dialog action that copies the challenge URL" },
+  "extensionVerificationOpenBrowser": "Open in browser",
+  "@extensionVerificationOpenBrowser": { "description": "Verification help dialog action that retries launching the challenge URL" },
+  "extensionVerificationClose": "Close",
+  "@extensionVerificationClose": { "description": "Verification help dialog dismiss action" },
+  "extensionVerificationLinkCopied": "Link copied",
+  "@extensionVerificationLinkCopied": { "description": "Snackbar confirming the verification link was copied to the clipboard" }
 }

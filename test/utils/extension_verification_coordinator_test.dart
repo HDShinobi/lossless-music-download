@@ -167,5 +167,24 @@ void main() {
       r.coordinator.onGrantCompleted('qobuz-web', true, [failed2]);
       expect(r.retried, ['dl_1']);
     });
+
+    test('re-arms auto-retry for a track once its download completes', () {
+      final r = _Recorder();
+      final failed1 = _entry(itemId: 'dl_1', verificationService: 'qobuz-web');
+      r.coordinator.onGrantCompleted('qobuz-web', true, [failed1]);
+      expect(r.retried, ['dl_1']);
+
+      // The retried download eventually succeeds — clears the once-per-session
+      // guard so a later session expiry can verify + retry the same track again.
+      final done =
+          _entry(itemId: 'dl_1b', status: 'done', error: null);
+      r.coordinator.onQueueChanged([failed1], [done]);
+
+      // Later the same track fails verification again (session expired anew);
+      // a fresh grant must auto-retry it, not stay blocked from the first cycle.
+      final failed2 = _entry(itemId: 'dl_2', verificationService: 'qobuz-web');
+      r.coordinator.onGrantCompleted('qobuz-web', true, [failed2]);
+      expect(r.retried, ['dl_1', 'dl_2']);
+    });
   });
 }

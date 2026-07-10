@@ -648,4 +648,30 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get viewLyrics => 'Xem lời bài hát';
+
+  @override
+  String get extensionVerificationHelpTitleManual => 'Xác thực nguồn này';
+
+  @override
+  String get extensionVerificationHelpTitleWaiting => 'Đang chờ xác thực';
+
+  @override
+  String get extensionVerificationHelpMessageManual =>
+      'Không mở được trình duyệt tự động. Hãy sao chép liên kết bên dưới và mở để hoàn tất xác thực, sau đó thử tải lại.';
+
+  @override
+  String get extensionVerificationHelpMessageWaiting =>
+      'Hoàn tất xác thực trong trình duyệt rồi quay lại thử tải lại. Nếu trang không mở, dùng liên kết bên dưới.';
+
+  @override
+  String get extensionVerificationCopyLink => 'Sao chép liên kết';
+
+  @override
+  String get extensionVerificationOpenBrowser => 'Mở trong trình duyệt';
+
+  @override
+  String get extensionVerificationClose => 'Đóng';
+
+  @override
+  String get extensionVerificationLinkCopied => 'Đã sao chép liên kết';
 }

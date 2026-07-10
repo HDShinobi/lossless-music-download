@@ -1309,6 +1309,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'View lyrics'**
   String get viewLyrics;
+
+  /// Title of the help dialog shown when the verification browser could not be opened automatically
+  ///
+  /// In en, this message translates to:
+  /// **'Verify this source'**
+  String get extensionVerificationHelpTitleManual;
+
+  /// Title of the help dialog shown while waiting for the user to finish browser verification
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for verification'**
+  String get extensionVerificationHelpTitleWaiting;
+
+  /// Body of the verification help dialog when the browser could not be launched
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t open the browser automatically. Copy the link below and open it to finish verification, then try downloading again.'**
+  String get extensionVerificationHelpMessageManual;
+
+  /// Body of the verification help dialog while waiting for the grant to complete
+  ///
+  /// In en, this message translates to:
+  /// **'Finish the verification in your browser, then come back and try downloading again. If the page didn\'t open, use the link below.'**
+  String get extensionVerificationHelpMessageWaiting;
+
+  /// Verification help dialog action that copies the challenge URL
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get extensionVerificationCopyLink;
+
+  /// Verification help dialog action that retries launching the challenge URL
+  ///
+  /// In en, this message translates to:
+  /// **'Open in browser'**
+  String get extensionVerificationOpenBrowser;
+
+  /// Verification help dialog dismiss action
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get extensionVerificationClose;
+
+  /// Snackbar confirming the verification link was copied to the clipboard
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied'**
+  String get extensionVerificationLinkCopied;
 }
 
 class _AppLocalizationsDelegate

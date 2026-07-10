@@ -26,6 +26,9 @@ class MainShell extends ConsumerStatefulWidget {
 class _MainShellState extends ConsumerState<MainShell> {
   StreamSubscription<String>? _shareSub;
   StreamSubscription<ExtensionSessionGrantEvent>? _grantSub;
+  // Nudges the user with the challenge link if verification is still pending
+  // after a delay; cancelled once a grant arrives or the shell is disposed.
+  Timer? _verificationHelpTimer;
   String? _handledInitialUrl;
 
   // Opens the browser challenge for the extension a failed download actually
@@ -93,15 +96,36 @@ class _MainShellState extends ConsumerState<MainShell> {
 
   Future<bool> _openVerification(String extensionId) async {
     final bridge = ref.read(backendBridgeProvider);
-    final opened = await openPendingExtensionVerification(bridge, extensionId);
-    if (!mounted || !opened) return opened;
+    Uri? authUri;
+    final opened = await openPendingExtensionVerification(
+      bridge,
+      extensionId,
+      onAuthUri: (uri) => authUri = uri,
+    );
+    if (!mounted) return opened;
     final t = AppLocalizations.of(context);
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(t.extensionVerificationOpened)));
+    if (opened) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(t.extensionVerificationOpened)));
+      // If the grant hasn't arrived after a while, offer the link manually.
+      _verificationHelpTimer?.cancel();
+      if (authUri != null) {
+        _verificationHelpTimer = Timer(const Duration(seconds: 20), () {
+          if (mounted) {
+            unawaited(showExtensionVerificationHelpDialog(context, authUri!));
+          }
+        });
+      }
+    } else if (authUri != null) {
+      // Browser couldn't be launched — surface the link so the user isn't stuck.
+      unawaited(showExtensionVerificationHelpDialog(context, authUri!,
+          immediateFailure: true));
+    }
     return opened;
   }
 
   void _onSessionGrantCompleted(ExtensionSessionGrantEvent event) {
+    _verificationHelpTimer?.cancel();
     _verification.onGrantCompleted(
       event.extensionId,
       event.success,
@@ -136,6 +160,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   void dispose() {
     _shareSub?.cancel();
     _grantSub?.cancel();
+    _verificationHelpTimer?.cancel();
     _verification.dispose();
     super.dispose();
   }

@@ -50,6 +50,15 @@ class ExtensionVerificationCoordinator {
       for (final e in previous ?? const <DownloadEntry>[]) e.itemId: e
     };
     for (final entry in next) {
+      // A completed download re-arms the once-per-session guard for its track,
+      // so a later session expiry can verify + auto-retry the same track again.
+      // Safe against loops: success never re-triggers verification, and a
+      // download stuck in a failing verify loop never reaches 'done'.
+      if (entry.status == 'done' &&
+          previousById[entry.itemId]?.status != 'done') {
+        _autoRetried.removeWhere((key) => key.startsWith('${entry.track.id}::'));
+        continue;
+      }
       if (entry.status != 'failed') continue;
       if (previousById[entry.itemId]?.status == 'failed') continue;
       final target = verificationTargetFor(entry);

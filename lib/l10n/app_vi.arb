@@ -294,5 +294,21 @@
   "lyricsInstrumental": "Bản nhạc không lời",
   "@lyricsInstrumental": { "description": "Shown when the track is instrumental (backend returns [instrumental:true])" },
   "viewLyrics": "Xem lời bài hát",
-  "@viewLyrics": { "description": "Track-detail menu action to open the lyrics viewer" }
+  "@viewLyrics": { "description": "Track-detail menu action to open the lyrics viewer" },
+  "extensionVerificationHelpTitleManual": "Xác thực nguồn này",
+  "@extensionVerificationHelpTitleManual": { "description": "Title of the help dialog shown when the verification browser could not be opened automatically" },
+  "extensionVerificationHelpTitleWaiting": "Đang chờ xác thực",
+  "@extensionVerificationHelpTitleWaiting": { "description": "Title of the help dialog shown while waiting for the user to finish browser verification" },
+  "extensionVerificationHelpMessageManual": "Không mở được trình duyệt tự động. Hãy sao chép liên kết bên dưới và mở để hoàn tất xác thực, sau đó thử tải lại.",
+  "@extensionVerificationHelpMessageManual": { "description": "Body of the verification help dialog when the browser could not be launched" },
+  "extensionVerificationHelpMessageWaiting": "Hoàn tất xác thực trong trình duyệt rồi quay lại thử tải lại. Nếu trang không mở, dùng liên kết bên dưới.",
+  "@extensionVerificationHelpMessageWaiting": { "description": "Body of the verification help dialog while waiting for the grant to complete" },
+  "extensionVerificationCopyLink": "Sao chép liên kết",
+  "@extensionVerificationCopyLink": { "description": "Verification help dialog action that copies the challenge URL" },
+  "extensionVerificationOpenBrowser": "Mở trong trình duyệt",
+  "@extensionVerificationOpenBrowser": { "description": "Verification help dialog action that retries launching the challenge URL" },
+  "extensionVerificationClose": "Đóng",
+  "@extensionVerificationClose": { "description": "Verification help dialog dismiss action" },
+  "extensionVerificationLinkCopied": "Đã sao chép liên kết",
+  "@extensionVerificationLinkCopied": { "description": "Snackbar confirming the verification link was copied to the clipboard" }
 }
