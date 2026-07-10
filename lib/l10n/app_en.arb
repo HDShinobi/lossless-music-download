@@ -310,5 +310,19 @@
   "extensionVerificationClose": "Close",
   "@extensionVerificationClose": { "description": "Verification help dialog dismiss action" },
   "extensionVerificationLinkCopied": "Link copied",
-  "@extensionVerificationLinkCopied": { "description": "Snackbar confirming the verification link was copied to the clipboard" }
+  "@extensionVerificationLinkCopied": { "description": "Snackbar confirming the verification link was copied to the clipboard" },
+  "extensionUpdatesAvailable": "{count, plural, =1{1 extension update available} other{{count} extension updates available}}",
+  "@extensionUpdatesAvailable": { "description": "Chip/banner on the Sources screen when installed extensions have newer versions", "placeholders": { "count": { "type": "int" } } },
+  "extensionUpdateAll": "Update all",
+  "@extensionUpdateAll": { "description": "Action to update every extension with an available update" },
+  "extensionUpdateTo": "Update to v{version}",
+  "@extensionUpdateTo": { "description": "Per-extension update button label", "placeholders": { "version": { "type": "String" } } },
+  "extensionUpdateIncompatible": "Needs app v{version}",
+  "@extensionUpdateIncompatible": { "description": "Warning shown when an extension update requires a newer app version", "placeholders": { "version": { "type": "String" } } },
+  "extensionUpdating": "Updating extensions…",
+  "@extensionUpdating": { "description": "Snackbar while extension updates are being applied" },
+  "extensionUpdated": "Extensions updated",
+  "@extensionUpdated": { "description": "Snackbar after extension updates complete" },
+  "extensionUpdateFailed": "Update failed",
+  "@extensionUpdateFailed": { "description": "Snackbar when an extension update fails" }
 }

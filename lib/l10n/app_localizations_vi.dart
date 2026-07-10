@@ -674,4 +674,37 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get extensionVerificationLinkCopied => 'Đã sao chép liên kết';
+
+  @override
+  String extensionUpdatesAvailable(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Có $count bản cập nhật extension',
+      one: 'Có 1 bản cập nhật extension',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get extensionUpdateAll => 'Cập nhật tất cả';
+
+  @override
+  String extensionUpdateTo(String version) {
+    return 'Cập nhật lên v$version';
+  }
+
+  @override
+  String extensionUpdateIncompatible(String version) {
+    return 'Cần app v$version';
+  }
+
+  @override
+  String get extensionUpdating => 'Đang cập nhật extension…';
+
+  @override
+  String get extensionUpdated => 'Đã cập nhật extension';
+
+  @override
+  String get extensionUpdateFailed => 'Cập nhật thất bại';
 }

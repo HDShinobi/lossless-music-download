@@ -310,5 +310,19 @@
   "extensionVerificationClose": "Đóng",
   "@extensionVerificationClose": { "description": "Verification help dialog dismiss action" },
   "extensionVerificationLinkCopied": "Đã sao chép liên kết",
-  "@extensionVerificationLinkCopied": { "description": "Snackbar confirming the verification link was copied to the clipboard" }
+  "@extensionVerificationLinkCopied": { "description": "Snackbar confirming the verification link was copied to the clipboard" },
+  "extensionUpdatesAvailable": "{count, plural, =1{Có 1 bản cập nhật extension} other{Có {count} bản cập nhật extension}}",
+  "@extensionUpdatesAvailable": { "description": "Chip/banner on the Sources screen when installed extensions have newer versions", "placeholders": { "count": { "type": "int" } } },
+  "extensionUpdateAll": "Cập nhật tất cả",
+  "@extensionUpdateAll": { "description": "Action to update every extension with an available update" },
+  "extensionUpdateTo": "Cập nhật lên v{version}",
+  "@extensionUpdateTo": { "description": "Per-extension update button label", "placeholders": { "version": { "type": "String" } } },
+  "extensionUpdateIncompatible": "Cần app v{version}",
+  "@extensionUpdateIncompatible": { "description": "Warning shown when an extension update requires a newer app version", "placeholders": { "version": { "type": "String" } } },
+  "extensionUpdating": "Đang cập nhật extension…",
+  "@extensionUpdating": { "description": "Snackbar while extension updates are being applied" },
+  "extensionUpdated": "Đã cập nhật extension",
+  "@extensionUpdated": { "description": "Snackbar after extension updates complete" },
+  "extensionUpdateFailed": "Cập nhật thất bại",
+  "@extensionUpdateFailed": { "description": "Snackbar when an extension update fails" }
 }

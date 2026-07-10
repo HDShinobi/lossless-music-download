@@ -1357,6 +1357,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Link copied'**
   String get extensionVerificationLinkCopied;
+
+  /// Chip/banner on the Sources screen when installed extensions have newer versions
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 extension update available} other{{count} extension updates available}}'**
+  String extensionUpdatesAvailable(int count);
+
+  /// Action to update every extension with an available update
+  ///
+  /// In en, this message translates to:
+  /// **'Update all'**
+  String get extensionUpdateAll;
+
+  /// Per-extension update button label
+  ///
+  /// In en, this message translates to:
+  /// **'Update to v{version}'**
+  String extensionUpdateTo(String version);
+
+  /// Warning shown when an extension update requires a newer app version
+  ///
+  /// In en, this message translates to:
+  /// **'Needs app v{version}'**
+  String extensionUpdateIncompatible(String version);
+
+  /// Snackbar while extension updates are being applied
+  ///
+  /// In en, this message translates to:
+  /// **'Updating extensions…'**
+  String get extensionUpdating;
+
+  /// Snackbar after extension updates complete
+  ///
+  /// In en, this message translates to:
+  /// **'Extensions updated'**
+  String get extensionUpdated;
+
+  /// Snackbar when an extension update fails
+  ///
+  /// In en, this message translates to:
+  /// **'Update failed'**
+  String get extensionUpdateFailed;
 }
 
 class _AppLocalizationsDelegate

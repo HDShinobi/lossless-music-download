@@ -678,4 +678,37 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get extensionVerificationLinkCopied => 'Link copied';
+
+  @override
+  String extensionUpdatesAvailable(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count extension updates available',
+      one: '1 extension update available',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get extensionUpdateAll => 'Update all';
+
+  @override
+  String extensionUpdateTo(String version) {
+    return 'Update to v$version';
+  }
+
+  @override
+  String extensionUpdateIncompatible(String version) {
+    return 'Needs app v$version';
+  }
+
+  @override
+  String get extensionUpdating => 'Updating extensions…';
+
+  @override
+  String get extensionUpdated => 'Extensions updated';
+
+  @override
+  String get extensionUpdateFailed => 'Update failed';
 }

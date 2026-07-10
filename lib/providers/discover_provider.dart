@@ -49,22 +49,48 @@ class DiscoverController extends AsyncNotifier<List<StoreExtension>> {
       .fetchCatalog(ref.watch(aggregatorUrlProvider));
 
   Future<void> install(StoreExtension e) async {
+    final resultJson = await _downloadAndInstall(e);
+    // The backend installs new extensions DISABLED by default. Since the user
+    // explicitly chose to install this source, enable it immediately so it is
+    // usable without a second manual toggle. This also persists `_enabled=true`,
+    // so the extension comes back enabled after an app restart.
+    final id = _installedId(resultJson) ?? e.id;
+    if (id.isNotEmpty) {
+      await ref.read(backendBridgeProvider).setExtensionEnabled(id, true);
+    }
+    ref.invalidate(extensionsProvider); // refresh installed list
+  }
+
+  /// Updates an already-installed extension to [e]'s (newer) version. The Go
+  /// backend upgrades in place — preserving the signed session, per-extension
+  /// storage, and the enabled flag — so unlike [install] this does NOT toggle
+  /// the enabled state (re-enabling would silently turn on a disabled source).
+  Future<void> updateExtension(StoreExtension e) async {
+    await _downloadAndInstall(e);
+    ref.invalidate(extensionsProvider);
+  }
+
+  /// Updates several extensions sequentially. Installs are serialized to avoid
+  /// racing the native extension VM teardown during an in-place upgrade.
+  Future<void> updateAll(List<StoreExtension> exts) async {
+    for (final e in exts) {
+      await _downloadAndInstall(e);
+    }
+    ref.invalidate(extensionsProvider);
+  }
+
+  /// Downloads [e]'s package and installs it (an in-place upgrade when already
+  /// installed). Returns the backend install-result JSON. On failure the
+  /// downloaded temp file is cleaned up and the error is rethrown; the existing
+  /// installation is left untouched because the backend only swaps on success.
+  Future<String?> _downloadAndInstall(StoreExtension e) async {
     final (extDir, _) = await ref.read(appDirsProvider);
     final bridge = ref.read(backendBridgeProvider);
     final path = await ref
         .read(registryServiceProvider)
         .downloadExtension(e, '$extDir/_dl');
     try {
-      final resultJson = await bridge.installExtension(path);
-      // The backend installs new extensions DISABLED by default. Since the user
-      // explicitly chose to install this source, enable it immediately so it is
-      // usable without a second manual toggle. This also persists `_enabled=true`,
-      // so the extension comes back enabled after an app restart.
-      final id = _installedId(resultJson) ?? e.id;
-      if (id.isNotEmpty) {
-        await bridge.setExtensionEnabled(id, true);
-      }
-      ref.invalidate(extensionsProvider); // refresh installed list
+      return await bridge.installExtension(path);
     } catch (_) {
       try { await File(path).delete(); } catch (_) {}
       rethrow;

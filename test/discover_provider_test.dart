@@ -270,6 +270,65 @@ void main() {
           reason: 'extensionsProvider should refetch after invalidation');
     });
 
+    // Updating an already-installed extension must NOT force-enable it: the Go
+    // upgrade preserves the enabled flag, so re-enabling would silently turn on
+    // a source the user had disabled.
+    test('update: installs the new package without auto-enabling', () async {
+      final extDir = Directory.systemTemp.createTempSync('discover_upd_').path;
+      addTearDown(() => Directory(extDir).deleteSync(recursive: true));
+
+      final ext = _fakeStoreExt('amazon');
+      final path = '$extDir/_dl/amazon.spotiflac-ext';
+      final svc = _FakeRegistryService.withData(
+        catalog: [ext],
+        downloadPaths: {'amazon': path},
+      );
+      final bridge = _FakeBackendBridge(installResult: '{"id":"amazon"}');
+      final container = _makeContainer(
+        registryService: svc,
+        bridge: bridge,
+        extDir: extDir,
+      );
+      addTearDown(container.dispose);
+
+      await container.read(discoverProvider.future);
+      await container.read(discoverProvider.notifier).updateExtension(ext);
+
+      expect(bridge.installCalls, [path]);
+      expect(svc.downloadCalls, ['amazon']);
+      expect(bridge.enabledCalls, isEmpty,
+          reason: 'update must not toggle the enabled state');
+    });
+
+    test('updateAll: installs every provided extension, no enabling', () async {
+      final extDir = Directory.systemTemp.createTempSync('discover_updall_').path;
+      addTearDown(() => Directory(extDir).deleteSync(recursive: true));
+
+      final a = _fakeStoreExt('amazon');
+      final b = _fakeStoreExt('deezer');
+      final svc = _FakeRegistryService.withData(
+        catalog: [a, b],
+        downloadPaths: {
+          'amazon': '$extDir/_dl/amazon.spotiflac-ext',
+          'deezer': '$extDir/_dl/deezer.spotiflac-ext',
+        },
+      );
+      final bridge = _FakeBackendBridge();
+      final container = _makeContainer(
+        registryService: svc,
+        bridge: bridge,
+        extDir: extDir,
+      );
+      addTearDown(container.dispose);
+
+      await container.read(discoverProvider.future);
+      await container.read(discoverProvider.notifier).updateAll([a, b]);
+
+      expect(svc.downloadCalls, containsAll(['amazon', 'deezer']));
+      expect(bridge.installCalls, hasLength(2));
+      expect(bridge.enabledCalls, isEmpty);
+    });
+
     test('setAggregatorUrl updates the aggregatorUrlProvider', () async {
       SharedPreferences.setMockInitialValues({});
       const newUrl = 'https://example.com/custom-registry.json';
