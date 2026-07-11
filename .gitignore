@@ -32,4 +32,6 @@ go_backend/.gomobile/
 .claude/
 CLAUDE.md
 docs/superpowers/
+.superpowers/
+.maestro/
 .remember/
