@@ -146,28 +146,23 @@ void main() {
       expect(r.opened, ['qobuz-web', 'qobuz-web']);
     });
 
-    test('successful grant retries ALL failed items, including transient '
-        'checkAvailability failures from the same batch', () async {
-      // Real-device repro: a whole album fails when its availability checks run
-      // before the shared session is verified. Only one item surfaces as a
-      // verify error; the rest fail with a transient "checkAvailability failed".
-      // Once the grant lands, every failed item must be re-driven — not just the
-      // verify-error one — so the user solves the challenge once for the album.
+    test('grant retries only its own verify items, not unrelated failures',
+        () async {
+      // A batch that hammered the API into 429 must NOT all be re-fired on a
+      // grant (that was the 0.5.5 regression) — rate-limit backoff handles the
+      // transient failures. Only verify-error items for this extension retry.
       final r = _Recorder();
-      final verifyFail = _entry(
-        itemId: 'dl_1',
-        verificationService: 'qobuz-web',
-        track: const Track(id: 'trk-1', name: 'A', artists: 'X'),
-      );
-      final transientFail = _entry(
+      final verifyFail =
+          _entry(itemId: 'dl_1', verificationService: 'qobuz-web');
+      final rateLimited = _entry(
         itemId: 'dl_2',
         service: 'qobuz-web',
         verificationService: null,
-        error: 'Download failed: checkAvailability failed: Error: HTTP 429',
+        error: 'All providers failed. Last error: HTTP 429 for https://api.zarz.moe',
         track: const Track(id: 'trk-2', name: 'B', artists: 'Y'),
       );
-      r.coordinator.onGrantCompleted('qobuz-web', true, [verifyFail, transientFail]);
-      expect(r.retried, containsAll(['dl_1', 'dl_2']));
+      r.coordinator.onGrantCompleted('qobuz-web', true, [verifyFail, rateLimited]);
+      expect(r.retried, ['dl_1']);
     });
 
     test('auto-retries a given track+extension only once per session '

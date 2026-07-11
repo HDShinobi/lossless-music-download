@@ -112,6 +112,11 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   // Sequential download gate — mirrors SpotiFLAC's _processQueue() pattern.
   bool _isProcessing = false;
 
+  // Items already given one rate-limit (HTTP 429) backoff retry. Mirrors
+  // SpotiFLAC's _rateLimitRetriedItemIds — one delayed retry per item, then
+  // the failure is surfaced.
+  final Set<String> _rateLimitRetriedItemIds = {};
+
   @override
   List<DownloadEntry> build() {
     // Keep the poll alive and merge live progress into our entries.
@@ -332,6 +337,16 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         else
           entry,
     ];
+
+    // Native worker reported a rate-limit (HTTP 429) failure — give it one
+    // delayed retry so the shared API's limit resets, instead of hard-failing.
+    for (final e in state) {
+      if (e.status == 'failed' &&
+          isRateLimitError(e.error) &&
+          !_rateLimitRetriedItemIds.contains(e.itemId)) {
+        unawaited(_handleRateLimited(e.itemId, e.error ?? ''));
+      }
+    }
   }
 
   DownloadEntry _applyNativeItemState(DownloadEntry entry, NativeWorkerItemState item) {
@@ -444,6 +459,11 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
           (res['status']?.toString().toLowerCase().contains('cancel') ?? false);
       final err = res['error']?.toString() ?? res['error_type']?.toString();
       final resultService = res['service']?.toString();
+      if (failed &&
+          isRateLimitError(err) &&
+          await _handleRateLimited(next.itemId, err ?? '')) {
+        return; // one delayed retry scheduled; don't surface the failure yet
+      }
       _setStatus(
         next.itemId,
         failed ? 'failed' : 'done',
@@ -743,6 +763,26 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     state = [for (final e in state) if (e.itemId != itemId) e];
     _samples.remove(itemId);
   }
+
+  // --- Rate-limit (HTTP 429) backoff — ported from SpotiFLAC ---------------
+
+  /// Gives a rate-limited item ONE delayed retry (mirrors upstream's
+  /// _handleRateLimitedDownload): shows it as retrying, waits out the backoff so
+  /// the shared API's limit resets, then re-queues it. Returns whether a retry
+  /// was scheduled (false once the item has already used its one retry). The
+  /// wait intentionally blocks the sequential queue so we stop hammering the API.
+  Future<bool> _handleRateLimited(String itemId, String errorMsg) async {
+    if (_rateLimitRetriedItemIds.contains(itemId)) return false;
+    _rateLimitRetriedItemIds.add(itemId);
+    final delay = rateLimitBackoffDelay(errorMsg);
+    _setStatus(itemId, 'downloading',
+        error: 'Rate limited · retrying after ${delay.inSeconds}s');
+    await Future<void>.delayed(delay);
+    if (!state.any((e) => e.itemId == itemId)) return true; // removed/cancelled
+    _setStatus(itemId, 'queued', error: null);
+    unawaited(_processQueue());
+    return true;
+  }
 }
 
 final nativeDownloadWorkerProvider =
@@ -752,3 +792,32 @@ final downloadQueueProvider =
     NotifierProvider<DownloadQueueController, List<DownloadEntry>>(
   DownloadQueueController.new,
 );
+
+/// True when [err] is an API rate-limit (HTTP 429 / "rate limit" / "too many
+/// requests"). The backend surfaces these as e.g. "All providers failed. Last
+/// error: HTTP 429 for https://api.zarz.moe/...".
+bool isRateLimitError(String? err) {
+  if (err == null) return false;
+  final l = err.toLowerCase();
+  return l.contains('rate limit') ||
+      l.contains('rate_limit') ||
+      l.contains('too many requests') ||
+      l.contains('http 429') ||
+      l.contains('status 429') ||
+      l.contains('429 for ') ||
+      l.contains('429:') ||
+      l.contains('429;');
+}
+
+/// Backoff before a rate-limit retry: honours a `Retry-After: N` in the error
+/// message, else 30s, clamped to 5–300s. Mirrors upstream's
+/// _rateLimitBackoffDelay.
+Duration rateLimitBackoffDelay(String errorMsg) {
+  final m = RegExp(
+    r'retry[- ]?after(?: seconds)?[:= ]+(\d+)',
+    caseSensitive: false,
+  ).firstMatch(errorMsg.toLowerCase());
+  final parsed = m == null ? null : int.tryParse(m.group(1) ?? '');
+  final seconds = (parsed ?? 30).clamp(5, 300).toInt();
+  return Duration(seconds: seconds);
+}
