@@ -146,12 +146,28 @@ void main() {
       expect(r.opened, ['qobuz-web', 'qobuz-web']);
     });
 
-    test('grant does not retry entries that failed for another extension',
-        () async {
+    test('successful grant retries ALL failed items, including transient '
+        'checkAvailability failures from the same batch', () async {
+      // Real-device repro: a whole album fails when its availability checks run
+      // before the shared session is verified. Only one item surfaces as a
+      // verify error; the rest fail with a transient "checkAvailability failed".
+      // Once the grant lands, every failed item must be re-driven — not just the
+      // verify-error one — so the user solves the challenge once for the album.
       final r = _Recorder();
-      final failed = _entry(itemId: 'dl_1', verificationService: 'tidal-web');
-      r.coordinator.onGrantCompleted('qobuz-web', true, [failed]);
-      expect(r.retried, isEmpty);
+      final verifyFail = _entry(
+        itemId: 'dl_1',
+        verificationService: 'qobuz-web',
+        track: const Track(id: 'trk-1', name: 'A', artists: 'X'),
+      );
+      final transientFail = _entry(
+        itemId: 'dl_2',
+        service: 'qobuz-web',
+        verificationService: null,
+        error: 'Download failed: checkAvailability failed: Error: HTTP 429',
+        track: const Track(id: 'trk-2', name: 'B', artists: 'Y'),
+      );
+      r.coordinator.onGrantCompleted('qobuz-web', true, [verifyFail, transientFail]);
+      expect(r.retried, containsAll(['dl_1', 'dl_2']));
     });
 
     test('auto-retries a given track+extension only once per session '

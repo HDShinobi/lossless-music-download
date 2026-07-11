@@ -71,7 +71,15 @@ class ExtensionVerificationCoordinator {
   }
 
   /// Handles a completed spotiflac://session-grant exchange. On success,
-  /// re-enqueues the failed items waiting on [extensionId] (once per track).
+  /// re-enqueues EVERY failed item once (per track).
+  ///
+  /// A batch (album/playlist) fires its availability checks against the shared
+  /// signed session while it's still being verified: one track surfaces as a
+  /// verify error (opening the challenge), but the rest fail with a transient
+  /// error (e.g. "checkAvailability failed"). Retrying only the verify-error
+  /// item left the rest of the album stuck until a manual retry (which then
+  /// succeeds). Since a successful grant means the session is now valid, we
+  /// re-drive all failed items — auto-fallback lands each on a working source.
   void onGrantCompleted(
     String extensionId,
     bool success,
@@ -81,7 +89,6 @@ class ExtensionVerificationCoordinator {
     if (!success) return;
     for (final entry in entries) {
       if (entry.status != 'failed') continue;
-      if (verificationTargetFor(entry) != extensionId) continue;
       if (!_autoRetried.add('${entry.track.id}::$extensionId')) continue;
       retryItem(entry.itemId);
     }
