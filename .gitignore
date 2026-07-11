@@ -26,3 +26,10 @@ go_backend/.gomobile/
 
 # spec-harden: generated deployment symlink (https://github.com/HDShinobi/spec-harden)
 .agents/skills/spec-harden
+
+# AI / dev-process tooling — not published to the public repo
+.mcp.json
+.claude/
+CLAUDE.md
+docs/superpowers/
+.remember/
