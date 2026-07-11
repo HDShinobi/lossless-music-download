@@ -79,6 +79,24 @@ class ArtistData {
       albums.where((a) => a.albumType == 'single' || a.albumType == 'ep').toList();
 }
 
+/// The `provider:id` route id for opening [album] from an artist resolved via
+/// [artistRouteId]. An artist's albums belong to the same provider as the
+/// artist, so when the album JSON didn't carry its own `provider_id` we fall
+/// back to the artist's provider (mirrors upstream SpotiFLAC). Without this a
+/// non-Spotify artist's albums opened with a bare id and were misrouted to
+/// Spotify's handleUrl — the album loaded no tracks. A bare id (no provider
+/// anywhere) is left as-is so AlbumScreen can still try the Spotify fallback.
+String albumRouteId(ArtistAlbumCard album, String artistRouteId) {
+  final own = album.providerId?.trim() ?? '';
+  final provider = own.isNotEmpty ? own : _providerOf(artistRouteId);
+  return provider.isEmpty ? album.id : '$provider:${album.id}';
+}
+
+String _providerOf(String routeId) {
+  final i = routeId.indexOf(':');
+  return i > 0 ? routeId.substring(0, i) : '';
+}
+
 // ---------------------------------------------------------------------------
 // In-memory cache (10 minute TTL)
 // ---------------------------------------------------------------------------
@@ -366,7 +384,7 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen> {
     context.push(
       '/search/album',
       extra: AlbumRouteArgs(
-        id: album.id,
+        id: albumRouteId(album, widget.id),
         name: album.name,
         artist: album.artists,
         coverUrl: album.coverUrl,

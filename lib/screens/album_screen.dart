@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/app_localizations.dart';
 import '../models/track.dart';
 import '../providers/download_options_provider.dart';
+import '../services/backend_bridge.dart';
 import '../providers/download_queue_provider.dart';
 import '../providers/extensions_provider.dart';
 import '../theme/app_tokens.dart';
@@ -21,11 +22,16 @@ class AlbumRouteArgs {
     required this.name,
     required this.artist,
     this.coverUrl,
+    this.resourceType = 'album',
   });
   final String id;
   final String name;
   final String artist;
   final String? coverUrl;
+
+  /// 'album' (default) or 'playlist' — selects the metadata resource type and
+  /// the Spotify URL path. A playlist shows the same tracklist UI as an album.
+  final String resourceType;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,28 +111,38 @@ AlbumData albumFromSpotifyResult(
 // provider's metadata API, mirroring ArtistScreen. A bare id is treated as a
 // Spotify album and resolved through handleUrl.
 // ---------------------------------------------------------------------------
-final _albumDataProvider =
-    FutureProvider.family<AlbumData, AlbumRouteArgs>((ref, args) async {
-  final bridge = ref.read(backendBridgeProvider);
+/// Resolves an album/playlist's tracks. A `provider:id` argument goes through
+/// the provider's metadata API for [AlbumRouteArgs.resourceType] ('album' or
+/// 'playlist'); a bare id is treated as a Spotify resource of that type and
+/// resolved via handleUrl. Extracted for testability.
+Future<AlbumData> resolveAlbumData(
+  BackendBridge bridge,
+  AlbumRouteArgs args,
+) async {
   final fallback = AlbumData(
     name: args.name,
     artist: args.artist,
     coverUrl: args.coverUrl,
     tracks: const [],
   );
+  final type = args.resourceType;
 
   final colon = args.id.indexOf(':');
   if (colon > 0) {
     final provider = args.id.substring(0, colon);
     final rawId = args.id.substring(colon + 1);
-    final result = await bridge.getProviderMetadata(provider, 'album', rawId);
+    final result = await bridge.getProviderMetadata(provider, type, rawId);
     return result == null ? fallback : albumFromProviderMetadata(result, args);
   }
 
   final result =
-      await bridge.handleUrl('https://open.spotify.com/album/${args.id}');
+      await bridge.handleUrl('https://open.spotify.com/$type/${args.id}');
   return result == null ? fallback : albumFromSpotifyResult(result, args);
-});
+}
+
+final _albumDataProvider =
+    FutureProvider.family<AlbumData, AlbumRouteArgs>((ref, args) =>
+        resolveAlbumData(ref.read(backendBridgeProvider), args));
 
 // ---------------------------------------------------------------------------
 // AlbumScreen

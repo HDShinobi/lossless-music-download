@@ -572,6 +572,18 @@ class _HomeFeedCard extends StatelessWidget {
               id: item.routeId, name: item.name, coverUrl: item.coverUrl),
         );
         break;
+      case 'playlist':
+        // Reuse the album screen's tracklist UI, resolved as a playlist.
+        context.push(
+          '/search/album',
+          extra: AlbumRouteArgs(
+              id: item.routeId,
+              name: item.name,
+              artist: item.artists,
+              coverUrl: item.coverUrl,
+              resourceType: 'playlist'),
+        );
+        break;
     }
   }
 
