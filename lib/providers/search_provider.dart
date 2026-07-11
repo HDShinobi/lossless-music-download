@@ -60,25 +60,35 @@ class SearchNotifier extends AsyncNotifier<SearchResults> {
     }
     if (providers.isEmpty) return (const <SearchArtist>[], const <SearchAlbum>[]);
 
-    final artistRaw = <Map<String, dynamic>>[];
-    final albumRaw = <Map<String, dynamic>>[];
+    // One unfiltered search per provider, then bucket by `item_type`. Extensions
+    // disagree on the entity filter keyword ("album" vs "albums" etc.), so a
+    // typed filter drops results from whichever extensions expect the other
+    // spelling. Unfiltered, every extension returns all entity types each tagged
+    // with `item_type` — this mirrors upstream SpotiFLAC's default (no filter →
+    // bucket by item_type) and works regardless of the keyword contract.
+    final entityRaw = <Map<String, dynamic>>[];
     final calls = <Future<void>>[];
-
     for (final p in providers) {
       final id = (p['id'] ?? '').toString();
       if (id.isEmpty) continue;
       calls.add(bridge
-          .customSearch(id, query, options: {'filter': 'artist', 'limit': 10})
-          .then((r) => artistRaw.addAll(_stampProvider(r, id)))
-          .catchError((_) {}));
-      calls.add(bridge
-          .customSearch(id, query, options: {'filter': 'album', 'limit': 10})
-          .then((r) => albumRaw.addAll(_stampProvider(r, id)))
+          .customSearch(id, query, options: {'limit': 20})
+          .then((r) => entityRaw.addAll(_stampProvider(r, id)))
           .catchError((_) {}));
     }
     await Future.wait(calls);
+
+    final artistRaw =
+        entityRaw.where((m) => _itemType(m) == 'artist').toList();
+    final albumRaw = entityRaw.where((m) => _itemType(m) == 'album').toList();
     return (parseArtists(artistRaw), parseAlbums(albumRaw));
   }
+
+  /// The entity kind an unfiltered custom-search result belongs to. Extensions
+  /// tag it as `item_type` ("album"/"artist"/"track"/"playlist"); fall back to
+  /// `type` for the few that use that key.
+  String _itemType(Map<String, dynamic> m) =>
+      (m['item_type'] ?? m['type'] ?? '').toString().trim().toLowerCase();
 
   /// Stamps the queried [providerId] onto each entity result so the album/artist
   /// route id resolves to `provider:id`. Extensions don't reliably echo

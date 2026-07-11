@@ -23,14 +23,16 @@ class _FakeBridge extends BackendBridge {
   @override
   Future<List<Map<String, dynamic>>> customSearch(String extensionId,
       String query, {Map<String, dynamic>? options}) async {
-    final filter = options?['filter'];
-    if (filter == 'album') {
-      // No provider_id / source echoed by the extension.
-      return [
-        {'id': '12345', 'name': 'Discovery', 'artists': 'Daft Punk'},
-      ];
-    }
-    return const [];
+    // PA2: the app queries WITHOUT a type filter and buckets by item_type.
+    // Return a mix of entity types; the album omits provider_id/source so the
+    // stamping is also exercised.
+    return [
+      {'id': 't1', 'name': 'Track', 'item_type': 'track'},
+      {'id': '12345', 'name': 'Discovery', 'artists': 'Daft Punk',
+        'item_type': 'album'},
+      {'id': 'a9', 'name': 'Daft Punk', 'item_type': 'artist',
+        'provider_id': 'deezer'},
+    ];
   }
 }
 
@@ -39,8 +41,7 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test(
-      'album entity result is tagged with the queried provider even when the '
-      'extension omits provider_id (routeId => provider:id, not a bare id)',
+      'unfiltered entity search buckets by item_type and stamps the provider',
       () async {
     final container = ProviderContainer(overrides: [
       backendBridgeProvider.overrideWithValue(_FakeBridge()),
@@ -50,9 +51,12 @@ void main() {
     await container.read(searchProvider.notifier).search('discovery');
 
     final results = container.read(searchProvider).value!;
+    // The track item must NOT leak into the album/artist sections.
     expect(results.albums, hasLength(1));
-    // Must be resolvable through the provider metadata path, not misrouted to
-    // Spotify's bare-id handleUrl fallback.
+    expect(results.artists, hasLength(1));
+    // Album omitted provider_id → stamped with the queried provider, so it
+    // resolves via getProviderMetadata, not the Spotify bare-id fallback.
     expect(results.albums.single.routeId, 'deezer:12345');
+    expect(results.artists.single.routeId, 'deezer:a9');
   });
 }
