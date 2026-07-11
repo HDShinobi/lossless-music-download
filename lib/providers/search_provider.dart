@@ -69,15 +69,32 @@ class SearchNotifier extends AsyncNotifier<SearchResults> {
       if (id.isEmpty) continue;
       calls.add(bridge
           .customSearch(id, query, options: {'filter': 'artist', 'limit': 10})
-          .then(artistRaw.addAll)
+          .then((r) => artistRaw.addAll(_stampProvider(r, id)))
           .catchError((_) {}));
       calls.add(bridge
           .customSearch(id, query, options: {'filter': 'album', 'limit': 10})
-          .then(albumRaw.addAll)
+          .then((r) => albumRaw.addAll(_stampProvider(r, id)))
           .catchError((_) {}));
     }
     await Future.wait(calls);
     return (parseArtists(artistRaw), parseAlbums(albumRaw));
+  }
+
+  /// Stamps the queried [providerId] onto each entity result so the album/artist
+  /// route id resolves to `provider:id`. Extensions don't reliably echo
+  /// `provider_id`/`source`; without this, an un-echoed result falls back to a
+  /// bare id and AlbumScreen misroutes it to Spotify's handleUrl — the album
+  /// then fails to load. Mirrors upstream SpotiFLAC stamping source at search
+  /// time. Only fills the field when the extension left it blank.
+  List<Map<String, dynamic>> _stampProvider(
+    List<Map<String, dynamic>> results,
+    String providerId,
+  ) {
+    for (final m in results) {
+      final existing = (m['provider_id'] ?? m['source'] ?? '').toString().trim();
+      if (existing.isEmpty) m['provider_id'] = providerId;
+    }
+    return results;
   }
 
   Track _trackFromResolved(Map<String, dynamic> m) => Track(
