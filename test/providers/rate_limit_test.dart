@@ -26,6 +26,27 @@ void main() {
     });
   });
 
+  group('foldRetryAfterSeconds', () {
+    test('appends a retry-after token the backoff parser can read', () {
+      final folded = foldRetryAfterSeconds('HTTP 429', 120);
+      expect(folded, 'HTTP 429 retry-after: 120');
+      // The whole point: the backend value now drives the backoff (not 30s).
+      expect(rateLimitBackoffDelay(folded!).inSeconds, 120);
+    });
+
+    test('is a no-op when there is no positive retry-after', () {
+      expect(foldRetryAfterSeconds('HTTP 429', 0), 'HTTP 429');
+      expect(foldRetryAfterSeconds('HTTP 429', -5), 'HTTP 429');
+      expect(foldRetryAfterSeconds(null, 60), isNull);
+      expect(foldRetryAfterSeconds('', 60), '');
+    });
+
+    test('does not double-append when a retry-after is already present', () {
+      expect(foldRetryAfterSeconds('429 retry-after: 45', 60),
+          '429 retry-after: 45');
+    });
+  });
+
   group('rateLimitBackoffDelay', () {
     test('defaults to 30s when no Retry-After is present', () {
       expect(rateLimitBackoffDelay('HTTP 429').inSeconds, 30);

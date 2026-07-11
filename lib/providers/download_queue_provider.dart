@@ -356,7 +356,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       progress: item.progress,
       bytesReceived: item.bytesReceived,
       totalBytes: item.bytesTotal > 0 ? item.bytesTotal : entry.totalBytes,
-      error: item.error,
+      error: foldRetryAfterSeconds(item.error, item.retryAfterSeconds),
       verificationService: item.service,
       resolvedService: item.resolvedService,
     );
@@ -457,7 +457,9 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
           (res['status']?.toString().toLowerCase().contains('error') ?? false) ||
           (res['status']?.toString().toLowerCase().contains('fail') ?? false) ||
           (res['status']?.toString().toLowerCase().contains('cancel') ?? false);
-      final err = res['error']?.toString() ?? res['error_type']?.toString();
+      final retryAfter = (res['retry_after_seconds'] as num?)?.toInt() ?? 0;
+      final err = foldRetryAfterSeconds(
+          res['error']?.toString() ?? res['error_type']?.toString(), retryAfter);
       final resultService = res['service']?.toString();
       if (failed &&
           isRateLimitError(err) &&
@@ -820,4 +822,17 @@ Duration rateLimitBackoffDelay(String errorMsg) {
   final parsed = m == null ? null : int.tryParse(m.group(1) ?? '');
   final seconds = (parsed ?? 30).clamp(5, 300).toInt();
   return Duration(seconds: seconds);
+}
+
+/// Folds a backend `retry_after_seconds` value into [err] as a `retry-after: N`
+/// suffix so [rateLimitBackoffDelay] honors the server's Retry-After instead of
+/// the 30s default (which retries too early and gets the IP re-throttled). The
+/// backend already carries this value in its result JSON, but it isn't always in
+/// the error string that reaches the backoff parser. Mirrors SpotiFLAC, which
+/// appends the same token before computing the backoff. No-op when [seconds] <= 0,
+/// [err] is null/empty, or a retry-after token is already present.
+String? foldRetryAfterSeconds(String? err, int seconds) {
+  if (err == null || err.isEmpty || seconds <= 0) return err;
+  if (err.toLowerCase().contains('retry-after')) return err;
+  return '$err retry-after: $seconds';
 }

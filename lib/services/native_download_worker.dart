@@ -12,6 +12,11 @@ class NativeWorkerItemState {
   final int bytesTotal;
   final String? error;
 
+  /// Seconds the backend asked us to wait before retrying a rate-limited
+  /// (HTTP 429) item, from the download result's `retry_after_seconds`. 0 when
+  /// absent. Lets the queue's backoff honor the server's Retry-After.
+  final int retryAfterSeconds;
+
   /// Extension that raised a verification_required error, as reported by the
   /// backend download result's `service` field. Null for other failures.
   final String? service;
@@ -27,6 +32,7 @@ class NativeWorkerItemState {
     required this.bytesReceived,
     required this.bytesTotal,
     this.error,
+    this.retryAfterSeconds = 0,
     this.service,
     this.resolvedService,
   });
@@ -38,6 +44,7 @@ class NativeWorkerItemState {
         bytesReceived: (j['bytes_received'] as num?)?.toInt() ?? 0,
         bytesTotal: (j['bytes_total'] as num?)?.toInt() ?? 0,
         error: j['error']?.toString(),
+        retryAfterSeconds: (j['retry_after_seconds'] as num?)?.toInt() ?? 0,
         service: j['service']?.toString(),
         resolvedService: j['resolved_service']?.toString(),
       );

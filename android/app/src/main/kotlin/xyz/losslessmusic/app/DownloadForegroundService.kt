@@ -113,6 +113,12 @@ class DownloadForegroundService : Service() {
         var bytesReceived: Long = 0L,
         var bytesTotal: Long = 0L,
         var error: String? = null,
+        // Seconds the backend asked us to wait before retrying a rate-limited
+        // (HTTP 429) item, from the download result's `retry_after_seconds`.
+        // 0 when absent. Surfaced to Dart so its backoff honors the server's
+        // Retry-After instead of the 30s default (which retries too early and
+        // gets the IP re-throttled). Mirrors SpotiFLAC's retry_after handling.
+        var retryAfterSeconds: Int = 0,
         // Extension the backend reported for a failed download (its result's
         // `service` field) — lets Dart open the right verification challenge.
         var service: String? = null,
@@ -218,12 +224,18 @@ class DownloadForegroundService : Service() {
 
     @Synchronized
     private fun stopForegroundService() {
+        // Stop processing further queued items, but deliberately do NOT call
+        // Bridge.cancelDownload() here. This runs on natural batch completion
+        // (runWorker's tail) as well as on forced stop, and Go-cancelling the
+        // current item leaves a stale "cancelled" entry in the backend's cancel
+        // map that poisons any later re-download of the SAME itemId (e.g. a
+        // rate-limit 429 retry, which re-queues the same item) — surfacing as a
+        // bogus "download cancelled" failure. Mirrors SpotiFLAC's DownloadService,
+        // which Go-cancels only on an explicit user pause/cancel. Explicit user
+        // cancellation still works: it goes through the Dart remove() path, which
+        // calls Bridge.cancelDownload() directly.
         workerJob?.cancel()
         workerJob = null
-        val itemId = currentItemId
-        if (itemId.isNotEmpty()) {
-            try { Bridge.cancelDownload(itemId) } catch (_: Exception) {}
-        }
         currentItemId = ""
         isRunning = false
         releaseWakeLock()
@@ -310,9 +322,11 @@ class DownloadForegroundService : Service() {
             if (failed) {
                 val error = result.optString("error", "unknown")
                 val service = result.optString("service", "").ifEmpty { null }
+                val retryAfter = result.optInt("retry_after_seconds", 0)
                 updateItem(request.itemId) {
                     it.status = "failed"
                     it.error = error
+                    it.retryAfterSeconds = retryAfter
                     it.service = service
                 }
                 writeSnapshot(isRunning = true)
@@ -406,6 +420,7 @@ class DownloadForegroundService : Service() {
                         .put("bytes_received", item.bytesReceived)
                         .put("bytes_total", item.bytesTotal)
                         .apply { item.error?.let { put("error", it) } }
+                        .apply { if (item.retryAfterSeconds > 0) put("retry_after_seconds", item.retryAfterSeconds) }
                         .apply { item.service?.let { put("service", it) } }
                         .apply { item.resolvedService?.let { put("resolved_service", it) } }
                 )
@@ -447,9 +462,10 @@ class DownloadForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        if (currentItemId.isNotEmpty()) {
-            try { Bridge.cancelDownload(currentItemId) } catch (_: Exception) {}
-        }
+        // Never Go-cancel the current item here (see stopForegroundService):
+        // a stale cancel entry would poison a later re-download of the same
+        // itemId. Cancelling the coroutine scope stops further processing; any
+        // in-flight native download simply runs to completion on its own thread.
         releaseWakeLock()
         serviceScope.cancel()
         isRunning = false
