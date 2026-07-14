@@ -68,7 +68,41 @@ class _DownloadSheetState extends State<_DownloadSheet> {
     super.initState();
     _selectedSourceId =
         widget.sources.isNotEmpty ? widget.sources.first.id : null;
-    _selectedQuality = _kQualityOptions.first.value;
+    _selectedQuality = _qualityOptionsFor(_selectedSourceId).first.value;
+  }
+
+  InstalledExtension? _sourceById(String? id) {
+    for (final s in widget.sources) {
+      if (s.id == id) return s;
+    }
+    return null;
+  }
+
+  /// Quality options for [sourceId]: the source's own declared options
+  /// (whose `value` is the extension quality id the backend matches on), or
+  /// the built-in fallback list when the source declares none.
+  List<_QualityOption> _qualityOptionsFor(String? sourceId) {
+    final src = _sourceById(sourceId);
+    if (src != null && src.qualityOptions.isNotEmpty) {
+      return src.qualityOptions
+          .map((q) => _QualityOption(
+                label: q.label,
+                desc: q.description,
+                value: q.id,
+              ))
+          .toList();
+    }
+    return _kQualityOptions;
+  }
+
+  void _selectSource(String id) {
+    setState(() {
+      _selectedSourceId = id;
+      final opts = _qualityOptionsFor(id);
+      if (!opts.any((o) => o.value == _selectedQuality)) {
+        _selectedQuality = opts.first.value;
+      }
+    });
   }
 
   @override
@@ -172,7 +206,7 @@ class _DownloadSheetState extends State<_DownloadSheet> {
                   return _SourceChip(
                     source: src,
                     isSelected: isSelected,
-                    onTap: () => setState(() => _selectedSourceId = src.id),
+                    onTap: () => _selectSource(src.id),
                   );
                 }).toList(),
               ),
@@ -190,7 +224,7 @@ class _DownloadSheetState extends State<_DownloadSheet> {
                 if (v != null) setState(() => _selectedQuality = v);
               },
               child: Column(
-                children: _kQualityOptions.map((opt) {
+                children: _qualityOptionsFor(_selectedSourceId).map((opt) {
                   return RadioListTile<String>(
                     value: opt.value,
                     contentPadding: EdgeInsets.zero,
@@ -199,13 +233,15 @@ class _DownloadSheetState extends State<_DownloadSheet> {
                       opt.label,
                       style: tt.bodyMedium?.copyWith(color: cs.onSurface),
                     ),
-                    subtitle: Text(
-                      opt.desc,
-                      style: tokens.mono.copyWith(
-                        fontSize: 11,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
+                    subtitle: opt.desc.isEmpty
+                        ? null
+                        : Text(
+                            opt.desc,
+                            style: tokens.mono.copyWith(
+                              fontSize: 11,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
                   );
                 }).toList(),
               ),

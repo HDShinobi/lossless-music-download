@@ -14,6 +14,7 @@ InstalledExtension _fakeSource({
   required String id,
   required String displayName,
   bool enabled = true,
+  List<ExtensionQualityOption> qualityOptions = const [],
 }) =>
     InstalledExtension(
       id: id,
@@ -28,6 +29,7 @@ InstalledExtension _fakeSource({
       hasMetadataProvider: false,
       hasDownloadProvider: true,
       hasLyricsProvider: false,
+      qualityOptions: qualityOptions,
     );
 
 const _track = Track(id: '1', name: 'Bohemian Rhapsody', artists: 'Queen');
@@ -207,6 +209,122 @@ void main() {
 
       expect(result!.sourceId, 'tidal');
       expect(result!.quality, 'mp3');
+    });
+
+    testWidgets(
+        'shows the selected source\'s own quality options when it declares them',
+        (tester) async {
+      final sources = [
+        _fakeSource(id: 'tidal', displayName: 'Tidal', qualityOptions: const [
+          ExtensionQualityOption(
+              id: 'HI_RES_LOSSLESS', label: 'Hi-Res FLAC', description: '24-bit / 192 kHz'),
+          ExtensionQualityOption(
+              id: 'LOSSLESS', label: 'FLAC Lossless', description: '16-bit / 44.1 kHz'),
+        ]),
+      ];
+      await _pumpAndShowSheet(tester, sources);
+
+      // Source-declared options are shown...
+      expect(find.text('Hi-Res FLAC'), findsOneWidget);
+      expect(find.text('FLAC Lossless'), findsOneWidget);
+      // ...and the hardcoded fallback ones are NOT.
+      expect(find.text('FLAC · Hi-Res'), findsNothing);
+      expect(find.text('MP3'), findsNothing);
+    });
+
+    testWidgets(
+        'CTA returns the extension quality id for a source with options',
+        (tester) async {
+      final sources = [
+        _fakeSource(id: 'tidal', displayName: 'Tidal', qualityOptions: const [
+          ExtensionQualityOption(id: 'HI_RES_LOSSLESS', label: 'Hi-Res FLAC'),
+          ExtensionQualityOption(id: 'LOSSLESS', label: 'FLAC Lossless'),
+        ]),
+      ];
+      DownloadChoice? result;
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: appTheme(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: ElevatedButton(
+                  onPressed: () async {
+                    result = await showDownloadSheet(context,
+                        track: _track, sources: sources);
+                  },
+                  child: const Text('Open sheet'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open sheet'));
+      await tester.pumpAndSettle();
+
+      // Pick the second option, then download.
+      await tester.tap(find.text('FLAC Lossless'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Download'));
+      await tester.pumpAndSettle();
+
+      expect(result!.sourceId, 'tidal');
+      expect(result!.quality, 'LOSSLESS');
+    });
+
+    testWidgets(
+        'switching sources swaps the quality list and resets the selection',
+        (tester) async {
+      final sources = [
+        _fakeSource(id: 'tidal', displayName: 'Tidal', qualityOptions: const [
+          ExtensionQualityOption(id: 'HI_RES_LOSSLESS', label: 'Hi-Res FLAC'),
+        ]),
+        _fakeSource(id: 'deezer', displayName: 'Deezer'), // no options -> fallback
+      ];
+      DownloadChoice? result;
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: appTheme(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: ElevatedButton(
+                  onPressed: () async {
+                    result = await showDownloadSheet(context,
+                        track: _track, sources: sources);
+                  },
+                  child: const Text('Open sheet'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open sheet'));
+      await tester.pumpAndSettle();
+
+      // Initially Tidal's option is shown, fallback is not.
+      expect(find.text('Hi-Res FLAC'), findsOneWidget);
+      expect(find.text('MP3'), findsNothing);
+
+      // Switch to Deezer (no declared options) -> fallback list appears.
+      await tester.tap(find.text('Deezer'));
+      await tester.pumpAndSettle();
+      expect(find.text('Hi-Res FLAC'), findsNothing);
+      expect(find.text('MP3'), findsOneWidget);
+
+      // Download uses the reset selection (fallback's first option).
+      await tester.tap(find.text('Download'));
+      await tester.pumpAndSettle();
+      expect(result!.sourceId, 'deezer');
+      expect(result!.quality, 'hires');
     });
 
     testWidgets('cancelling sheet returns null', (tester) async {
