@@ -134,6 +134,12 @@
   .pillar:last-child .arrow { display: none; }
 
   /* ── VERIFY (hot spot) ── */
+  /* screenshots */
+  .shots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.1rem; margin-top: 2.6rem; }
+  .shot { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem; }
+  .shot img { display: block; width: 100%; height: auto; border-radius: 9px; border: 1px solid var(--border); background: #000; }
+  .shot .cap { display: block; margin-top: auto; padding-top: .7rem; font-size: .78rem; line-height: 1.45; color: var(--muted); }
+  .shot .cap b { color: var(--text); font-weight: 650; display: block; margin-bottom: .12rem; font-size: .82rem; }
   .verify-grid { display: grid; grid-template-columns: 1.35fr .65fr; gap: 2rem; margin-top: 2.8rem; align-items: stretch; }
   .spec-card { background: #0a0c0f; border: 1px solid var(--border); border-radius: var(--radius); padding: 1.2rem; overflow: hidden; }
   .spec-row { position: relative; }
@@ -144,11 +150,11 @@
   .verdict.ok { color: var(--accent); background: var(--accent-bg); border: 1px solid var(--accent-bd); }
   .verdict.no { color: var(--faint); background: rgba(255,255,255,.03); border: 1px solid var(--border-2); }
   .spec-canvas-box { position: relative; }
-  canvas.spec { display: block; width: 100%; height: 124px; border-radius: 8px; }
+  img.spec { display: block; width: 100%; height: auto; aspect-ratio: 4 / 1; object-fit: cover; border-radius: 8px; }
   .cut-line { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--border-2); }
   .cut-tag { position: absolute; right: 6px; transform: translateY(-50%); font-family: var(--mono); font-size: .64rem; color: var(--faint); background: #0a0c0f; padding: 0 4px; }
 
-  .stats { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.3rem 1.4rem; display: flex; flex-direction: column; }
+  .stats { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.3rem 1.4rem; display: flex; flex-direction: column;  align-self: start;}
   .stats .ex { font-family: var(--mono); font-size: .68rem; color: var(--faint); letter-spacing: .08em; margin-bottom: 1rem; }
   .stat { padding: .8rem 0; border-top: 1px solid var(--border); display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
   .stat:first-of-type { border-top: 0; padding-top: 0; }
@@ -261,6 +267,7 @@
     .hero-cta { justify-content: center; }
     .hero-art { order: -1; justify-content: center; }
     .verify-grid, .serve-grid, .support-grid { grid-template-columns: 1fr; }
+    .shots { grid-template-columns: repeat(2, 1fr); }
     .pillars { grid-template-columns: 1fr; }
     .pillar .arrow { display: none; }
     .bento { grid-template-columns: 1fr; }
@@ -380,11 +387,38 @@
   </div>
 </section>
 
+<!-- SCREENSHOTS -->
+<section id="shots">
+  <div class="wrap">
+    <h2 class="h2 reveal" data-vi="Ứng dụng trông như thế nào." data-en="What the app looks like.">Ứng dụng trông như thế nào.</h2>
+    <p class="lead reveal" data-vi="Ảnh chụp thật từ bản đang phát hành, không phải hình dựng." data-en="Real screenshots from the current release, not mockups.">Ảnh chụp thật từ bản đang phát hành, không phải hình dựng.</p>
+
+    <div class="shots">
+      <div class="shot reveal">
+        <img src="shot-search.jpg" width="342" height="760" loading="lazy" decoding="async" alt="Search results with cover art"/>
+        <span class="cap"><b data-vi="Tìm kiếm" data-en="Search">Tìm kiếm</b><span data-vi="Gộp kết quả từ mọi nguồn đã cài." data-en="Results merged across every installed source.">Gộp kết quả từ mọi nguồn đã cài.</span></span>
+      </div>
+      <div class="shot reveal">
+        <img src="shot-source.jpg" width="342" height="760" loading="lazy" decoding="async" alt="Source and quality picker before download"/>
+        <span class="cap"><b data-vi="Chọn nguồn &amp; chất lượng" data-en="Source &amp; quality">Chọn nguồn &amp; chất lượng</b><span data-vi="Mỗi nguồn hiện đúng các mức nó hỗ trợ." data-en="Each source shows the tiers it really supports.">Mỗi nguồn hiện đúng các mức nó hỗ trợ.</span></span>
+      </div>
+      <div class="shot reveal">
+        <img src="shot-sources.jpg" width="342" height="760" loading="lazy" decoding="async" alt="Extension repository listing available sources"/>
+        <span class="cap"><b data-vi="Kho nguồn" data-en="Source library">Kho nguồn</b><span data-vi="Cài thêm nguồn tải ngay trong ứng dụng." data-en="Install more download sources in-app.">Cài thêm nguồn tải ngay trong ứng dụng.</span></span>
+      </div>
+      <div class="shot reveal">
+        <img src="shot-settings.jpg" width="342" height="760" loading="lazy" decoding="async" alt="Settings screen including folder layout"/>
+        <span class="cap"><b data-vi="Tuỳ chỉnh" data-en="Settings">Tuỳ chỉnh</b><span data-vi="Cách xếp thư mục, thẻ metadata, ảnh bìa, lời bài hát." data-en="Folder layout, tags, cover art, lyrics.">Cách xếp thư mục, thẻ metadata, ảnh bìa, lời bài hát.</span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- VERIFY (hot spot) -->
 <section id="verify" class="band">
   <div class="wrap">
     <h2 class="h2 reveal" data-vi="Nhìn thấu chất lượng âm thanh thật." data-en="See which one is real.">Nhìn thấu chất lượng âm thanh thật.</h2>
-    <p class="lead reveal" data-vi="Nhạc lossless chuẩn giữ lại trọn vẹn dải tần âm thanh cao nhất. Ngược lại, tệp MP3 320kbps giả lập FLAC (transcode) sẽ bị giới hạn tần số đột ngột (thường ở mức 16kHz). Ứng dụng tự động dựng biểu đồ phổ tần để giúp bạn phân biệt chính xác." data-en="True lossless audio preserves the entire high-frequency spectrum. In contrast, a 320kbps MP3 file converted to FLAC will show a sharp cutoff (typically at 16kHz). The app visualizes this comparison so you can verify with confidence.">Nhạc lossless chuẩn giữ lại trọn vẹn dải tần âm thanh cao nhất. Ngược lại, tệp MP3 320kbps giả lập FLAC (transcode) sẽ bị giới hạn tần số đột ngột (thường ở mức 16kHz). Ứng dụng tự động dựng biểu đồ phổ tần để giúp bạn phân biệt chính xác.</p>
+    <p class="lead reveal" data-vi="Nhạc lossless chuẩn giữ lại trọn vẹn dải tần lên tới trần Nyquist. Ngược lại, tệp giả lập FLAC dựng từ MP3 luôn để lại vết cắt tần số đột ngột — ngay cả bản 320kbps cũng bị chặn quanh 20 kHz. Hai biểu đồ dưới đây dựng từ chính một bản tải về của ứng dụng: bản gốc và bản đã nén lại qua MP3 320kbps." data-en="True lossless audio carries energy all the way to the Nyquist ceiling. A FLAC rebuilt from an MP3 always leaves a hard frequency cutoff — even at 320kbps it stops around 20 kHz. Both spectrograms below come from one real download made by the app: the original, and the same audio re-encoded through 320kbps MP3.">Nhạc lossless chuẩn giữ lại trọn vẹn dải tần lên tới trần Nyquist. Ngược lại, tệp giả lập FLAC dựng từ MP3 luôn để lại vết cắt tần số đột ngột — ngay cả bản 320kbps cũng bị chặn quanh 20 kHz. Hai biểu đồ dưới đây dựng từ chính một bản tải về của ứng dụng: bản gốc và bản đã nén lại qua MP3 320kbps.</p>
 
     <div class="verify-grid">
       <div class="spec-card reveal">
@@ -394,7 +428,8 @@
             <span class="verdict ok" data-vi="ĐÃ XÁC MINH" data-en="VERIFIED">ĐÃ XÁC MINH</span>
           </div>
           <div class="spec-canvas-box">
-            <canvas class="spec" data-kind="real" aria-hidden="true"></canvas>
+            <img class="spec" src="spec-lossless.jpg" width="900" height="225" loading="lazy" decoding="async" alt="Spectrogram of a real 24-bit/48 kHz FLAC: energy reaches the top of the spectrum"/>
+            <span class="cut-tag mono" style="top:4%">23.4 kHz</span>
           </div>
         </div>
         <div class="spec-row">
@@ -403,9 +438,9 @@
             <span class="verdict no" data-vi="NGHI NÉN LẠI" data-en="LIKELY TRANSCODE">NGHI NÉN LẠI</span>
           </div>
           <div class="spec-canvas-box">
-            <canvas class="spec" data-kind="fake" aria-hidden="true"></canvas>
-            <div class="cut-line" style="top:42%"></div>
-            <span class="cut-tag mono" style="top:42%">16 kHz</span>
+            <img class="spec" src="spec-transcode.jpg" width="900" height="225" loading="lazy" decoding="async" alt="Spectrogram of the same audio re-encoded through 320kbps MP3: a hard cutoff near 20 kHz"/>
+            <div class="cut-line" style="top:15%"></div>
+            <span class="cut-tag mono" style="top:15%">20.4 kHz</span>
           </div>
         </div>
       </div>
@@ -414,7 +449,7 @@
         <span class="ex" data-vi="PHÂN TÍCH VÍ DỤ" data-en="EXAMPLE ANALYSIS">PHÂN TÍCH VÍ DỤ</span>
         <div class="stat">
           <span class="sl" data-vi="Trần tần số" data-en="Frequency ceiling">Trần tần số</span>
-          <span class="sv hl mono">22.0 kHz</span>
+          <span class="sv hl mono">23.4 kHz</span>
         </div>
         <div class="stat">
           <span class="sl" data-vi="Độ sâu bit" data-en="Bit depth">Độ sâu bit</span>
@@ -422,11 +457,11 @@
         </div>
         <div class="stat">
           <span class="sl" data-vi="Tần số lấy mẫu" data-en="Sample rate">Tần số lấy mẫu</span>
-          <span class="sv mono">96 kHz</span>
+          <span class="sv mono">48 kHz</span>
         </div>
         <div class="stat">
-          <span class="sl" data-vi="Dải động" data-en="Dynamic range">Dải động</span>
-          <span class="sv mono">DR12</span>
+          <span class="sl" data-vi="Biên độ đỉnh/RMS" data-en="Crest (peak/RMS)">Biên độ đỉnh/RMS</span>
+          <span class="sv mono">10.0 dB</span>
         </div>
       </div>
     </div>
@@ -639,126 +674,6 @@
     for (var k = 0; k < reveals.length; k++) io.observe(reveals[k]);
   }
 
-  /* ---------- spectrogram (the one hot spot) ---------- */
-  function seeded(n) { var x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); }
-  function drawSpec(canvas, progress) {
-    var kind = canvas.getAttribute("data-kind");
-    var dpr = Math.min(window.devicePixelRatio || 1, 2);
-    var w = canvas.clientWidth, h = canvas.clientHeight;
-    if (!w) return;
-    canvas.width = w * dpr; canvas.height = h * dpr;
-    var ctx = canvas.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-    var cols = Math.floor(w / 1.2);
-    var cut = kind === "fake" ? 0.42 : 0.0;
-    var lit = Math.floor(cols * progress);
-    for (var c = 0; c < lit; c++) {
-      var x = c * (w / cols);
-      for (var y = 0; y < h; y += 1) {
-        var fy = y / h;                       // 0 top .. 1 bottom
-        var freq = 1 - fy;                    // 0 bottom .. 1 top
-
-        // Simulate realistic music spectrogram structures (Spek style):
-        // 1. Dense bass & lower frequencies (0..0.25)
-        var bassBase = 0.65 * Math.exp(-freq * 5);
-        var bassPulse = Math.pow(Math.sin(c * 0.1), 8) * Math.exp(-freq * 10) * 0.35;
-        var bass = bassBase + bassPulse;
-
-        // 2. Mid-range harmonics (vocals, instruments) (0.25..0.6)
-        var wave1 = Math.exp(-Math.pow(freq - (0.22 + 0.05 * Math.sin(c * 0.04)), 2) / 0.005) * 0.45;
-        var wave2 = Math.exp(-Math.pow(freq - (0.35 + 0.08 * Math.sin(c * 0.02 + 1)), 2) / 0.008) * 0.4;
-        var wave3 = Math.exp(-Math.pow(freq - (0.50 + 0.12 * Math.sin(c * 0.03 + 2)), 2) / 0.012) * 0.35;
-        var wave4 = Math.exp(-Math.pow(freq - (0.65 + 0.06 * Math.sin(c * 0.05 + 3)), 2) / 0.006) * 0.25;
-        var mids = wave1 + wave2 + wave3 + wave4;
-
-        // 3. Transients (snare/beat hits and cymbals) extending high up
-        var beatSnare = Math.pow(Math.sin(c * 0.06), 24) * 0.6;
-        var beatHats = Math.pow(Math.sin(c * 0.03 + 0.8), 32) * 0.35;
-        var transients = beatSnare * Math.exp(-Math.pow(freq - 0.75, 2) / 0.15) + 
-                         beatHats * Math.exp(-Math.pow(freq - 0.88, 2) / 0.05);
-
-        // 4. Background texture noise
-        var bgNoise = seeded(c * 3.1 + y * 0.13 + (kind === "fake" ? 99 : 1)) * 0.15 * (1 - freq * 0.6);
-
-        // Combine to get magnitude
-        var mag = bass + mids + transients + bgNoise;
-
-        // Apply compression cutoff for low quality FLAC (transcode)
-        if (kind === "fake" && fy < cut) {
-          mag = bgNoise * 0.05; // Drop everything except faint residual noise above 16kHz
-        }
-
-        if (mag < 0.05) continue;
-
-        // Spek color scale: Black/Purple -> Blue -> Teal/Cyan -> Green -> Yellow/Orange -> Red
-        var r, g, b;
-        var t = Math.min(1, mag * 1.15);
-        if (t < 0.15) {
-          var ratio = t / 0.15;
-          r = Math.round(15 * (1 - ratio) + ratio * 10);
-          g = Math.round(10 * (1 - ratio) + ratio * 20);
-          b = Math.round(45 * (1 - ratio) + ratio * 160);
-        } else if (t < 0.40) {
-          var ratio = (t - 0.15) / 0.25;
-          r = Math.round(10 * (1 - ratio) + ratio * 0);
-          g = Math.round(20 * (1 - ratio) + ratio * 180);
-          b = Math.round(160 * (1 - ratio) + ratio * 200);
-        } else if (t < 0.65) {
-          var ratio = (t - 0.40) / 0.25;
-          r = Math.round(0 * (1 - ratio) + ratio * 20);
-          g = Math.round(180 * (1 - ratio) + ratio * 220);
-          b = Math.round(200 * (1 - ratio) + ratio * 40);
-        } else if (t < 0.85) {
-          var ratio = (t - 0.65) / 0.20;
-          r = Math.round(20 * (1 - ratio) + ratio * 240);
-          g = Math.round(220 * (1 - ratio) + ratio * 220);
-          b = Math.round(40 * (1 - ratio) + ratio * 10);
-        } else {
-          var ratio = (t - 0.85) / 0.15;
-          r = Math.round(240 * (1 - ratio) + ratio * 240);
-          g = Math.round(220 * (1 - ratio) + ratio * 10);
-          b = Math.round(10 * (1 - ratio) + ratio * 10);
-        }
-
-        ctx.fillStyle = "rgba(" + r + "," + g + "," + b + ", 0.95)";
-        ctx.fillRect(x, y, w / cols + 0.3, 1);
-      }
-    }
-  }
-  var specs = document.querySelectorAll("canvas.spec");
-  function runSpecs() {
-    if (reduce) { specs.forEach(function (cv) { drawSpec(cv, 1); }); return; }
-    var start = null, DUR = 1100;
-    function frame(ts) {
-      if (start === null) start = ts;
-      var p = Math.min(1, (ts - start) / DUR);
-      var eased = 1 - Math.pow(1 - p, 3);
-      specs.forEach(function (cv) { drawSpec(cv, eased); });
-      if (p < 1) requestAnimationFrame(frame);
-    }
-    requestAnimationFrame(frame);
-  }
-  var fired = false;
-  function armSpecs() {
-    if (fired) return; fired = true; runSpecs();
-  }
-  var specCard = document.querySelector(".spec-card");
-  if (specCard) {
-    if (reduce || !("IntersectionObserver" in window)) { armSpecs(); }
-    else {
-      var sio = new IntersectionObserver(function (entries) {
-        entries.forEach(function (en) { if (en.isIntersecting) { armSpecs(); sio.disconnect(); } });
-      }, { threshold: 0.3 });
-      sio.observe(specCard);
-    }
-  }
-  // redraw final state on resize (no re-animation)
-  var rt;
-  window.addEventListener("resize", function () {
-    clearTimeout(rt);
-    rt = setTimeout(function () { if (fired) specs.forEach(function (cv) { drawSpec(cv, 1); }); }, 160);
-  });
 })();
 </script>
 </body>
