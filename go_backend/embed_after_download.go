@@ -1,12 +1,21 @@
 package gobackend
 
-// This file holds LosslessMusic-v2's own post-download metadata embedding,
-// kept separate from the vendored upstream (SpotiFLAC) sources so that
-// `git diff upstream/main -- go_backend/` stays clean and future upstream
-// syncs are easy. The only upstream touch-points are the two one-line
-// embedMetadataAfterDownload(...) hooks in extension_providers.go.
+// This file holds LosslessMusic-v2's only intentional divergence from the
+// vendored upstream (SpotiFLAC) post-download embed path: we resolve lyrics
+// ourselves when the extension didn't supply any.
+//
+// Everything else -- field precedence, cover art, the FLAC writer -- is
+// upstream's embedExtensionDownloadMetadata, which we *call* rather than copy,
+// so upstream improvements to it land on a sync without touching this file.
+// The only upstream touch-points are the embedMetadataAfterDownload(...) hooks
+// at the extension download call sites (see docs/UPSTREAM-SYNC.md).
 
 import "strings"
+
+// instrumentalSentinel is what GetLyricsLRC returns for a track with no lyrics
+// (see exports.go). It is a marker, not lyrics -- embedding it verbatim would
+// write that literal string into the LYRICS tag.
+const instrumentalSentinel = "[instrumental:true]"
 
 // lyricsLRCFetcher fetches synced/plain lyrics (LRC) for a track from the
 // configured lyrics providers. It is a package var so tests can stub the
@@ -17,85 +26,40 @@ var lyricsLRCFetcher = func(spotifyID, trackName, artistName string, durationMs 
 }
 
 // embedMetadataAfterDownload writes full tags + cover art + lyrics into a
-// freshly downloaded local FLAC file using the native Go writer. Non-FLAC
-// formats (Opus/M4A/MP3) are gated out by canEmbedGenreLabel and are tagged
-// on the Dart side via FFmpeg instead.
+// freshly downloaded local FLAC file. Lyrics are resolved here (our addition);
+// the write itself is upstream's.
 //
-// Fields prefer resp (the resolved download result) over req (the original
-// request) via firstNonEmptyTrimmed/firstPositiveInt, matching upstream's
-// v4.7.1 embedExtensionDownloadMetadata -- resp reflects what was actually
-// downloaded, which can differ from the pre-download search request.
+// Non-FLAC formats (Opus/M4A/MP3) are gated out by canEmbedGenreLabel and are
+// tagged on the Dart side via FFmpeg instead.
 func embedMetadataAfterDownload(resp DownloadResponse, req DownloadRequest, alreadyExists bool) {
-	if alreadyExists || !req.EmbedMetadata {
-		return
-	}
-	filePath := strings.TrimSpace(resp.FilePath)
-	if !canEmbedGenreLabel(filePath) {
-		return
+	// resp is a value copy, so overwriting LyricsLRC only affects the handoff
+	// below. These guards mirror upstream's own early returns: resolving lyrics
+	// costs a network call, and upstream discards the result in every one of
+	// these cases.
+	if req.EmbedLyrics && req.EmbedMetadata && !alreadyExists &&
+		canEmbedGenreLabel(strings.TrimSpace(resp.FilePath)) {
+		resp.LyricsLRC = resolveLyricsLRC(resp, req)
 	}
 
-	// 1. Download cover art if available
-	var coverData []byte
-	if coverURL := firstNonEmptyTrimmed(resp.CoverURL, req.CoverURL); coverURL != "" {
-		data, err := downloadCoverToMemory(coverURL, req.EmbedMaxQualityCover)
+	embedExtensionDownloadMetadata(resp, req, alreadyExists)
+}
+
+// resolveLyricsLRC prefers lyrics the extension already resolved and only falls
+// back to our own providers when it supplied none. Most extensions never
+// populate resp.LyricsLRC, so without this fallback the majority of downloads
+// would carry no lyrics -- which is why we hook the embed path at all.
+func resolveLyricsLRC(resp DownloadResponse, req DownloadRequest) string {
+	lrc := strings.TrimSpace(resp.LyricsLRC)
+	if lrc == "" {
+		fetched, err := lyricsLRCFetcher(req.SpotifyID, req.TrackName, req.ArtistName, int64(req.DurationMS))
 		if err != nil {
-			GoLog("[DownloadWithExtensionFallback] Warning: failed to download cover art: %v\n", err)
-		} else {
-			coverData = data
+			GoLog("[DownloadWithExtensionFallback] Warning: failed to fetch lyrics: %v\n", err)
+			return ""
 		}
+		lrc = strings.TrimSpace(fetched)
 	}
-
-	// 2. Build metadata struct
-	metadata := Metadata{
-		Title:         firstNonEmptyTrimmed(resp.Title, req.TrackName),
-		Artist:        firstNonEmptyTrimmed(resp.Artist, req.ArtistName),
-		Album:         firstNonEmptyTrimmed(resp.Album, req.AlbumName),
-		AlbumArtist:   firstNonEmptyTrimmed(resp.AlbumArtist, req.AlbumArtist),
-		ArtistTagMode: req.ArtistTagMode,
-		Date:          firstNonEmptyTrimmed(resp.ReleaseDate, req.ReleaseDate),
-		TrackNumber:   firstPositiveInt(resp.TrackNumber, req.TrackNumber),
-		TotalTracks:   firstPositiveInt(resp.TotalTracks, req.TotalTracks),
-		DiscNumber:    firstPositiveInt(resp.DiscNumber, req.DiscNumber),
-		TotalDiscs:    firstPositiveInt(resp.TotalDiscs, req.TotalDiscs),
-		ISRC:          firstNonEmptyTrimmed(resp.ISRC, req.ISRC),
-		Genre:         firstNonEmptyTrimmed(resp.Genre, req.Genre),
-		Label:         firstNonEmptyTrimmed(resp.Label, req.Label),
-		Copyright:     firstNonEmptyTrimmed(resp.Copyright, req.Copyright),
-		Composer:      firstNonEmptyTrimmed(resp.Composer, req.Composer),
+	if lrc == instrumentalSentinel {
+		return ""
 	}
-
-	// 2b. Attach lyrics (LRC) so they are embedded as Vorbis
-	// LYRICS/UNSYNCEDLYRICS comments, matching SpotiFLAC behaviour. Prefer
-	// lyrics the extension/provider already resolved on resp; only hit our
-	// own lyrics providers when it didn't supply any, so most extensions
-	// (which don't populate LyricsLRC) still get lyrics embedded.
-	if req.EmbedLyrics {
-		lrc := strings.TrimSpace(resp.LyricsLRC)
-		if lrc == "" {
-			fetched, err := lyricsLRCFetcher(req.SpotifyID, req.TrackName, req.ArtistName, int64(req.DurationMS))
-			if err != nil {
-				GoLog("[DownloadWithExtensionFallback] Warning: failed to fetch lyrics: %v\n", err)
-			} else {
-				lrc = strings.TrimSpace(fetched)
-			}
-		}
-		if lrc != "" && lrc != "[instrumental:true]" {
-			metadata.Lyrics = lrc
-		}
-	}
-
-	// 3. Embed metadata and cover
-	if len(coverData) > 0 {
-		if err := EmbedMetadataWithCoverData(filePath, metadata, coverData); err != nil {
-			GoLog("[DownloadWithExtensionFallback] Warning: failed to embed metadata with cover: %v\n", err)
-		} else {
-			GoLog("[DownloadWithExtensionFallback] Embedded metadata with cover\n")
-		}
-	} else {
-		if err := EmbedMetadata(filePath, metadata, ""); err != nil {
-			GoLog("[DownloadWithExtensionFallback] Warning: failed to embed metadata: %v\n", err)
-		} else {
-			GoLog("[DownloadWithExtensionFallback] Embedded metadata without cover\n")
-		}
-	}
+	return lrc
 }
