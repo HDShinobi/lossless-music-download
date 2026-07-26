@@ -269,7 +269,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: GestureDetector(
-              onTap: () => context.go('/settings/sources'),
+              onTap: () => context.push('/settings/sources'),
               child: Container(
                 key: const Key('sourceBanner'),
                 width: double.infinity,

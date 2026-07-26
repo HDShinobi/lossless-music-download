@@ -62,7 +62,7 @@ class ExtensionDetailScreen extends ConsumerWidget {
             onPressed: () async {
               await ref.read(extensionsProvider.notifier).remove(ext.id);
               if (context.mounted) {
-                context.go('/settings/sources');
+                context.pop();
               }
             },
             child: Text(t.removeExtension),

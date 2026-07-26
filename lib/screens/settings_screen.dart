@@ -171,7 +171,7 @@ class SettingsScreen extends ConsumerWidget {
             leading: const Icon(Icons.extension_outlined),
             title: Text(t.sourcesTitle),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.go('/settings/sources'),
+            onTap: () => context.push('/settings/sources'),
           ),
 
           // Fallback sources
@@ -179,7 +179,7 @@ class SettingsScreen extends ConsumerWidget {
             leading: const Icon(Icons.swap_horiz_outlined),
             title: Text(t.fallbackSourcesTitle),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.go('/settings/fallback-sources'),
+            onTap: () => context.push('/settings/fallback-sources'),
           ),
 
           // Home feed ("Nguồn gợi ý") source selector

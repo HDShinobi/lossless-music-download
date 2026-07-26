@@ -143,7 +143,7 @@ class _SourcesScreenState extends ConsumerState<SourcesScreen> {
                 onChanged: (v) =>
                     ref.read(extensionsProvider.notifier).setEnabled(ext.id, v),
               ),
-              onTap: () => context.go('/settings/sources/${ext.id}'),
+              onTap: () => context.push('/settings/sources/${ext.id}'),
             );
           },
         );

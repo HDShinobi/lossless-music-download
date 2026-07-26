@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -169,7 +170,25 @@ class _MainShellState extends ConsumerState<MainShell> {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
     return Scaffold(
-      body: widget.shell,
+      // Each tab branch has its own Navigator nested inside the root one. Once
+      // you switch tabs, the root router stops seeing pages pushed inside a
+      // branch, so system-back skipped straight past them and closed the app
+      // (repro: open a Settings sub-page, switch tabs, switch back, press back).
+      // Route back into the active branch, and only leave the app when that
+      // branch genuinely has nothing left to pop.
+      body: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          final branch = widget.shell.shellRouteContext.navigatorKey.currentState;
+          if (branch != null && branch.canPop()) {
+            branch.pop();
+            return;
+          }
+          SystemNavigator.pop();
+        },
+        child: widget.shell,
+      ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

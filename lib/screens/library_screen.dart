@@ -148,7 +148,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       itemCount: entries.length,
       itemBuilder: (context, index) => LibraryTrackTile(
         entry: entries[index],
-        onTap: () => context.go('/library/verified', extra: entries[index]),
+        onTap: () => context.push('/library/verified', extra: entries[index]),
       ),
     );
   }
@@ -210,7 +210,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       itemBuilder: (context, index) => LibraryTrackTile(
         entry: singles[index],
         onTap: () =>
-            context.go('/library/verified', extra: singles[index]),
+            context.push('/library/verified', extra: singles[index]),
       ),
     );
   }
