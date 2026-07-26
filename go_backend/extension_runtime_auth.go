@@ -54,10 +54,7 @@ func summarizeURLForLog(urlStr string) string {
 
 func (r *extensionRuntime) authOpenUrl(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "auth URL is required",
-		})
+		return r.jsError("auth URL is required")
 	}
 
 	authURL := call.Arguments[0].String()
@@ -67,10 +64,7 @@ func (r *extensionRuntime) authOpenUrl(call goja.FunctionCall) goja.Value {
 	}
 
 	if err := validateExtensionAuthURL(authURL); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	pendingAuthRequestsMu.Lock()
@@ -78,6 +72,7 @@ func (r *extensionRuntime) authOpenUrl(call goja.FunctionCall) goja.Value {
 		ExtensionID: r.extensionID,
 		AuthURL:     authURL,
 		CallbackURL: callbackURL,
+		CreatedAt:   time.Now(),
 	}
 	pendingAuthRequestsMu.Unlock()
 
@@ -93,8 +88,7 @@ func (r *extensionRuntime) authOpenUrl(call goja.FunctionCall) goja.Value {
 
 	GoLog("[Extension:%s] Auth URL requested: %s\n", r.extensionID, summarizeURLForLog(authURL))
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success": true,
+	return r.jsSuccess(map[string]any{
 		"message": "Auth URL will be opened by the app",
 	})
 }
@@ -130,7 +124,7 @@ func (r *extensionRuntime) authSetCode(call goja.FunctionCall) goja.Value {
 	switch v := arg.(type) {
 	case string:
 		state.AuthCode = v
-	case map[string]interface{}:
+	case map[string]any:
 		if code, ok := v["code"].(string); ok {
 			state.AuthCode = code
 		}
@@ -184,10 +178,10 @@ func (r *extensionRuntime) authGetTokens(call goja.FunctionCall) goja.Value {
 
 	state, exists := extensionAuthState[r.extensionID]
 	if !exists {
-		return r.vm.ToValue(map[string]interface{}{})
+		return r.vm.ToValue(map[string]any{})
 	}
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"access_token":     state.AccessToken,
 		"refresh_token":    state.RefreshToken,
 		"is_authenticated": state.IsAuthenticated,
@@ -239,7 +233,7 @@ func (r *extensionRuntime) authGeneratePKCE(call goja.FunctionCall) goja.Value {
 	verifier, err := generatePKCEVerifier(length)
 	if err != nil {
 		GoLog("[Extension:%s] PKCE generation error: %v\n", r.extensionID, err)
-		return r.vm.ToValue(map[string]interface{}{
+		return r.vm.ToValue(map[string]any{
 			"error": err.Error(),
 		})
 	}
@@ -258,7 +252,7 @@ func (r *extensionRuntime) authGeneratePKCE(call goja.FunctionCall) goja.Value {
 
 	GoLog("[Extension:%s] PKCE generated (verifier length: %d)\n", r.extensionID, len(verifier))
 
-	return r.vm.ToValue(map[string]interface{}{
+	return r.vm.ToValue(map[string]any{
 		"verifier":  verifier,
 		"challenge": challenge,
 		"method":    "S256",
@@ -271,10 +265,10 @@ func (r *extensionRuntime) authGetPKCE(call goja.FunctionCall) goja.Value {
 
 	state, exists := extensionAuthState[r.extensionID]
 	if !exists || state.PKCEVerifier == "" {
-		return r.vm.ToValue(map[string]interface{}{})
+		return r.vm.ToValue(map[string]any{})
 	}
 
-	return r.vm.ToValue(map[string]interface{}{
+	return r.vm.ToValue(map[string]any{
 		"verifier":  state.PKCEVerifier,
 		"challenge": state.PKCEChallenge,
 		"method":    "S256",
@@ -283,19 +277,13 @@ func (r *extensionRuntime) authGetPKCE(call goja.FunctionCall) goja.Value {
 
 func (r *extensionRuntime) authStartOAuthWithPKCE(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "config object is required",
-		})
+		return r.jsError("config object is required")
 	}
 
 	configObj := call.Arguments[0].Export()
-	config, ok := configObj.(map[string]interface{})
+	config, ok := configObj.(map[string]any)
 	if !ok {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "config must be an object",
-		})
+		return r.jsError("config must be an object")
 	}
 
 	authURL, _ := config["authUrl"].(string)
@@ -303,27 +291,18 @@ func (r *extensionRuntime) authStartOAuthWithPKCE(call goja.FunctionCall) goja.V
 	redirectURI, _ := config["redirectUri"].(string)
 
 	if authURL == "" || clientID == "" || redirectURI == "" {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "authUrl, clientId, and redirectUri are required",
-		})
+		return r.jsError("authUrl, clientId, and redirectUri are required")
 	}
 	if err := validateExtensionAuthURL(authURL); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	scope, _ := config["scope"].(string)
-	extraParams, _ := config["extraParams"].(map[string]interface{})
+	extraParams, _ := config["extraParams"].(map[string]any)
 
 	verifier, err := generatePKCEVerifier(64)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to generate PKCE: %v", err),
-		})
+		return r.jsError("failed to generate PKCE: %v", err)
 	}
 	challenge := generatePKCEChallenge(verifier)
 
@@ -340,10 +319,7 @@ func (r *extensionRuntime) authStartOAuthWithPKCE(call goja.FunctionCall) goja.V
 
 	parsedURL, err := url.Parse(authURL)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("invalid authUrl: %v", err),
-		})
+		return r.jsError("invalid authUrl: %v", err)
 	}
 
 	query := parsedURL.Query()
@@ -369,15 +345,15 @@ func (r *extensionRuntime) authStartOAuthWithPKCE(call goja.FunctionCall) goja.V
 		ExtensionID: r.extensionID,
 		AuthURL:     fullAuthURL,
 		CallbackURL: redirectURI,
+		CreatedAt:   time.Now(),
 	}
 	pendingAuthRequestsMu.Unlock()
 
 	GoLog("[Extension:%s] PKCE OAuth started: %s\n", r.extensionID, summarizeURLForLog(fullAuthURL))
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success": true,
+	return r.jsSuccess(map[string]any{
 		"authUrl": fullAuthURL,
-		"pkce": map[string]interface{}{
+		"pkce": map[string]any{
 			"verifier":  verifier,
 			"challenge": challenge,
 			"method":    "S256",
@@ -387,19 +363,13 @@ func (r *extensionRuntime) authStartOAuthWithPKCE(call goja.FunctionCall) goja.V
 
 func (r *extensionRuntime) authExchangeCodeWithPKCE(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "config object is required",
-		})
+		return r.jsError("config object is required")
 	}
 
 	configObj := call.Arguments[0].Export()
-	config, ok := configObj.(map[string]interface{})
+	config, ok := configObj.(map[string]any)
 	if !ok {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "config must be an object",
-		})
+		return r.jsError("config must be an object")
 	}
 
 	tokenURL, _ := config["tokenUrl"].(string)
@@ -408,10 +378,7 @@ func (r *extensionRuntime) authExchangeCodeWithPKCE(call goja.FunctionCall) goja
 	code, _ := config["code"].(string)
 
 	if tokenURL == "" || clientID == "" || code == "" {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "tokenUrl, clientId, and code are required",
-		})
+		return r.jsError("tokenUrl, clientId, and code are required")
 	}
 
 	extensionAuthStateMu.RLock()
@@ -423,17 +390,11 @@ func (r *extensionRuntime) authExchangeCodeWithPKCE(call goja.FunctionCall) goja
 	extensionAuthStateMu.RUnlock()
 
 	if verifier == "" {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "no PKCE verifier found - call generatePKCE or startOAuthWithPKCE first",
-		})
+		return r.jsError("no PKCE verifier found - call generatePKCE or startOAuthWithPKCE first")
 	}
 
 	if err := r.validateDomain(tokenURL); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	formData := url.Values{}
@@ -445,7 +406,7 @@ func (r *extensionRuntime) authExchangeCodeWithPKCE(call goja.FunctionCall) goja
 		formData.Set("redirect_uri", redirectURI)
 	}
 
-	if extraParams, ok := config["extraParams"].(map[string]interface{}); ok {
+	if extraParams, ok := config["extraParams"].(map[string]any); ok {
 		for k, v := range extraParams {
 			formData.Set(k, fmt.Sprintf("%v", v))
 		}
@@ -453,10 +414,7 @@ func (r *extensionRuntime) authExchangeCodeWithPKCE(call goja.FunctionCall) goja
 
 	req, err := http.NewRequest("POST", tokenURL, strings.NewReader(formData.Encode()))
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 	req = r.bindDownloadCancelContext(req)
 
@@ -465,28 +423,22 @@ func (r *extensionRuntime) authExchangeCodeWithPKCE(call goja.FunctionCall) goja
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 	bodyPreview := sanitizeSensitiveLogText(string(body))
 	if len(bodyPreview) > 1000 {
 		bodyPreview = bodyPreview[:1000] + "...[truncated]"
 	}
 
-	var tokenResp map[string]interface{}
+	var tokenResp map[string]any
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
+		return r.vm.ToValue(map[string]any{
 			"success": false,
 			"error":   fmt.Sprintf("failed to parse token response: %v", err),
 			"body":    bodyPreview,
@@ -495,7 +447,7 @@ func (r *extensionRuntime) authExchangeCodeWithPKCE(call goja.FunctionCall) goja
 
 	if errMsg, ok := tokenResp["error"].(string); ok {
 		errDesc, _ := tokenResp["error_description"].(string)
-		return r.vm.ToValue(map[string]interface{}{
+		return r.vm.ToValue(map[string]any{
 			"success":           false,
 			"error":             errMsg,
 			"error_description": errDesc,
@@ -507,7 +459,7 @@ func (r *extensionRuntime) authExchangeCodeWithPKCE(call goja.FunctionCall) goja
 	expiresIn, _ := tokenResp["expires_in"].(float64)
 
 	if accessToken == "" {
-		return r.vm.ToValue(map[string]interface{}{
+		return r.vm.ToValue(map[string]any{
 			"success": false,
 			"error":   "no access_token in response",
 			"body":    bodyPreview,
@@ -532,7 +484,7 @@ func (r *extensionRuntime) authExchangeCodeWithPKCE(call goja.FunctionCall) goja
 
 	GoLog("[Extension:%s] PKCE token exchange successful\n", r.extensionID)
 
-	result := map[string]interface{}{
+	result := map[string]any{
 		"success":       true,
 		"access_token":  accessToken,
 		"refresh_token": refreshToken,

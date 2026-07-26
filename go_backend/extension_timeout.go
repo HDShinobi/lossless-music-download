@@ -11,21 +11,34 @@ import (
 )
 
 type JSExecutionError struct {
-	Message   string
-	IsTimeout bool
+	Message       string
+	IsTimeout     bool
+	RuntimeUnsafe bool
+	Cause         error
 }
 
 func (e *JSExecutionError) Error() string {
 	return e.Message
 }
 
-func RunWithTimeout(vm *goja.Runtime, script string, timeout time.Duration) (goja.Value, error) {
-	return RunWithTimeoutContext(context.Background(), vm, script, timeout)
+func (e *JSExecutionError) Unwrap() error {
+	return e.Cause
 }
 
+var jsInterruptGracePeriod = 5 * time.Second
+
 func RunWithTimeoutContext(ctx context.Context, vm *goja.Runtime, script string, timeout time.Duration) (goja.Value, error) {
+	return runGojaCallWithTimeoutContext(ctx, vm, func() (goja.Value, error) {
+		return vm.RunString(script)
+	}, timeout)
+}
+
+func runGojaCallWithTimeoutContext(ctx context.Context, vm *goja.Runtime, call func() (goja.Value, error), timeout time.Duration) (goja.Value, error) {
 	if vm == nil {
 		return nil, fmt.Errorf("extension runtime unavailable")
+	}
+	if call == nil {
+		return nil, fmt.Errorf("extension call unavailable")
 	}
 
 	if timeout <= 0 {
@@ -66,7 +79,7 @@ func RunWithTimeoutContext(ctx context.Context, vm *goja.Runtime, script string,
 			}
 		}()
 
-		val, err := vm.RunString(script)
+		val, err := call()
 		resultCh <- result{val, err}
 	}()
 
@@ -91,27 +104,29 @@ func RunWithTimeoutContext(ctx context.Context, vm *goja.Runtime, script string,
 		// caller will access the VM concurrently and crash with a nil
 		// pointer dereference.
 		select {
-		case res := <-resultCh:
+		case <-resultCh:
 			if cancelled {
 				return nil, ErrExtensionRequestCancelled
-			}
-			if res.err != nil {
-				return nil, res.err
 			}
 			return nil, &JSExecutionError{
 				Message:   "execution timeout exceeded",
 				IsTimeout: true,
 			}
-		case <-time.After(60 * time.Second):
+		case <-time.After(jsInterruptGracePeriod):
 			// Goroutine is truly stuck (e.g. HTTP read with no timeout).
 			// Log a warning — the VM should NOT be reused after this.
 			GoLog("[extensionRuntime] WARNING: JS goroutine did not exit within 60s after interrupt, VM may be unsafe\n")
+			message := "execution timeout exceeded (runtime quarantined)"
+			var cause error
 			if cancelled {
-				return nil, ErrExtensionRequestCancelled
+				message = "extension request cancelled (runtime quarantined)"
+				cause = ErrExtensionRequestCancelled
 			}
 			return nil, &JSExecutionError{
-				Message:   "execution timeout exceeded (force)",
-				IsTimeout: true,
+				Message:       message,
+				IsTimeout:     !cancelled,
+				RuntimeUnsafe: true,
+				Cause:         cause,
 			}
 		}
 	}
@@ -126,11 +141,30 @@ func RunWithTimeoutAndRecover(vm *goja.Runtime, script string, timeout time.Dura
 func RunWithTimeoutContextAndRecover(ctx context.Context, vm *goja.Runtime, script string, timeout time.Duration) (goja.Value, error) {
 	result, err := RunWithTimeoutContext(ctx, vm, script, timeout)
 
-	if vm != nil {
+	if vm != nil && !IsRuntimeUnsafeError(err) {
 		vm.ClearInterrupt()
 	}
 
 	return result, err
+}
+
+func runGojaCallWithTimeoutAndRecover(vm *goja.Runtime, call func() (goja.Value, error), timeout time.Duration) (goja.Value, error) {
+	return runGojaCallWithTimeoutContextAndRecover(context.Background(), vm, call, timeout)
+}
+
+func runGojaCallWithTimeoutContextAndRecover(ctx context.Context, vm *goja.Runtime, call func() (goja.Value, error), timeout time.Duration) (goja.Value, error) {
+	result, err := runGojaCallWithTimeoutContext(ctx, vm, call, timeout)
+
+	if vm != nil && !IsRuntimeUnsafeError(err) {
+		vm.ClearInterrupt()
+	}
+
+	return result, err
+}
+
+func IsRuntimeUnsafeError(err error) bool {
+	jsErr, ok := err.(*JSExecutionError)
+	return ok && jsErr.RuntimeUnsafe
 }
 
 func IsTimeoutError(err error) bool {

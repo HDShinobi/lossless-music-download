@@ -2,6 +2,7 @@ package gobackend
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -185,7 +186,7 @@ func parseID3v22Frames(data []byte, metadata *AudioMetadata, tagUnsync bool) {
 		case "TCR":
 			metadata.Copyright = value
 		case "ULT":
-			if v := extractLyricsFrame(frameData); v != "" && metadata.Lyrics == "" {
+			if v := extractLangTextFrame(frameData); v != "" && metadata.Lyrics == "" {
 				metadata.Lyrics = v
 			}
 		case "TXX":
@@ -306,11 +307,11 @@ func parseID3v23Frames(data []byte, metadata *AudioMetadata, version byte, tagUn
 		case "TCOP":
 			metadata.Copyright = value
 		case "COMM":
-			if v := extractCommentFrame(frameData); v != "" {
+			if v := extractLangTextFrame(frameData); v != "" {
 				metadata.Comment = v
 			}
 		case "USLT":
-			if v := extractLyricsFrame(frameData); v != "" && metadata.Lyrics == "" {
+			if v := extractLangTextFrame(frameData); v != "" && metadata.Lyrics == "" {
 				metadata.Lyrics = v
 			}
 		case "TXXX":
@@ -390,46 +391,12 @@ func extractTextFrame(data []byte) string {
 	}
 }
 
-func extractCommentFrame(data []byte) string {
+// extractLangTextFrame decodes ID3 frames with an encoding byte, 3-byte
+// language code, and null-terminated descriptor before the text (COMM, USLT).
+func extractLangTextFrame(data []byte) string {
 	if len(data) < 5 {
 		return ""
 	}
-	encoding := data[0]
-	rest := data[4:]
-
-	var text []byte
-	switch encoding {
-	case 1, 2:
-		for i := 0; i+1 < len(rest); i += 2 {
-			if rest[i] == 0 && rest[i+1] == 0 {
-				text = rest[i+2:]
-				break
-			}
-		}
-	default:
-		idx := bytes.IndexByte(rest, 0)
-		if idx >= 0 && idx+1 < len(rest) {
-			text = rest[idx+1:]
-		} else {
-			text = rest
-		}
-	}
-
-	if len(text) == 0 {
-		return ""
-	}
-
-	framed := make([]byte, 1+len(text))
-	framed[0] = encoding
-	copy(framed[1:], text)
-	return extractTextFrame(framed)
-}
-
-func extractLyricsFrame(data []byte) string {
-	if len(data) < 5 {
-		return ""
-	}
-
 	encoding := data[0]
 	rest := data[4:]
 
@@ -579,11 +546,6 @@ func cleanGenre(genre string) string {
 		}
 	}
 	return genre
-}
-
-func parseTrackNumber(s string) int {
-	num, _ := parseIndexPair(s)
-	return num
 }
 
 func parseIndexPair(s string) (int, int) {
@@ -1078,6 +1040,21 @@ func parseVorbisComments(data []byte, metadata *AudioMetadata) {
 			metadata.ReplayGainAlbumGain = value
 		case "REPLAYGAIN_ALBUM_PEAK":
 			metadata.ReplayGainAlbumPeak = value
+		// Opus gain tags (RFC 7845): Q7.8 fixed point on the R128 -23 LUFS
+		// reference. Exposed as ReplayGain 2 dB (-18 LUFS reference) so
+		// consumers see one representation; explicit REPLAYGAIN_* wins.
+		case "R128_TRACK_GAIN":
+			if metadata.ReplayGainTrackGain == "" {
+				if db, ok := r128ToReplayGainDb(value); ok {
+					metadata.ReplayGainTrackGain = db
+				}
+			}
+		case "R128_ALBUM_GAIN":
+			if metadata.ReplayGainAlbumGain == "" {
+				if db, ok := r128ToReplayGainDb(value); ok {
+					metadata.ReplayGainAlbumGain = db
+				}
+			}
 		}
 	}
 
@@ -1087,6 +1064,17 @@ func parseVorbisComments(data []byte, metadata *AudioMetadata) {
 	if len(albumArtistValues) > 0 {
 		metadata.AlbumArtist = joinVorbisCommentValues(albumArtistValues)
 	}
+}
+
+// r128ToReplayGainDb converts an R128_*_GAIN value (integer, 1/256 dB steps,
+// -23 LUFS reference) to a ReplayGain 2 dB string (-18 LUFS reference):
+// rg = q/256 + 5. Inverse of the writer's replayGainDbToR128.
+func r128ToReplayGainDb(raw string) (string, bool) {
+	q, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return "", false
+	}
+	return fmt.Sprintf("%.2f dB", float64(q)/256.0+5.0), true
 }
 
 func GetOggQuality(filePath string) (*OggQuality, error) {
@@ -1460,13 +1448,20 @@ func extractPictureFromVorbisComments(data []byte) ([]byte, string) {
 
 		key := "METADATA_BLOCK_PICTURE="
 		if len(comment) > len(key) && strings.ToUpper(string(comment[:len(key)])) == key {
-			b64Data := comment[len(key):]
-			decoded := make([]byte, base64StdDecodeLen(len(b64Data)))
-			n, err := base64StdDecode(decoded, b64Data)
+			cleaned := strings.Map(func(r rune) rune {
+				switch r {
+				case '\n', '\r', ' ', '\t':
+					return -1
+				}
+				return r
+			}, string(comment[len(key):]))
+			decoded, err := base64.StdEncoding.DecodeString(cleaned)
+			if err != nil {
+				decoded, err = base64.RawStdEncoding.DecodeString(cleaned)
+			}
 			if err != nil {
 				continue
 			}
-			decoded = decoded[:n]
 
 			imageData, mimeType := parseFLACPictureBlock(decoded)
 			if len(imageData) > 0 {
@@ -1520,71 +1515,6 @@ func parseFLACPictureBlock(data []byte) ([]byte, string) {
 	return imageData, mimeType
 }
 
-func base64StdDecodeLen(n int) int {
-	return n * 6 / 8
-}
-
-func base64StdDecode(dst, src []byte) (int, error) {
-	const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-
-	decodeMap := make([]byte, 256)
-	for i := range decodeMap {
-		decodeMap[i] = 0xFF
-	}
-	for i := 0; i < len(alphabet); i++ {
-		decodeMap[alphabet[i]] = byte(i)
-	}
-
-	si, di := 0, 0
-	for si < len(src) {
-		for si < len(src) && (src[si] == '\n' || src[si] == '\r' || src[si] == ' ' || src[si] == '\t') {
-			si++
-		}
-		if si >= len(src) {
-			break
-		}
-
-		var vals [4]byte
-		var valCount int
-		for valCount < 4 && si < len(src) {
-			c := src[si]
-			si++
-			if c == '=' {
-				vals[valCount] = 0
-				valCount++
-			} else if c == '\n' || c == '\r' || c == ' ' || c == '\t' {
-				continue
-			} else if decodeMap[c] != 0xFF {
-				vals[valCount] = decodeMap[c]
-				valCount++
-			}
-		}
-
-		if valCount < 2 {
-			break
-		}
-
-		if di < len(dst) {
-			dst[di] = vals[0]<<2 | vals[1]>>4
-			di++
-		}
-		if valCount >= 3 && di < len(dst) {
-			dst[di] = vals[1]<<4 | vals[2]>>2
-			di++
-		}
-		if valCount >= 4 && di < len(dst) {
-			dst[di] = vals[2]<<6 | vals[3]
-			di++
-		}
-	}
-
-	return di, nil
-}
-
-func extractAnyCoverArt(filePath string) ([]byte, string, error) {
-	return extractAnyCoverArtWithHint(filePath, "")
-}
-
 func extractAnyCoverArtWithHint(filePath, displayNameHint string) ([]byte, string, error) {
 	ext := strings.ToLower(filepath.Ext(filePath))
 	if ext == "" {
@@ -1632,14 +1562,6 @@ func extractAnyCoverArtWithHint(filePath, displayNameHint string) ([]byte, strin
 	}
 }
 
-func SaveCoverToCache(filePath, cacheDir string) (string, error) {
-	return SaveCoverToCacheWithHintAndKey(filePath, "", cacheDir, "")
-}
-
-func SaveCoverToCacheWithHint(filePath, displayNameHint, cacheDir string) (string, error) {
-	return SaveCoverToCacheWithHintAndKey(filePath, displayNameHint, cacheDir, "")
-}
-
 func resolveLibraryCoverCacheKey(filePath, explicitKey string) string {
 	explicitKey = strings.TrimSpace(explicitKey)
 	if explicitKey != "" {
@@ -1653,39 +1575,56 @@ func resolveLibraryCoverCacheKey(filePath, explicitKey string) string {
 	return cacheKey
 }
 
-func SaveCoverToCacheWithHintAndKey(filePath, displayNameHint, cacheDir, coverCacheKey string) (string, error) {
-	cacheKey := resolveLibraryCoverCacheKey(filePath, coverCacheKey)
+func libraryCoverCachePaths(cacheDir, cacheKey string) (string, string) {
 	hash := hashString(cacheKey)
-
 	jpgPath := filepath.Join(cacheDir, fmt.Sprintf("cover_%x.jpg", hash))
 	pngPath := filepath.Join(cacheDir, fmt.Sprintf("cover_%x.png", hash))
+	return jpgPath, pngPath
+}
+
+func existingLibraryCoverCachePath(cacheDir, cacheKey string) string {
+	jpgPath, pngPath := libraryCoverCachePaths(cacheDir, cacheKey)
 
 	if _, err := os.Stat(jpgPath); err == nil {
-		return jpgPath, nil
+		return jpgPath
 	}
 	if _, err := os.Stat(pngPath); err == nil {
-		return pngPath, nil
+		return pngPath
+	}
+	return ""
+}
+
+func saveLibraryCoverDataToCache(cacheDir, cacheKey string, imageData []byte, mimeType string) (string, error) {
+	if existing := existingLibraryCoverCachePath(cacheDir, cacheKey); existing != "" {
+		return existing, nil
+	}
+	if len(imageData) == 0 {
+		return "", fmt.Errorf("cover data is empty")
+	}
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create cache dir: %w", err)
+	}
+
+	jpgPath, pngPath := libraryCoverCachePaths(cacheDir, cacheKey)
+	cachePath := jpgPath
+	if strings.Contains(mimeType, "png") {
+		cachePath = pngPath
+	}
+	if err := os.WriteFile(cachePath, imageData, 0644); err != nil {
+		return "", fmt.Errorf("failed to write cover: %w", err)
+	}
+	return cachePath, nil
+}
+
+func SaveCoverToCacheWithHintAndKey(filePath, displayNameHint, cacheDir, coverCacheKey string) (string, error) {
+	cacheKey := resolveLibraryCoverCacheKey(filePath, coverCacheKey)
+	if existing := existingLibraryCoverCachePath(cacheDir, cacheKey); existing != "" {
+		return existing, nil
 	}
 
 	imageData, mimeType, err := extractAnyCoverArtWithHint(filePath, displayNameHint)
 	if err != nil {
 		return "", err
 	}
-
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create cache dir: %w", err)
-	}
-
-	var cachePath string
-	if strings.Contains(mimeType, "png") {
-		cachePath = pngPath
-	} else {
-		cachePath = jpgPath
-	}
-
-	if err := os.WriteFile(cachePath, imageData, 0644); err != nil {
-		return "", fmt.Errorf("failed to write cover: %w", err)
-	}
-
-	return cachePath, nil
+	return saveLibraryCoverDataToCache(cacheDir, cacheKey, imageData, mimeType)
 }

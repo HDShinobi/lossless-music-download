@@ -18,13 +18,6 @@ var (
 	allowedDownloadDirsMu sync.RWMutex
 )
 
-func SetAllowedDownloadDirs(dirs []string) {
-	allowedDownloadDirsMu.Lock()
-	defer allowedDownloadDirsMu.Unlock()
-	allowedDownloadDirs = dirs
-	GoLog("[Extension] Allowed download directories set: %v\n", dirs)
-}
-
 func AddAllowedDownloadDir(dir string) {
 	allowedDownloadDirsMu.Lock()
 	defer allowedDownloadDirsMu.Unlock()
@@ -32,6 +25,15 @@ func AddAllowedDownloadDir(dir string) {
 	if err == nil {
 		allowedDownloadDirs = append(allowedDownloadDirs, absDir)
 	}
+}
+
+// SetAllowedDownloadDirs replaces the whole allow-list in one call (passing nil
+// clears it). Used by tests to reset the sandbox between cases; production code
+// appends via AddAllowedDownloadDir.
+func SetAllowedDownloadDirs(dirs []string) {
+	allowedDownloadDirsMu.Lock()
+	defer allowedDownloadDirsMu.Unlock()
+	allowedDownloadDirs = dirs
 }
 
 func isPathInAllowedDirs(absPath string) bool {
@@ -109,28 +111,19 @@ func (r *extensionRuntime) validatePath(path string) (string, error) {
 
 func (r *extensionRuntime) fileDownload(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 2 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "URL and output path are required",
-		})
+		return r.jsError("URL and output path are required")
 	}
 
 	urlStr := call.Arguments[0].String()
 	outputPath := call.Arguments[1].String()
 
 	if err := r.validateDomain(urlStr); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	fullPath, err := r.validatePath(outputPath)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	var onProgress goja.Callable
@@ -140,8 +133,8 @@ func (r *extensionRuntime) fileDownload(call goja.FunctionCall) goja.Value {
 	var chunkSize int64
 	if len(call.Arguments) > 2 && !goja.IsUndefined(call.Arguments[2]) && !goja.IsNull(call.Arguments[2]) {
 		optionsObj := call.Arguments[2].Export()
-		if opts, ok := optionsObj.(map[string]interface{}); ok {
-			if h, ok := opts["headers"].(map[string]interface{}); ok {
+		if opts, ok := optionsObj.(map[string]any); ok {
+			if h, ok := opts["headers"].(map[string]any); ok {
 				headers = make(map[string]string)
 				for k, v := range h {
 					headers[k] = fmt.Sprintf("%v", v)
@@ -187,10 +180,7 @@ func (r *extensionRuntime) fileDownload(call goja.FunctionCall) goja.Value {
 
 	dir := filepath.Dir(fullPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to create directory: %v", err),
-		})
+		return r.jsError("failed to create directory: %v", err)
 	}
 
 	client := r.downloadClient
@@ -207,46 +197,65 @@ func (r *extensionRuntime) fileDownload(call goja.FunctionCall) goja.Value {
 		return r.fileDownloadChunked(client, urlStr, fullPath, headers, ua, chunkSize, onProgress, trackItemBytes)
 	}
 
-	req, err := http.NewRequest("GET", urlStr, nil)
-	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
-	}
-	req = r.bindDownloadCancelContext(req)
+	unlock := lockDownloadOutputPath(fullPath)
+	defer unlock()
 
-	for k, v := range headers {
-		req.Header.Set(k, v)
+	buildReq := func(rangeFrom int64, validator string) (*http.Request, *stallWatchdog, error) {
+		req, err := http.NewRequest("GET", urlStr, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+		req = r.bindDownloadCancelContext(req)
+		req, wd := bindStallWatchdog(req, downloadStallTimeout)
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+		if req.Header.Get("User-Agent") == "" {
+			req.Header.Set("User-Agent", appUserAgent())
+		}
+		if rangeFrom > 0 {
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", rangeFrom))
+			req.Header.Set("If-Range", validator)
+		}
+		return req, wd, nil
 	}
-	if req.Header.Get("User-Agent") == "" {
-		req.Header.Set("User-Agent", appUserAgent())
+
+	req, wd, err := buildReq(0, "")
+	if err != nil {
+		return r.jsError("%s", err.Error())
 	}
+	defer func() { wd.stop() }()
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		if wd.stalled.Load() {
+			return r.stallError()
+		}
+		return r.jsError("%s", err.Error())
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("HTTP error: %d", resp.StatusCode),
-		})
+		resp.Body.Close()
+		return r.jsError("HTTP error: %d", resp.StatusCode)
 	}
 
-	out, err := os.Create(fullPath)
+	// Stream into a staged sibling and promote via rename on success so a
+	// killed process can never leave a partial file under the final name
+	// (the duplicate check would then accept it as complete forever).
+	stagedPath := stagedDownloadPath(fullPath)
+	os.Remove(stagedPath)
+	out, err := os.Create(stagedPath)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to create file: %v", err),
-		})
+		resp.Body.Close()
+		return r.jsError("failed to create file: %v", err)
 	}
-	defer out.Close()
+	promoted := false
+	defer func() {
+		out.Close()
+		if !promoted {
+			os.Remove(stagedPath)
+		}
+	}()
 
 	activeItemID := r.getActiveDownloadItemID()
 	if activeItemID != "" {
@@ -259,55 +268,144 @@ func (r *extensionRuntime) fileDownload(call goja.FunctionCall) goja.Value {
 		SetItemBytesTotal(activeItemID, contentLength)
 	}
 
-	var progressWriter interface{ Write([]byte) (int, error) } = out
-	if shouldTrackItemBytes {
-		progressWriter = NewItemProgressWriter(out, activeItemID)
+	makeProgressWriter := func() interface{ Write([]byte) (int, error) } {
+		if shouldTrackItemBytes {
+			return NewItemProgressWriter(out, activeItemID)
+		}
+		return out
+	}
+	progressWriter := makeProgressWriter()
+
+	// resumeValidator picks a validator usable with If-Range: a strong ETag or
+	// Last-Modified. Weak ETags (W/...) are not valid for If-Range.
+	resumeValidator := func(h http.Header) string {
+		if etag := h.Get("ETag"); etag != "" && !strings.HasPrefix(etag, "W/") {
+			return etag
+		}
+		return h.Get("Last-Modified")
 	}
 
 	var written int64
 	buf := make([]byte, 32*1024)
-	for {
-		nr, er := resp.Body.Read(buf)
-		if nr > 0 {
-			nw, ew := progressWriter.Write(buf[0:nr])
-			if nw < 0 || nr < nw {
-				nw = 0
-				if ew == nil {
-					ew = fmt.Errorf("invalid write result")
-				}
-			}
-			written += int64(nw)
-			if ew != nil {
-				if ew == ErrDownloadCancelled {
-					return r.vm.ToValue(map[string]interface{}{
-						"success": false,
-						"error":   "download cancelled",
-					})
-				}
-				return r.vm.ToValue(map[string]interface{}{
-					"success": false,
-					"error":   fmt.Sprintf("failed to write file: %v", ew),
-				})
-			}
-			if nr != nw {
-				return r.vm.ToValue(map[string]interface{}{
-					"success": false,
-					"error":   "short write",
-				})
-			}
 
-			if onProgress != nil && contentLength > 0 {
-				_, _ = onProgress(goja.Undefined(), r.vm.ToValue(written), r.vm.ToValue(contentLength))
+	// copyBody streams resp into progressWriter. fatal is a terminal JS error
+	// (write failure or user cancel); readErr is a network error eligible for
+	// a Range resume.
+	copyBody := func(resp *http.Response) (fatal goja.Value, readErr error) {
+		defer resp.Body.Close()
+		for {
+			nr, er := resp.Body.Read(buf)
+			if nr > 0 {
+				wd.reset()
+				nw, ew := progressWriter.Write(buf[0:nr])
+				if nw < 0 || nr < nw {
+					nw = 0
+					if ew == nil {
+						ew = fmt.Errorf("invalid write result")
+					}
+				}
+				written += int64(nw)
+				if ew != nil {
+					if ew == ErrDownloadCancelled {
+						return r.jsError("download cancelled"), nil
+					}
+					return r.jsError("failed to write file: %v", ew), nil
+				}
+				if nr != nw {
+					return r.jsError("short write"), nil
+				}
+
+				if onProgress != nil && contentLength > 0 {
+					_, _ = onProgress(goja.Undefined(), r.vm.ToValue(written), r.vm.ToValue(contentLength))
+				}
+			}
+			if er != nil {
+				if er != io.EOF {
+					return nil, er
+				}
+				return nil, nil
 			}
 		}
-		if er != nil {
-			if er != io.EOF {
-				return r.vm.ToValue(map[string]interface{}{
-					"success": false,
-					"error":   fmt.Sprintf("failed to read response: %v", er),
-				})
-			}
+	}
+
+	// Mid-body network failures resume from the current offset instead of
+	// failing the whole download. Only attempted when the server gave a
+	// validator (If-Range guards against splicing two versions of the file)
+	// and the caller did not set its own Range. A server that ignores Range
+	// answers 200 and the download restarts from zero — same as today.
+	validator := resumeValidator(resp.Header)
+	_, callerSetRange := headers["Range"]
+	canResume := validator != "" && !callerSetRange
+
+	const maxResumes = 3
+	resumes := 0
+	for {
+		fatal, readErr := copyBody(resp)
+		if fatal != nil {
+			return fatal
+		}
+		if readErr == nil {
 			break
+		}
+
+		stalled := wd.stalled.Load()
+		if !canResume || resumes >= maxResumes ||
+			(activeItemID != "" && isDownloadCancelled(activeItemID)) {
+			if stalled {
+				return r.stallError()
+			}
+			return r.jsError("failed to read response: %v", readErr)
+		}
+		resumes++
+		GoLog("[Extension:%s] Download interrupted at %d bytes (%v), resuming (attempt %d/%d)\n",
+			r.extensionID, written, readErr, resumes, maxResumes)
+
+		wd.stop()
+		var resumeReq *http.Request
+		resumeReq, wd, err = buildReq(written, validator)
+		if err != nil {
+			return r.jsError("%s", err.Error())
+		}
+		resp, err = client.Do(resumeReq)
+		if err != nil {
+			if wd.stalled.Load() {
+				return r.stallError()
+			}
+			return r.jsError("resume failed at %d bytes: %v", written, err)
+		}
+
+		switch resp.StatusCode {
+		case http.StatusPartialContent:
+			if written > 0 && !strings.HasPrefix(resp.Header.Get("Content-Range"), fmt.Sprintf("bytes %d-", written)) {
+				cr := resp.Header.Get("Content-Range")
+				resp.Body.Close()
+				return r.jsError("resume failed: unexpected Content-Range %q at %d bytes", cr, written)
+			}
+		case http.StatusOK:
+			// Range ignored or file changed under If-Range: restart from zero
+			// on the same staged file.
+			if err := out.Truncate(0); err != nil {
+				resp.Body.Close()
+				return r.jsError("failed to restart download: %v", err)
+			}
+			if _, err := out.Seek(0, io.SeekStart); err != nil {
+				resp.Body.Close()
+				return r.jsError("failed to restart download: %v", err)
+			}
+			written = 0
+			progressWriter = makeProgressWriter()
+			if resp.ContentLength > 0 {
+				contentLength = resp.ContentLength
+				if shouldTrackItemBytes {
+					SetItemBytesTotal(activeItemID, contentLength)
+				}
+			}
+			validator = resumeValidator(resp.Header)
+			canResume = validator != ""
+		default:
+			code := resp.StatusCode
+			resp.Body.Close()
+			return r.jsError("resume failed: HTTP %d at %d bytes", code, written)
 		}
 	}
 
@@ -319,12 +417,25 @@ func (r *extensionRuntime) fileDownload(call goja.FunctionCall) goja.Value {
 		}
 	}
 
+	// Sync before the promote rename so a power loss right after the rename
+	// cannot leave a truncated file under the final name.
+	if err := out.Sync(); err != nil {
+		return r.jsError("failed to sync file: %v", err)
+	}
+	if err := out.Close(); err != nil {
+		return r.jsError("failed to finalize file: %v", err)
+	}
+	if err := os.Rename(stagedPath, fullPath); err != nil {
+		return r.jsError("failed to publish file: %v", err)
+	}
+	promoted = true
+	syncDir(filepath.Dir(fullPath))
+
 	GoLog("[Extension:%s] Downloaded %d bytes to %s\n", r.extensionID, written, fullPath)
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success": true,
-		"path":    fullPath,
-		"size":    written,
+	return r.jsSuccess(map[string]any{
+		"path": fullPath,
+		"size": written,
 	})
 }
 
@@ -332,15 +443,18 @@ func (r *extensionRuntime) fileDownload(call goja.FunctionCall) goja.Value {
 // This is needed for servers (like YouTube's googlevideo CDN) that reject
 // non-ranged or large-range requests with 403 and require small chunk downloads.
 func (r *extensionRuntime) fileDownloadChunked(client *http.Client, urlStr, fullPath string, headers map[string]string, ua string, chunkSize int64, onProgress goja.Callable, trackItemBytes bool) goja.Value {
+	unlock := lockDownloadOutputPath(fullPath)
+	defer unlock()
+
 	// First, get the total content length with a small probe request
 	probeReq, err := http.NewRequest("GET", urlStr, nil)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("chunked: probe request error: %v", err),
-		})
+		return r.jsError("chunked: probe request error: %v", err)
 	}
 	probeReq = r.bindDownloadCancelContext(probeReq)
+	probeReq, wd := bindStallWatchdog(probeReq, downloadStallTimeout)
+	defer wd.stop()
+	stallCtx := probeReq.Context()
 	probeReq.Header.Set("User-Agent", ua)
 	for k, v := range headers {
 		if k != "Range" { // Don't copy any existing Range header
@@ -351,19 +465,16 @@ func (r *extensionRuntime) fileDownloadChunked(client *http.Client, urlStr, full
 
 	probeResp, err := client.Do(probeReq)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("chunked: probe error: %v", err),
-		})
+		if wd.stalled.Load() {
+			return r.stallError()
+		}
+		return r.jsError("chunked: probe error: %v", err)
 	}
 	io.Copy(io.Discard, probeResp.Body)
 	probeResp.Body.Close()
 
 	if probeResp.StatusCode != 206 && probeResp.StatusCode != 200 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("chunked: probe HTTP %d", probeResp.StatusCode),
-		})
+		return r.jsError("chunked: probe HTTP %d", probeResp.StatusCode)
 	}
 
 	// Parse Content-Range to get total size: "bytes 0-1/TOTAL"
@@ -386,14 +497,21 @@ func (r *extensionRuntime) fileDownloadChunked(client *http.Client, urlStr, full
 		GoLog("[Extension:%s] Chunked download: total size %d bytes, chunk size %d\n", r.extensionID, totalSize, chunkSize)
 	}
 
-	out, err := os.Create(fullPath)
+	// Same staged-write-then-promote protocol as fileDownload: never leave a
+	// partial file under the final name.
+	stagedPath := stagedDownloadPath(fullPath)
+	os.Remove(stagedPath)
+	out, err := os.Create(stagedPath)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to create file: %v", err),
-		})
+		return r.jsError("failed to create file: %v", err)
 	}
-	defer out.Close()
+	promoted := false
+	defer func() {
+		out.Close()
+		if !promoted {
+			os.Remove(stagedPath)
+		}
+	}()
 
 	activeItemID := r.getActiveDownloadItemID()
 	if activeItemID != "" {
@@ -426,12 +544,9 @@ func (r *extensionRuntime) fileDownloadChunked(client *http.Client, urlStr, full
 		for retry := 0; retry < maxRetries; retry++ {
 			chunkReq, err := http.NewRequest("GET", urlStr, nil)
 			if err != nil {
-				return r.vm.ToValue(map[string]interface{}{
-					"success": false,
-					"error":   fmt.Sprintf("chunked: request error at offset %d: %v", offset, err),
-				})
+				return r.jsError("chunked: request error at offset %d: %v", offset, err)
 			}
-			chunkReq = r.bindDownloadCancelContext(chunkReq)
+			chunkReq = chunkReq.WithContext(stallCtx)
 			chunkReq.Header.Set("User-Agent", ua)
 			for k, v := range headers {
 				if k != "Range" {
@@ -442,14 +557,14 @@ func (r *extensionRuntime) fileDownloadChunked(client *http.Client, urlStr, full
 
 			chunkResp, chunkErr = client.Do(chunkReq)
 			if chunkErr != nil {
+				if wd.stalled.Load() {
+					return r.stallError()
+				}
 				if retry < maxRetries-1 {
 					time.Sleep(time.Duration(retry+1) * time.Second)
 					continue
 				}
-				return r.vm.ToValue(map[string]interface{}{
-					"success": false,
-					"error":   fmt.Sprintf("chunked: error at offset %d after %d retries: %v", offset, maxRetries, chunkErr),
-				})
+				return r.jsError("chunked: error at offset %d after %d retries: %v", offset, maxRetries, chunkErr)
 			}
 
 			if chunkResp.StatusCode == 206 || chunkResp.StatusCode == 200 {
@@ -466,16 +581,14 @@ func (r *extensionRuntime) fileDownloadChunked(client *http.Client, urlStr, full
 				}
 			}
 
-			return r.vm.ToValue(map[string]interface{}{
-				"success": false,
-				"error":   fmt.Sprintf("chunked: HTTP %d at offset %d", chunkResp.StatusCode, offset),
-			})
+			return r.jsError("chunked: HTTP %d at offset %d", chunkResp.StatusCode, offset)
 		}
 
 		chunkWritten := int64(0)
 		for {
 			nr, er := chunkResp.Body.Read(buf)
 			if nr > 0 {
+				wd.reset()
 				nw, ew := progressWriter.Write(buf[0:nr])
 				if nw < 0 || nr < nw {
 					nw = 0
@@ -488,22 +601,13 @@ func (r *extensionRuntime) fileDownloadChunked(client *http.Client, urlStr, full
 				if ew != nil {
 					chunkResp.Body.Close()
 					if ew == ErrDownloadCancelled {
-						return r.vm.ToValue(map[string]interface{}{
-							"success": false,
-							"error":   "download cancelled",
-						})
+						return r.jsError("download cancelled")
 					}
-					return r.vm.ToValue(map[string]interface{}{
-						"success": false,
-						"error":   fmt.Sprintf("failed to write file: %v", ew),
-					})
+					return r.jsError("failed to write file: %v", ew)
 				}
 				if nr != nw {
 					chunkResp.Body.Close()
-					return r.vm.ToValue(map[string]interface{}{
-						"success": false,
-						"error":   "short write",
-					})
+					return r.jsError("short write")
 				}
 
 				if onProgress != nil && totalSize > 0 {
@@ -513,10 +617,10 @@ func (r *extensionRuntime) fileDownloadChunked(client *http.Client, urlStr, full
 			if er != nil {
 				if er != io.EOF {
 					chunkResp.Body.Close()
-					return r.vm.ToValue(map[string]interface{}{
-						"success": false,
-						"error":   fmt.Sprintf("failed to read chunk at offset %d: %v", offset, er),
-					})
+					if wd.stalled.Load() {
+						return r.stallError()
+					}
+					return r.jsError("failed to read chunk at offset %d: %v", offset, er)
 				}
 				break
 			}
@@ -549,12 +653,25 @@ func (r *extensionRuntime) fileDownloadChunked(client *http.Client, urlStr, full
 		}
 	}
 
+	// Sync before the promote rename so a power loss right after the rename
+	// cannot leave a truncated file under the final name.
+	if err := out.Sync(); err != nil {
+		return r.jsError("failed to sync file: %v", err)
+	}
+	if err := out.Close(); err != nil {
+		return r.jsError("failed to finalize file: %v", err)
+	}
+	if err := os.Rename(stagedPath, fullPath); err != nil {
+		return r.jsError("failed to publish file: %v", err)
+	}
+	promoted = true
+	syncDir(filepath.Dir(fullPath))
+
 	GoLog("[Extension:%s] Chunked download complete: %d bytes to %s\n", r.extensionID, totalWritten, fullPath)
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success": true,
-		"path":    fullPath,
-		"size":    totalWritten,
+	return r.jsSuccess(map[string]any{
+		"path": fullPath,
+		"size": totalWritten,
 	})
 }
 
@@ -575,79 +692,84 @@ func (r *extensionRuntime) fileExists(call goja.FunctionCall) goja.Value {
 
 func (r *extensionRuntime) fileDelete(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "path is required",
-		})
+		return r.jsError("path is required")
 	}
 
 	path := call.Arguments[0].String()
 	fullPath, err := r.validatePath(path)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	if err := os.Remove(fullPath); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success": true,
-	})
+	return r.jsSuccess(nil)
 }
 
 func (r *extensionRuntime) fileRead(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "path is required",
-		})
+		return r.jsError("path is required")
 	}
 
 	path := call.Arguments[0].String()
 	fullPath, err := r.validatePath(path)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
-	data, err := os.ReadFile(fullPath)
+	file, err := os.Open(fullPath)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, maxExtensionFileReadBytes+1))
+	if err != nil {
+		return r.jsError("%s", err.Error())
+	}
+	if int64(len(data)) > maxExtensionFileReadBytes {
+		return r.jsError(extensionFileReadLimitError)
 	}
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success": true,
-		"data":    string(data),
+	return r.jsSuccess(map[string]any{
+		"data": string(data),
 	})
+}
+
+const (
+	maxExtensionFileReadBytes   = int64(16 << 20)
+	extensionFileReadLimitError = "file read exceeds 16 MiB limit; use file.readBytes with offset and length to read it in chunks"
+)
+
+func extensionFileReadLength(size, offset, requested int64) (int64, error) {
+	remaining := size - offset
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	if requested < 0 {
+		if remaining > maxExtensionFileReadBytes {
+			return 0, fmt.Errorf("%s", extensionFileReadLimitError)
+		}
+		return remaining, nil
+	}
+	if requested > maxExtensionFileReadBytes {
+		return 0, fmt.Errorf("%s", extensionFileReadLimitError)
+	}
+	return min(requested, remaining), nil
 }
 
 func (r *extensionRuntime) fileReadBytes(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "path is required",
-		})
+		return r.jsError("path is required")
 	}
 
 	path := call.Arguments[0].String()
 	fullPath, err := r.validatePath(path)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	options := parseRuntimeOptionsArgument(call, 1)
@@ -655,26 +777,17 @@ func (r *extensionRuntime) fileReadBytes(call goja.FunctionCall) goja.Value {
 	length := runtimeOptionInt64(options, "length", -1)
 	encoding := runtimeOptionString(options, "encoding", "base64")
 	if offset < 0 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "offset must be >= 0",
-		})
+		return r.jsError("offset must be >= 0")
 	}
 	file, err := os.Open(fullPath)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 	defer file.Close()
 
 	info, err := file.Stat()
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	size := info.Size()
@@ -682,42 +795,27 @@ func (r *extensionRuntime) fileReadBytes(call goja.FunctionCall) goja.Value {
 		offset = size
 	}
 	if _, err := file.Seek(offset, io.SeekStart); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to seek file: %v", err),
-		})
+		return r.jsError("failed to seek file: %v", err)
 	}
 
-	var data []byte
-	switch {
-	case length == 0:
-		data = []byte{}
-	case length > 0:
-		buf := make([]byte, int(length))
-		n, readErr := file.Read(buf)
-		if readErr != nil && readErr != io.EOF {
-			return r.vm.ToValue(map[string]interface{}{
-				"success": false,
-				"error":   fmt.Sprintf("failed to read file: %v", readErr),
-			})
+	readLength, err := extensionFileReadLength(size, offset, length)
+	if err != nil {
+		return r.jsError("%s", err.Error())
+	}
+	data := make([]byte, int(readLength))
+	if readLength > 0 {
+		n, readErr := io.ReadFull(file, data)
+		if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
+			return r.jsError("failed to read file: %v", readErr)
 		}
-		data = buf[:n]
-	default:
-		data, err = io.ReadAll(file)
-		if err != nil {
-			return r.vm.ToValue(map[string]interface{}{
-				"success": false,
-				"error":   fmt.Sprintf("failed to read file: %v", err),
-			})
-		}
+		data = data[:n]
 	}
 
 	if strings.EqualFold(strings.TrimSpace(encoding), "bytes") ||
 		strings.EqualFold(strings.TrimSpace(encoding), "raw") {
 		// Return raw bytes as an ArrayBuffer to avoid base64 encode/decode of
 		// large payloads under the goja interpreter.
-		return r.vm.ToValue(map[string]interface{}{
-			"success":    true,
+		return r.jsSuccess(map[string]any{
 			"data":       r.vm.NewArrayBuffer(data),
 			"bytes_read": len(data),
 			"offset":     offset,
@@ -728,14 +826,10 @@ func (r *extensionRuntime) fileReadBytes(call goja.FunctionCall) goja.Value {
 
 	encoded, err := encodeRuntimeBytes(data, encoding)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success":    true,
+	return r.jsSuccess(map[string]any{
 		"data":       encoded,
 		"bytes_read": len(data),
 		"offset":     offset,
@@ -745,10 +839,7 @@ func (r *extensionRuntime) fileReadBytes(call goja.FunctionCall) goja.Value {
 }
 func (r *extensionRuntime) fileWrite(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 2 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "path and data are required",
-		})
+		return r.jsError("path and data are required")
 	}
 
 	path := call.Arguments[0].String()
@@ -756,48 +847,40 @@ func (r *extensionRuntime) fileWrite(call goja.FunctionCall) goja.Value {
 
 	fullPath, err := r.validatePath(path)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	dir := filepath.Dir(fullPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to create directory: %v", err),
-		})
+		return r.jsError("failed to create directory: %v", err)
 	}
 
-	if err := os.WriteFile(fullPath, []byte(data), 0644); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+	// Full-content write: stage and rename so a kill mid-write cannot leave
+	// a truncated file under the final name.
+	stagedPath := stagedDownloadPath(fullPath)
+	if err := os.WriteFile(stagedPath, []byte(data), 0644); err != nil {
+		os.Remove(stagedPath)
+		return r.jsError("%s", err.Error())
+	}
+	if err := os.Rename(stagedPath, fullPath); err != nil {
+		os.Remove(stagedPath)
+		return r.jsError("%s", err.Error())
 	}
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success": true,
-		"path":    fullPath,
+	return r.jsSuccess(map[string]any{
+		"path": fullPath,
 	})
 }
 
 func (r *extensionRuntime) fileWriteBytes(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 2 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "path and data are required",
-		})
+		return r.jsError("path and data are required")
 	}
 
 	path := call.Arguments[0].String()
 	fullPath, err := r.validatePath(path)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	options := parseRuntimeOptionsArgument(call, 2)
@@ -808,32 +891,20 @@ func (r *extensionRuntime) fileWriteBytes(call goja.FunctionCall) goja.Value {
 	encoding := runtimeOptionString(options, "encoding", "base64")
 
 	if appendMode && hasOffset {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "append and offset cannot be used together",
-		})
+		return r.jsError("append and offset cannot be used together")
 	}
 	if offset < 0 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "offset must be >= 0",
-		})
+		return r.jsError("offset must be >= 0")
 	}
 
 	data, err := decodeRuntimeBytesValue(call.Arguments[1].Export(), encoding)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	dir := filepath.Dir(fullPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to create directory: %v", err),
-		})
+		return r.jsError("failed to create directory: %v", err)
 	}
 
 	flags := os.O_CREATE | os.O_WRONLY
@@ -846,28 +917,19 @@ func (r *extensionRuntime) fileWriteBytes(call goja.FunctionCall) goja.Value {
 
 	file, err := os.OpenFile(fullPath, flags, 0644)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 	defer file.Close()
 
 	if hasOffset && !appendMode {
 		if _, err := file.Seek(offset, io.SeekStart); err != nil {
-			return r.vm.ToValue(map[string]interface{}{
-				"success": false,
-				"error":   fmt.Sprintf("failed to seek file: %v", err),
-			})
+			return r.jsError("failed to seek file: %v", err)
 		}
 	}
 
 	written, err := file.Write(data)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	info, statErr := file.Stat()
@@ -876,8 +938,7 @@ func (r *extensionRuntime) fileWriteBytes(call goja.FunctionCall) goja.Value {
 		size = info.Size()
 	}
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success":       true,
+	return r.jsSuccess(map[string]any{
 		"path":          fullPath,
 		"bytes_written": written,
 		"size":          size,
@@ -886,10 +947,7 @@ func (r *extensionRuntime) fileWriteBytes(call goja.FunctionCall) goja.Value {
 
 func (r *extensionRuntime) fileCopy(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 2 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "source and destination paths are required",
-		})
+		return r.jsError("source and destination paths are required")
 	}
 
 	srcPath := call.Arguments[0].String()
@@ -897,72 +955,47 @@ func (r *extensionRuntime) fileCopy(call goja.FunctionCall) goja.Value {
 
 	fullSrc, err := r.validatePath(srcPath)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	fullDst, err := r.validatePath(dstPath)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	srcFile, err := os.Open(fullSrc)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to read source: %v", err),
-		})
+		return r.jsError("failed to read source: %v", err)
 	}
 	defer srcFile.Close()
 
 	dir := filepath.Dir(fullDst)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to create directory: %v", err),
-		})
+		return r.jsError("failed to create directory: %v", err)
 	}
 
 	dstFile, err := os.OpenFile(fullDst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to open destination: %v", err),
-		})
+		return r.jsError("failed to open destination: %v", err)
 	}
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		_ = dstFile.Close()
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to copy file: %v", err),
-		})
+		return r.jsError("failed to copy file: %v", err)
 	}
 
 	if err := dstFile.Close(); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to finalize destination: %v", err),
-		})
+		return r.jsError("failed to finalize destination: %v", err)
 	}
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success": true,
-		"path":    fullDst,
+	return r.jsSuccess(map[string]any{
+		"path": fullDst,
 	})
 }
 
 func (r *extensionRuntime) fileMove(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 2 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "source and destination paths are required",
-		})
+		return r.jsError("source and destination paths are required")
 	}
 
 	srcPath := call.Arguments[0].String()
@@ -970,68 +1003,45 @@ func (r *extensionRuntime) fileMove(call goja.FunctionCall) goja.Value {
 
 	fullSrc, err := r.validatePath(srcPath)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	fullDst, err := r.validatePath(dstPath)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	dir := filepath.Dir(fullDst)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to create directory: %v", err),
-		})
+		return r.jsError("failed to create directory: %v", err)
 	}
 
 	if err := os.Rename(fullSrc, fullDst); err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   fmt.Sprintf("failed to move file: %v", err),
-		})
+		return r.jsError("failed to move file: %v", err)
 	}
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success": true,
-		"path":    fullDst,
+	return r.jsSuccess(map[string]any{
+		"path": fullDst,
 	})
 }
 
 func (r *extensionRuntime) fileGetSize(call goja.FunctionCall) goja.Value {
 	if len(call.Arguments) < 1 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "path is required",
-		})
+		return r.jsError("path is required")
 	}
 
 	path := call.Arguments[0].String()
 	fullPath, err := r.validatePath(path)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
 	info, err := os.Stat(fullPath)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success": true,
-		"size":    info.Size(),
+	return r.jsSuccess(map[string]any{
+		"size": info.Size(),
 	})
 }

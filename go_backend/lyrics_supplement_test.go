@@ -2,6 +2,7 @@ package gobackend
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -61,8 +62,23 @@ func TestLyricsCacheParsingAndLRCLibClient(t *testing.T) {
 	if msg, ok := detectLyricsErrorPayload(`{"code":405,"message":"rate limited"}`); !ok || msg != "rate limited" {
 		t.Fatalf("coded error payload = %q/%v", msg, ok)
 	}
-	if !isLyricsProviderUnavailableError(errors.New("rate limit")) {
-		t.Fatal("expected rate-limit errors to mark provider unavailable")
+	if !isLyricsProviderUnavailableError(classifyLyricsPayloadError(0, "rate limit", "proxy error: %s", "rate limit")) {
+		t.Fatal("expected rate-limit payloads to mark provider unavailable")
+	}
+	if !isLyricsProviderUnavailableError(fmt.Errorf("spotify search failed: %w", lyricsServiceUnavailableErrorf("HTTP 503"))) {
+		t.Fatal("expected wrapped unavailable errors to keep their classification")
+	}
+	if !isLyricsProviderUnavailableError(lyricsHTTPStatusError(503, "proxy returned HTTP 503")) {
+		t.Fatal("expected 5xx statuses to mark provider unavailable")
+	}
+	if isLyricsProviderUnavailableError(lyricsHTTPStatusError(403, "proxy returned HTTP 403")) {
+		t.Fatal("4xx statuses other than 429 must not mark provider unavailable")
+	}
+	if isLyricsProviderUnavailableError(classifyLyricsPayloadError(500, "lyrics not found", "HTTP 500: lyrics not found")) {
+		t.Fatal("not-found payloads must never mark provider unavailable")
+	}
+	if isLyricsProviderUnavailableError(errors.New("rate limit")) {
+		t.Fatal("untyped errors must not be classified by message text")
 	}
 	if lrcTimestampToMs("01", "02", "345") != 62345 || msToLRCTimestamp(62340) != "[01:02.34]" {
 		t.Fatal("unexpected LRC timestamp conversion")
@@ -98,7 +114,7 @@ func TestLyricsCacheParsingAndLRCLibClient(t *testing.T) {
 		case "/api/get":
 			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"id":1,"trackName":"Song","artistName":"Artist","duration":180,"syncedLyrics":"[00:01.00]Hello"}`)), Request: req}, nil
 		case "/api/search":
-			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`[{"id":2,"duration":180,"plainLyrics":"Plain\nLyric"},{"id":3,"duration":180,"syncedLyrics":"[00:02.00]Synced"}]`)), Request: req}, nil
+			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`[{"id":2,"trackName":"Song","artistName":"Artist","duration":180,"plainLyrics":"Plain\nLyric"},{"id":3,"trackName":"Song","artistName":"Artist","duration":180,"syncedLyrics":"[00:02.00]Synced"}]`)), Request: req}, nil
 		default:
 			return &http.Response{StatusCode: 404, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`)), Request: req}, nil
 		}
@@ -111,7 +127,16 @@ func TestLyricsCacheParsingAndLRCLibClient(t *testing.T) {
 	if err != nil || len(search.Lines) == 0 {
 		t.Fatalf("FetchLyricsFromLRCLibSearch = %#v/%v", search, err)
 	}
-	if best := client.findBestMatch([]LRCLibResponse{{Duration: 100, PlainLyrics: "A"}, {Duration: 180, SyncedLyrics: "[00:01.00]B"}}, 180); best == nil || best.SyncedLyrics == "" {
+	if best := client.findBestLRCLibSearchMatch(
+		[]LRCLibResponse{
+			{TrackName: "Other", ArtistName: "Artist", Duration: 180, PlainLyrics: "A"},
+			{TrackName: "Song", ArtistName: "Artist", Duration: 180, SyncedLyrics: "[00:01.00]B"},
+		},
+		"Artist Song",
+		"Song",
+		"Artist",
+		180,
+	); best == nil || best.SyncedLyrics == "" {
 		t.Fatalf("best = %#v", best)
 	}
 	if !client.durationMatches(181, 180) || client.durationMatches(300, 180) {

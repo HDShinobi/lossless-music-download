@@ -7,7 +7,7 @@ import (
 )
 
 func TestBuildFilenameFromTemplate_WithRawTrackAndDisc(t *testing.T) {
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"title":  "Song Name",
 		"artist": "Artist Name",
 		"album":  "Album Name",
@@ -28,7 +28,7 @@ func TestBuildFilenameFromTemplate_WithRawTrackAndDisc(t *testing.T) {
 }
 
 func TestBuildFilenameFromTemplate_RawPlaceholdersEmptyWhenZero(t *testing.T) {
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"title":  "Song Name",
 		"artist": "Artist Name",
 		"track":  0,
@@ -43,7 +43,7 @@ func TestBuildFilenameFromTemplate_RawPlaceholdersEmptyWhenZero(t *testing.T) {
 }
 
 func TestBuildFilenameFromTemplate_InlineNumberFormatting(t *testing.T) {
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"track": 3,
 		"disc":  2,
 	}
@@ -56,7 +56,7 @@ func TestBuildFilenameFromTemplate_InlineNumberFormatting(t *testing.T) {
 }
 
 func TestBuildFilenameFromTemplate_PlaylistPositionFormatting(t *testing.T) {
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"playlist_position": 4,
 		"artist":            "Artist Name",
 		"title":             "Song Name",
@@ -72,8 +72,71 @@ func TestBuildFilenameFromTemplate_PlaylistPositionFormatting(t *testing.T) {
 	}
 }
 
+func TestBuildFilenameFromTemplate_QualityVariant(t *testing.T) {
+	metadata := map[string]any{
+		"artist":  "Artist Name",
+		"title":   "Song Name",
+		"quality": "HI_RES_LOSSLESS",
+	}
+
+	formatted := buildFilenameFromTemplate(
+		"{artist} - {title} - {quality}",
+		metadata,
+	)
+	if formatted != "Artist Name - Song Name - HI_RES_LOSSLESS" {
+		t.Fatalf("unexpected quality filename: %q", formatted)
+	}
+}
+
+func TestBuildFilenameFromTemplate_QualityVariantStagingToken(t *testing.T) {
+	metadata := map[string]any{
+		"artist":          "Artist Name",
+		"title":           "Song Name",
+		"quality_variant": "qv_12345678",
+	}
+
+	formatted := buildFilenameFromTemplate(
+		"{artist} - {title} - {quality_variant}",
+		metadata,
+	)
+	if formatted != "Artist Name - Song Name - qv_12345678" {
+		t.Fatalf("unexpected quality variant filename: %q", formatted)
+	}
+}
+
+func TestBuildDownloadFilename_ProvidesRequestedQuality(t *testing.T) {
+	filename := buildDownloadFilename(DownloadRequest{
+		TrackName:      "Song Name",
+		ArtistName:     "Artist Name",
+		FilenameFormat: "{artist} - {title} - {quality}",
+		Quality:        "LOSSLESS",
+		OutputExt:      ".flac",
+	})
+
+	if filename != "Artist Name - Song Name - LOSSLESS.flac" {
+		t.Fatalf("unexpected download filename: %q", filename)
+	}
+}
+
+func TestBuildDownloadFilename_PreservesVariantTokenWhenTruncated(t *testing.T) {
+	filename := buildDownloadFilename(DownloadRequest{
+		TrackName:      strings.Repeat("Very Long Song ", 30),
+		ArtistName:     "Artist Name",
+		FilenameFormat: "{artist} - {title} - {quality_variant}",
+		QualityVariant: "qv_12345678",
+		OutputExt:      ".flac",
+	})
+
+	if !strings.Contains(filename, "qv_12345678") {
+		t.Fatalf("quality variant token was truncated: %q", filename)
+	}
+	if len(strings.TrimSuffix(filename, ".flac")) > maxSanitizedFilenameBytes {
+		t.Fatalf("filename base exceeds limit: %d bytes", len(filename))
+	}
+}
+
 func TestBuildFilenameFromTemplate_DateStrftimeFormatting(t *testing.T) {
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"artist":       "Artist Name",
 		"title":        "Song Name",
 		"release_date": "2024-03-09",
@@ -92,7 +155,7 @@ func TestBuildFilenameFromTemplate_DateStrftimeFormatting(t *testing.T) {
 }
 
 func TestBuildFilenameFromTemplate_DateStrftimeFormattingWithYearOnly(t *testing.T) {
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"artist": "Artist Name",
 		"title":  "Song Name",
 		"date":   "2019",

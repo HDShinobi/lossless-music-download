@@ -1,10 +1,13 @@
 package gobackend
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -59,7 +62,12 @@ type PendingAuthRequest struct {
 	ExtensionID string
 	AuthURL     string
 	CallbackURL string
+	CreatedAt   time.Time
 }
+
+// Challenge URLs are short-lived; serving one past this age sends the user
+// to an already-expired verification page.
+const pendingAuthRequestTTL = 5 * time.Minute
 
 var (
 	pendingAuthRequests   = make(map[string]*PendingAuthRequest)
@@ -108,7 +116,7 @@ func SetExtensionTokens(extensionID string, accessToken, refreshToken string, ex
 type extensionRuntime struct {
 	extensionID    string
 	manifest       *ExtensionManifest
-	settings       map[string]interface{}
+	settings       map[string]any
 	httpClient     *http.Client
 	downloadClient *http.Client
 	cookieJar      http.CookieJar
@@ -121,18 +129,40 @@ type extensionRuntime struct {
 	activeRequestMu sync.RWMutex
 	activeRequestID string
 
-	storageMu      sync.RWMutex
-	storageCache   map[string]interface{}
-	storageLoaded  bool
-	storageDirty   bool
-	storageClosed  bool
-	storageTimer   *time.Timer
-	storageWriteMu sync.Mutex
+	storageMu     sync.RWMutex
+	storageCache  map[string]any
+	storageClosed bool
 
-	credentialsMu     sync.RWMutex
-	credentialsCache  map[string]interface{}
-	credentialsLoaded bool
-	storageFlushDelay time.Duration
+	credentialsMu    sync.RWMutex
+	credentialsCache map[string]any
+
+	// Set when a signed-session call inside the current script invocation
+	// required verification. The provider wrapper consumes it after the
+	// script returns, so verification surfaces even when the extension
+	// script swallowed the needsVerification response (issue: fallback
+	// skipped provider B's challenge and failed outright).
+	verificationMu          sync.Mutex
+	verificationRequiredURL string
+}
+
+func (r *extensionRuntime) noteVerificationRequired(authURL string) {
+	r.verificationMu.Lock()
+	if authURL == "" {
+		authURL = "pending"
+	}
+	r.verificationRequiredURL = authURL
+	r.verificationMu.Unlock()
+}
+
+// consumeVerificationRequired returns the noted auth URL (or "pending") and
+// clears the flag; "" means no verification was requested since the last
+// consume.
+func (r *extensionRuntime) consumeVerificationRequired() string {
+	r.verificationMu.Lock()
+	url := r.verificationRequiredURL
+	r.verificationRequiredURL = ""
+	r.verificationMu.Unlock()
+	return url
 }
 
 type privateIPCacheEntry struct {
@@ -151,17 +181,22 @@ var (
 	privateIPCacheMu sync.RWMutex
 )
 
+func clearPrivateIPCache() {
+	privateIPCacheMu.Lock()
+	privateIPCache = make(map[string]privateIPCacheEntry)
+	privateIPCacheMu.Unlock()
+}
+
 func newExtensionRuntime(ext *loadedExtension) *extensionRuntime {
 	jar, _ := newSimpleCookieJar()
 
 	runtime := &extensionRuntime{
-		extensionID:       ext.ID,
-		manifest:          ext.Manifest,
-		settings:          make(map[string]interface{}),
-		cookieJar:         jar,
-		dataDir:           ext.DataDir,
-		vm:                ext.VM,
-		storageFlushDelay: defaultStorageFlushDelay,
+		extensionID: ext.ID,
+		manifest:    ext.Manifest,
+		settings:    make(map[string]any),
+		cookieJar:   jar,
+		dataDir:     ext.DataDir,
+		vm:          ext.VM,
 	}
 
 	runtime.httpClient = newExtensionHTTPClient(ext, jar, extensionHTTPTimeout(ext, 30*time.Second), true)
@@ -195,7 +230,7 @@ func extensionHTTPTimeout(ext *loadedExtension, fallback time.Duration) time.Dur
 	return time.Duration(seconds) * time.Second
 }
 
-func parseExtensionTimeoutSeconds(raw interface{}) int {
+func parseExtensionTimeoutSeconds(raw any) int {
 	switch v := raw.(type) {
 	case int:
 		return v
@@ -265,10 +300,53 @@ func (r *extensionRuntime) bindDownloadCancelContext(req *http.Request) *http.Re
 		if requestID == "" {
 			return req
 		}
-		return req.WithContext(initExtensionRequestCancel(requestID))
+		return req.WithContext(extensionRequestCancelContext(requestID))
 	}
 
-	return req.WithContext(initDownloadCancel(itemID))
+	return req.WithContext(downloadCancelContext(itemID))
+}
+
+// downloadStallTimeout is how long a download may go without receiving a single
+// byte before the stall watchdog aborts it. A dead radio mid-transfer otherwise
+// blocks on Body.Read until the 24h client timeout with no error and no retry.
+const downloadStallTimeout = 60 * time.Second
+
+// stallWatchdog cancels an in-flight download when no data arrives within
+// timeout. It wraps the request context in a child cancel so firing it does NOT
+// set the user-cancel flag (isDownloadCancelled stays false) — a stall is a
+// distinct, retryable condition. Call reset() after every successful Read and
+// stop() when the transfer ends.
+type stallWatchdog struct {
+	cancel  context.CancelFunc
+	timer   *time.Timer
+	timeout time.Duration
+	stalled atomic.Bool
+}
+
+func bindStallWatchdog(req *http.Request, timeout time.Duration) (*http.Request, *stallWatchdog) {
+	ctx, cancel := context.WithCancel(req.Context())
+	w := &stallWatchdog{cancel: cancel, timeout: timeout}
+	w.timer = time.AfterFunc(timeout, func() {
+		w.stalled.Store(true)
+		cancel()
+	})
+	return req.WithContext(ctx), w
+}
+
+func (w *stallWatchdog) reset() { w.timer.Reset(w.timeout) }
+
+// stop halts the timer and releases the child context so a completed download
+// leaks neither a pending timer nor a live cancel func.
+func (w *stallWatchdog) stop() {
+	w.timer.Stop()
+	w.cancel()
+}
+
+// stallError is returned when the watchdog fires. The message is deliberately
+// free of "cancel" and worded to classify as retryable network failure, so the
+// fallback layer retries instead of treating it as a user cancellation.
+func (r *extensionRuntime) stallError() goja.Value {
+	return r.jsError("download stalled: no data received for %ds (network timeout)", int(downloadStallTimeout.Seconds()))
 }
 
 func newExtensionHTTPClient(ext *loadedExtension, jar http.CookieJar, timeout time.Duration, compressResponses bool) *http.Client {
@@ -356,13 +434,7 @@ func isPrivateIP(host string) bool {
 		return false
 	}
 
-	isPrivate := false
-	for _, ip := range ips {
-		if isPrivateIPAddr(ip) {
-			isPrivate = true
-			break
-		}
-	}
+	isPrivate := slices.ContainsFunc(ips, isPrivateIPAddr)
 
 	setPrivateIPCache(hostLower, isPrivate, privateIPCacheTTL)
 	return isPrivate
@@ -429,30 +501,39 @@ func isPrivateIPAddr(ip net.IP) bool {
 }
 
 type simpleCookieJar struct {
-	cookies map[string][]*http.Cookie
-	mu      sync.RWMutex
+	mu  sync.RWMutex
+	jar *cookiejar.Jar
 }
 
 func newSimpleCookieJar() (*simpleCookieJar, error) {
-	return &simpleCookieJar{
-		cookies: make(map[string][]*http.Cookie),
-	}, nil
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, err
+	}
+	return &simpleCookieJar{jar: jar}, nil
 }
 
 func (j *simpleCookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	key := u.Host
-	j.cookies[key] = append(j.cookies[key], cookies...)
+	j.mu.RLock()
+	defer j.mu.RUnlock()
+	j.jar.SetCookies(u, cookies)
 }
 
 func (j *simpleCookieJar) Cookies(u *url.URL) []*http.Cookie {
 	j.mu.RLock()
 	defer j.mu.RUnlock()
-	return j.cookies[u.Host]
+	return j.jar.Cookies(u)
+
 }
 
-func (r *extensionRuntime) SetSettings(settings map[string]interface{}) {
+func (j *simpleCookieJar) Clear() {
+	jar, _ := cookiejar.New(nil)
+	j.mu.Lock()
+	j.jar = jar
+	j.mu.Unlock()
+}
+
+func (r *extensionRuntime) SetSettings(settings map[string]any) {
 	r.settings = settings
 }
 
@@ -469,59 +550,67 @@ func (r *extensionRuntime) RegisterAPIs(vm *goja.Runtime) {
 	httpObj.Set("clearCookies", r.httpClearCookies)
 	vm.Set("http", httpObj)
 
-	storageObj := vm.NewObject()
-	storageObj.Set("get", r.storageGet)
-	storageObj.Set("set", r.storageSet)
-	storageObj.Set("remove", r.storageRemove)
-	vm.Set("storage", storageObj)
+	if r.manifest != nil && r.manifest.Permissions.Storage {
+		storageObj := vm.NewObject()
+		storageObj.Set("get", r.storageGet)
+		storageObj.Set("set", r.storageSet)
+		storageObj.Set("remove", r.storageRemove)
+		vm.Set("storage", storageObj)
 
-	credentialsObj := vm.NewObject()
-	credentialsObj.Set("store", r.credentialsStore)
-	credentialsObj.Set("get", r.credentialsGet)
-	credentialsObj.Set("remove", r.credentialsRemove)
-	credentialsObj.Set("has", r.credentialsHas)
-	vm.Set("credentials", credentialsObj)
-
-	authObj := vm.NewObject()
-	authObj.Set("openAuthUrl", r.authOpenUrl)
-	authObj.Set("getAuthCode", r.authGetCode)
-	authObj.Set("setAuthCode", r.authSetCode)
-	authObj.Set("clearAuth", r.authClear)
-	authObj.Set("isAuthenticated", r.authIsAuthenticated)
-	authObj.Set("getTokens", r.authGetTokens)
-	authObj.Set("generatePKCE", r.authGeneratePKCE)
-	authObj.Set("getPKCE", r.authGetPKCE)
-	authObj.Set("startOAuthWithPKCE", r.authStartOAuthWithPKCE)
-	authObj.Set("exchangeCodeWithPKCE", r.authExchangeCodeWithPKCE)
-	vm.Set("auth", authObj)
-
-	if r.manifest != nil && r.manifest.SignedSession != nil {
-		sessionObj := vm.NewObject()
-		sessionObj.Set("signedFetch", r.signedSessionFetch)
-		sessionObj.Set("completeGrant", r.signedSessionCompleteGrant)
-		sessionObj.Set("status", r.signedSessionStatus)
-		sessionObj.Set("clear", r.signedSessionClear)
-		vm.Set("session", sessionObj)
+		credentialsObj := vm.NewObject()
+		credentialsObj.Set("store", r.credentialsStore)
+		credentialsObj.Set("get", r.credentialsGet)
+		credentialsObj.Set("remove", r.credentialsRemove)
+		credentialsObj.Set("has", r.credentialsHas)
+		vm.Set("credentials", credentialsObj)
 	}
 
-	fileObj := vm.NewObject()
-	fileObj.Set("download", r.fileDownload)
-	fileObj.Set("exists", r.fileExists)
-	fileObj.Set("delete", r.fileDelete)
-	fileObj.Set("read", r.fileRead)
-	fileObj.Set("readBytes", r.fileReadBytes)
-	fileObj.Set("write", r.fileWrite)
-	fileObj.Set("writeBytes", r.fileWriteBytes)
-	fileObj.Set("copy", r.fileCopy)
-	fileObj.Set("move", r.fileMove)
-	fileObj.Set("getSize", r.fileGetSize)
-	vm.Set("file", fileObj)
+	if r.manifest != nil && r.manifest.Permissions.Storage {
+		authObj := vm.NewObject()
+		authObj.Set("openAuthUrl", r.authOpenUrl)
+		authObj.Set("getAuthCode", r.authGetCode)
+		authObj.Set("setAuthCode", r.authSetCode)
+		authObj.Set("clearAuth", r.authClear)
+		authObj.Set("isAuthenticated", r.authIsAuthenticated)
+		authObj.Set("getTokens", r.authGetTokens)
+		authObj.Set("generatePKCE", r.authGeneratePKCE)
+		authObj.Set("getPKCE", r.authGetPKCE)
+		authObj.Set("startOAuthWithPKCE", r.authStartOAuthWithPKCE)
+		authObj.Set("exchangeCodeWithPKCE", r.authExchangeCodeWithPKCE)
+		vm.Set("auth", authObj)
 
-	ffmpegObj := vm.NewObject()
-	ffmpegObj.Set("execute", r.ffmpegExecute)
-	ffmpegObj.Set("getInfo", r.ffmpegGetInfo)
-	ffmpegObj.Set("convert", r.ffmpegConvert)
-	vm.Set("ffmpeg", ffmpegObj)
+		if r.manifest.SignedSession != nil {
+			sessionObj := vm.NewObject()
+			sessionObj.Set("signedFetch", r.signedSessionFetch)
+			sessionObj.Set("completeGrant", r.signedSessionCompleteGrant)
+			sessionObj.Set("status", r.signedSessionStatus)
+			sessionObj.Set("clear", r.signedSessionClear)
+			vm.Set("session", sessionObj)
+		}
+	}
+
+	if r.manifest != nil && r.manifest.Permissions.File {
+		fileObj := vm.NewObject()
+		fileObj.Set("download", r.fileDownload)
+		fileObj.Set("exists", r.fileExists)
+		fileObj.Set("delete", r.fileDelete)
+		fileObj.Set("read", r.fileRead)
+		fileObj.Set("readBytes", r.fileReadBytes)
+		fileObj.Set("write", r.fileWrite)
+		fileObj.Set("writeBytes", r.fileWriteBytes)
+		fileObj.Set("copy", r.fileCopy)
+		fileObj.Set("move", r.fileMove)
+		fileObj.Set("getSize", r.fileGetSize)
+		vm.Set("file", fileObj)
+
+		ffmpegObj := vm.NewObject()
+		if r.manifest.HasCapability("rawFfmpeg") {
+			ffmpegObj.Set("execute", r.ffmpegExecute)
+		}
+		ffmpegObj.Set("getInfo", r.ffmpegGetInfo)
+		ffmpegObj.Set("convert", r.ffmpegConvert)
+		vm.Set("ffmpeg", ffmpegObj)
+	}
 
 	matchingObj := vm.NewObject()
 	matchingObj.Set("compareStrings", r.matchingCompareStrings)

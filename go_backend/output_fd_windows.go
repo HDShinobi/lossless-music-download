@@ -8,22 +8,22 @@ func dupOutputFD(fd int) (int, error) {
 	return fd, nil
 }
 
-func truncateFD(fd int) error {
+func truncateFD(_ int) error {
 	return nil
 }
 
-func seekFDStart(fd int) error {
+func seekFDStart(_ int) error {
 	return nil
 }
 
-func closeFD(fd int) error {
+func closeFD(_ int) error {
 	return nil
 }
 
-func isBestEffortTruncateError(err error) bool {
+func isBestEffortTruncateError(_ error) bool {
 	return true
 }
 
-func isBadFD(err error) bool {
+func isBadFD(_ error) bool {
 	return false
 }

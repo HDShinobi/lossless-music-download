@@ -59,6 +59,18 @@ func initDownloadCancel(itemID string) context.Context {
 	return ctx
 }
 
+func downloadCancelContext(itemID string) context.Context {
+	if itemID == "" {
+		return context.Background()
+	}
+	cancelMu.Lock()
+	defer cancelMu.Unlock()
+	if entry, ok := cancelMap[itemID]; ok && entry.ctx != nil {
+		return entry.ctx
+	}
+	return context.Background()
+}
+
 func cancelDownload(itemID string) {
 	if itemID == "" {
 		return
@@ -89,6 +101,22 @@ func isDownloadCancelled(itemID string) bool {
 	canceled := ok && entry.canceled
 	cancelMu.Unlock()
 	return canceled
+}
+
+// resetDownloadCancel removes a cancellation entry that has no active
+// download attached (refs <= 0). Such entries exist to catch an item that is
+// just about to start, but if the item never starts the flag lingers and the
+// next explicit retry would consume it and abort immediately.
+func resetDownloadCancel(itemID string) {
+	if itemID == "" {
+		return
+	}
+
+	cancelMu.Lock()
+	if entry, ok := cancelMap[itemID]; ok && entry.refs <= 0 {
+		delete(cancelMap, itemID)
+	}
+	cancelMu.Unlock()
 }
 
 func clearDownloadCancel(itemID string) {
@@ -135,6 +163,18 @@ func initExtensionRequestCancel(requestID string) context.Context {
 		refs:     1,
 	}
 	return ctx
+}
+
+func extensionRequestCancelContext(requestID string) context.Context {
+	if requestID == "" {
+		return context.Background()
+	}
+	extensionRequestCancelMu.Lock()
+	defer extensionRequestCancelMu.Unlock()
+	if entry, ok := extensionRequestCancelMap[requestID]; ok && entry.ctx != nil {
+		return entry.ctx
+	}
+	return context.Background()
 }
 
 func cancelExtensionRequest(requestID string) {

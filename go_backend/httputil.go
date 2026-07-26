@@ -1,6 +1,7 @@
 package gobackend
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -63,16 +64,27 @@ var (
 	networkCompatibilityOptions NetworkCompatibilityOptions
 )
 
+var transportDialer = &net.Dialer{
+	Timeout:   10 * time.Second,
+	KeepAlive: 30 * time.Second,
+}
+
+func transportDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	return dialWithDoHFallback(ctx, transportDialer, network, addr)
+}
+
 var sharedTransport = &http.Transport{
-	DialContext: (&net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}).DialContext,
-	MaxIdleConns:          100,
-	MaxIdleConnsPerHost:   10,
-	MaxConnsPerHost:       20,
-	IdleConnTimeout:       90 * time.Second,
-	TLSHandshakeTimeout:   10 * time.Second,
+	DialContext:         transportDialContext,
+	MaxIdleConns:        100,
+	MaxIdleConnsPerHost: 10,
+	MaxConnsPerHost:     20,
+	IdleConnTimeout:     60 * time.Second,
+	TLSHandshakeTimeout: 10 * time.Second,
+	// Downloads ride this transport; some extension providers prepare the
+	// file server-side before the first byte, so give TTFB more headroom
+	// than the API/metadata transports. The 60s stall watchdog still bounds
+	// dead transfers.
+	ResponseHeaderTimeout: 120 * time.Second,
 	ExpectContinueTimeout: 1 * time.Second,
 	DisableKeepAlives:     false,
 	ForceAttemptHTTP2:     true,
@@ -83,15 +95,13 @@ var sharedTransport = &http.Transport{
 }
 
 var extensionAPITransport = &http.Transport{
-	DialContext: (&net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}).DialContext,
+	DialContext:           transportDialContext,
 	MaxIdleConns:          100,
 	MaxIdleConnsPerHost:   10,
 	MaxConnsPerHost:       20,
-	IdleConnTimeout:       90 * time.Second,
+	IdleConnTimeout:       60 * time.Second,
 	TLSHandshakeTimeout:   10 * time.Second,
+	ResponseHeaderTimeout: 45 * time.Second,
 	ExpectContinueTimeout: 1 * time.Second,
 	DisableKeepAlives:     false,
 	ForceAttemptHTTP2:     true,
@@ -102,32 +112,27 @@ var extensionAPITransport = &http.Transport{
 }
 
 var metadataTransport = &http.Transport{
-	DialContext: (&net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}).DialContext,
+	DialContext:           transportDialContext,
 	MaxIdleConns:          30,
 	MaxIdleConnsPerHost:   5,
 	MaxConnsPerHost:       10,
-	IdleConnTimeout:       90 * time.Second,
+	IdleConnTimeout:       60 * time.Second,
 	TLSHandshakeTimeout:   10 * time.Second,
+	ResponseHeaderTimeout: 45 * time.Second,
 	ExpectContinueTimeout: 1 * time.Second,
 	DisableKeepAlives:     false,
 	ForceAttemptHTTP2:     true,
 	WriteBufferSize:       32 * 1024,
 	ReadBufferSize:        32 * 1024,
-	DisableCompression:    true,
+	// Metadata responses are JSON; transparent gzip cuts transfer size several
+	// times over. Downloads stay on sharedTransport with compression disabled.
+	DisableCompression:    false,
 	TLSClientConfig:       newTLSCompatibilityConfig(false),
 }
 
 var sharedClient = &http.Client{
 	Transport: newCompatibilityTransport(sharedTransport),
 	Timeout:   DefaultTimeout,
-}
-
-var downloadClient = &http.Client{
-	Transport: newCompatibilityTransport(sharedTransport),
-	Timeout:   DownloadTimeout,
 }
 
 func NewHTTPClientWithTimeout(timeout time.Duration) *http.Client {
@@ -144,18 +149,11 @@ func NewMetadataHTTPClient(timeout time.Duration) *http.Client {
 	}
 }
 
-func GetSharedClient() *http.Client {
-	return sharedClient
-}
-
-func GetDownloadClient() *http.Client {
-	return downloadClient
-}
-
 func CloseIdleConnections() {
 	sharedTransport.CloseIdleConnections()
 	extensionAPITransport.CloseIdleConnections()
 	metadataTransport.CloseIdleConnections()
+	closeUTLSIdleConnections()
 }
 
 func SetNetworkCompatibilityOptions(allowHTTP, insecureTLS bool) {
@@ -289,14 +287,16 @@ func DoRequestWithRetry(client *http.Client, req *http.Request, config RetryConf
 		if err != nil {
 			lastErr = err
 
-			if CheckAndLogISPBlocking(err, reqCopy.URL.String(), "HTTP") {
+			if isHardConnectivityBlock(err) {
 				return nil, WrapErrorWithISPCheck(err, reqCopy.URL.String(), "HTTP")
 			}
 
 			if attempt < config.MaxRetries {
 				GoLog("[HTTP] Request failed (attempt %d/%d): %v, retrying in %v...\n",
 					attempt+1, config.MaxRetries+1, err, delay)
-				time.Sleep(delay)
+				if err := sleepRetry(req.Context(), delay); err != nil {
+					return nil, err
+				}
 				delay = calculateNextDelay(delay, config)
 			}
 			continue
@@ -315,7 +315,9 @@ func DoRequestWithRetry(client *http.Client, req *http.Request, config RetryConf
 			lastErr = fmt.Errorf("rate limited (429)")
 			if attempt < config.MaxRetries {
 				GoLog("[HTTP] Rate limited, waiting %v before retry...\n", delay)
-				time.Sleep(delay)
+				if err := sleepRetry(req.Context(), delay); err != nil {
+					return nil, err
+				}
 				delay = calculateNextDelay(delay, config)
 			}
 			continue
@@ -340,14 +342,23 @@ func DoRequestWithRetry(client *http.Client, req *http.Request, config RetryConf
 					return nil, fmt.Errorf("ISP blocking detected for %s (HTTP %d) - try using VPN or change DNS", req.URL.Host, resp.StatusCode)
 				}
 			}
+
+			// No blocking marker: hand the caller back a readable body in
+			// place of the one consumed by the scan above.
+			resp.Body = io.NopCloser(bytes.NewReader(body))
 		}
 
 		if resp.StatusCode >= 500 {
 			resp.Body.Close()
+			if retryAfter := getRetryAfterDuration(resp); retryAfter > 0 {
+				delay = retryAfter
+			}
 			lastErr = fmt.Errorf("server error: HTTP %d", resp.StatusCode)
 			if attempt < config.MaxRetries {
 				GoLog("[HTTP] Server error %d, retrying in %v...\n", resp.StatusCode, delay)
-				time.Sleep(delay)
+				if err := sleepRetry(req.Context(), delay); err != nil {
+					return nil, err
+				}
 				delay = calculateNextDelay(delay, config)
 			}
 			continue
@@ -359,10 +370,38 @@ func DoRequestWithRetry(client *http.Client, req *http.Request, config RetryConf
 	return nil, fmt.Errorf("request failed after %d retries: %w", config.MaxRetries+1, lastErr)
 }
 
+// sleepRetry waits out a retry delay, aborting early when the request context
+// is cancelled so a cancelled download never sits in a backoff sleep.
+func sleepRetry(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+// jitterFloat returns a fraction in [0,1); overridable in tests for
+// deterministic backoff assertions.
+var jitterFloat = rand.Float64
+
 func calculateNextDelay(currentDelay time.Duration, config RetryConfig) time.Duration {
 	nextDelay := time.Duration(float64(currentDelay) * config.BackoffFactor)
-	return min(nextDelay, config.MaxDelay)
+	capped := min(nextDelay, config.MaxDelay)
+	// Full jitter: spread retries between InitialDelay and the capped
+	// exponential ceiling to avoid synchronized thundering-herd retries.
+	if capped <= config.InitialDelay {
+		return capped
+	}
+	span := capped - config.InitialDelay
+	return config.InitialDelay + time.Duration(jitterFloat()*float64(span))
 }
+
+// maxRetryAfterDelay caps honored Retry-After values so a hostile or
+// misconfigured server cannot park a retry loop for an hour.
+const maxRetryAfterDelay = 2 * time.Minute
 
 // Returns 0 if the header is missing or invalid so callers can keep their
 // normal exponential backoff instead of stalling for an arbitrary minute.
@@ -373,13 +412,13 @@ func getRetryAfterDuration(resp *http.Response) time.Duration {
 	}
 
 	if seconds, err := strconv.Atoi(retryAfter); err == nil {
-		return time.Duration(seconds) * time.Second
+		return min(time.Duration(seconds)*time.Second, maxRetryAfterDelay)
 	}
 
 	if t, err := http.ParseTime(retryAfter); err == nil {
 		duration := time.Until(t)
 		if duration > 0 {
-			return duration
+			return min(duration, maxRetryAfterDelay)
 		}
 	}
 
@@ -401,32 +440,6 @@ func ReadResponseBody(resp *http.Response) ([]byte, error) {
 	}
 
 	return body, nil
-}
-
-func ValidateResponse(resp *http.Response) error {
-	if resp == nil {
-		return fmt.Errorf("response is nil")
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
-	}
-
-	return nil
-}
-
-func BuildErrorMessage(apiURL string, statusCode int, responsePreview string) string {
-	msg := fmt.Sprintf("API %s failed", apiURL)
-	if statusCode > 0 {
-		msg += fmt.Sprintf(" (HTTP %d)", statusCode)
-	}
-	if responsePreview != "" {
-		if len(responsePreview) > 100 {
-			responsePreview = responsePreview[:100] + "..."
-		}
-		msg += fmt.Sprintf(": %s", responsePreview)
-	}
-	return msg
 }
 
 type ISPBlockingError struct {
@@ -561,6 +574,42 @@ func isTLSHandshakeOrResetError(err error) bool {
 		}
 	}
 	return false
+}
+
+// isHardConnectivityBlock reports transport failures that signal an active
+// block (DNS not found, connection refused/reset, TLS/cert MITM) and should
+// abort retries immediately. Timeouts and deadline-exceeded are treated as
+// transient and excluded so they fall through to normal retry backoff.
+func isHardConnectivityBlock(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) && urlErr.Timeout() {
+		return false
+	}
+
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return dnsErr.IsNotFound
+	}
+
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		if opErr.Timeout() {
+			return false
+		}
+		var errno syscall.Errno
+		if errors.As(opErr.Err, &errno) {
+			switch errno {
+			case syscall.ECONNREFUSED, syscall.ECONNRESET:
+				return true
+			}
+		}
+	}
+
+	return isTLSHandshakeOrResetError(err)
 }
 
 func IsISPBlocking(err error, requestURL string) *ISPBlockingError {

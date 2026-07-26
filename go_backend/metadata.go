@@ -200,18 +200,37 @@ type Metadata struct {
 	ReplayGainAlbumPeak string // e.g. "1.000000"
 }
 
-func EmbedMetadata(filePath string, metadata Metadata, coverPath string) error {
-	f, err := flac.ParseFile(filePath)
+// parseFlacFile wraps flac.ParseFile but closes the file handle when parsing
+// fails. flac.ParseFile leaks the *os.File on parse errors (no reference is
+// returned to close it), which on Windows keeps the file locked until GC.
+// Callers must Close() the returned file when done reading; File.Save also
+// closes the underlying handle, and a second Close afterwards is harmless.
+func parseFlacFile(filePath string) (*flac.File, error) {
+	handle, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	f, err := flac.ParseBytes(flac.NewBufIOWithInner(handle))
+	if err != nil {
+		handle.Close()
+		return nil, err
+	}
+	return f, nil
+}
+
+// updateFlacVorbis parses a FLAC file, hands the parsed file and its Vorbis
+// comment block (created if absent) to mutate, then marshals the block back
+// into the file and saves it. Shared scaffold for all FLAC tag writers.
+func updateFlacVorbis(filePath string, mutate func(f *flac.File, cmt *flacvorbis.MetaDataBlockVorbisComment) error) error {
+	f, err := parseFlacFile(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to parse FLAC file: %w", err)
 	}
+	defer f.Close()
 
-	var cmtIdx int = -1
 	var cmt *flacvorbis.MetaDataBlockVorbisComment
-
-	for idx, meta := range f.Meta {
+	for _, meta := range f.Meta {
 		if meta.Type == flac.VorbisComment {
-			cmtIdx = idx
 			cmt, err = flacvorbis.ParseFromMetaDataBlock(*meta)
 			if err != nil {
 				return fmt.Errorf("failed to parse vorbis comment: %w", err)
@@ -219,106 +238,95 @@ func EmbedMetadata(filePath string, metadata Metadata, coverPath string) error {
 			break
 		}
 	}
-
 	if cmt == nil {
 		cmt = flacvorbis.New()
 	}
 
-	writeVorbisMetadata(cmt, metadata)
+	if err := mutate(f, cmt); err != nil {
+		return err
+	}
 
+	// Re-scan for the block index: mutate may have removed blocks.
 	cmtBlock := cmt.Marshal()
-	if cmtIdx >= 0 {
-		f.Meta[cmtIdx] = &cmtBlock
-	} else {
+	replaced := false
+	for idx, meta := range f.Meta {
+		if meta.Type == flac.VorbisComment {
+			f.Meta[idx] = &cmtBlock
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
 		f.Meta = append(f.Meta, &cmtBlock)
 	}
 
-	if coverPath != "" {
-		if fileExists(coverPath) {
-			coverData, err := os.ReadFile(coverPath)
-			if err != nil {
-				fmt.Printf("[Metadata] Warning: Failed to read cover file %s: %v\n", coverPath, err)
-			} else {
-				for i := len(f.Meta) - 1; i >= 0; i-- {
-					if f.Meta[i].Type == flac.Picture {
-						f.Meta = append(f.Meta[:i], f.Meta[i+1:]...)
-					}
-				}
+	return saveFlacFile(f, filePath)
+}
 
-				picBlock, err := buildPictureBlock(coverPath, coverData)
-				if err != nil {
-					fmt.Printf("[Metadata] Warning: skipping cover art: %v\n", err)
-				} else {
-					f.Meta = append(f.Meta, &picBlock)
-					fmt.Printf("[Metadata] Cover art embedded successfully (%d bytes)\n", len(coverData))
-				}
-			}
-		} else {
-			fmt.Printf("[Metadata] Warning: Cover file does not exist: %s\n", coverPath)
+// replaceFlacPictures strips all Picture blocks and appends a new front cover
+// built from coverData. On error the pictures stay removed and no cover is added.
+func replaceFlacPictures(f *flac.File, coverPath string, coverData []byte) error {
+	for i := len(f.Meta) - 1; i >= 0; i-- {
+		if f.Meta[i].Type == flac.Picture {
+			f.Meta = append(f.Meta[:i], f.Meta[i+1:]...)
 		}
 	}
 
-	return f.Save(filePath)
+	picBlock, err := buildPictureBlock(coverPath, coverData)
+	if err != nil {
+		return err
+	}
+	f.Meta = append(f.Meta, &picBlock)
+	return nil
+}
+
+func EmbedMetadata(filePath string, metadata Metadata, coverPath string) error {
+	return updateFlacVorbis(filePath, func(f *flac.File, cmt *flacvorbis.MetaDataBlockVorbisComment) error {
+		writeVorbisMetadata(cmt, metadata)
+
+		if coverPath != "" {
+			if fileExists(coverPath) {
+				coverData, err := os.ReadFile(coverPath)
+				if err != nil {
+					fmt.Printf("[Metadata] Warning: Failed to read cover file %s: %v\n", coverPath, err)
+				} else if err := replaceFlacPictures(f, coverPath, coverData); err != nil {
+					fmt.Printf("[Metadata] Warning: skipping cover art: %v\n", err)
+				} else {
+					fmt.Printf("[Metadata] Cover art embedded successfully (%d bytes)\n", len(coverData))
+				}
+			} else {
+				fmt.Printf("[Metadata] Warning: Cover file does not exist: %s\n", coverPath)
+			}
+		}
+		return nil
+	})
 }
 
 func EmbedMetadataWithCoverData(filePath string, metadata Metadata, coverData []byte) error {
-	f, err := flac.ParseFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to parse FLAC file: %w", err)
-	}
+	return updateFlacVorbis(filePath, func(f *flac.File, cmt *flacvorbis.MetaDataBlockVorbisComment) error {
+		writeVorbisMetadata(cmt, metadata)
 
-	var cmtIdx int = -1
-	var cmt *flacvorbis.MetaDataBlockVorbisComment
-
-	for idx, meta := range f.Meta {
-		if meta.Type == flac.VorbisComment {
-			cmtIdx = idx
-			cmt, err = flacvorbis.ParseFromMetaDataBlock(*meta)
-			if err != nil {
-				return fmt.Errorf("failed to parse vorbis comment: %w", err)
-			}
-			break
-		}
-	}
-
-	if cmt == nil {
-		cmt = flacvorbis.New()
-	}
-
-	writeVorbisMetadata(cmt, metadata)
-
-	cmtBlock := cmt.Marshal()
-	if cmtIdx >= 0 {
-		f.Meta[cmtIdx] = &cmtBlock
-	} else {
-		f.Meta = append(f.Meta, &cmtBlock)
-	}
-
-	if len(coverData) > 0 {
-		for i := len(f.Meta) - 1; i >= 0; i-- {
-			if f.Meta[i].Type == flac.Picture {
-				f.Meta = append(f.Meta[:i], f.Meta[i+1:]...)
+		if len(coverData) > 0 {
+			if err := replaceFlacPictures(f, "", coverData); err != nil {
+				fmt.Printf("[Metadata] Warning: skipping cover art: %v\n", err)
+			} else {
+				fmt.Printf("[Metadata] Cover art embedded successfully (%d bytes)\n", len(coverData))
 			}
 		}
-
-		picBlock, err := buildPictureBlock("", coverData)
-		if err != nil {
-			fmt.Printf("[Metadata] Warning: skipping cover art: %v\n", err)
-		} else {
-			f.Meta = append(f.Meta, &picBlock)
-			fmt.Printf("[Metadata] Cover art embedded successfully (%d bytes)\n", len(coverData))
-		}
-	}
-
-	return f.Save(filePath)
+		return nil
+	})
 }
 
 func ReadMetadata(filePath string) (*Metadata, error) {
-	f, err := flac.ParseFile(filePath)
+	f, err := parseFlacFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse FLAC file: %w", err)
 	}
+	defer f.Close()
+	return metadataFromParsedFlac(f), nil
+}
 
+func metadataFromParsedFlac(f *flac.File) *Metadata {
 	metadata := &Metadata{}
 
 	for _, meta := range f.Meta {
@@ -394,7 +402,7 @@ func ReadMetadata(filePath string) (*Metadata, error) {
 		}
 	}
 
-	return metadata, nil
+	return metadata
 }
 
 // EditFlacFields opens a FLAC file and updates only the Vorbis Comment keys
@@ -403,28 +411,23 @@ func ReadMetadata(filePath string) (*Metadata, error) {
 // absent from the map are left untouched.  This is the correct function for
 // partial edits (e.g. writing only ReplayGain tags) and full editor saves alike.
 func EditFlacFields(filePath string, fields map[string]string) error {
-	f, err := flac.ParseFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to parse FLAC file: %w", err)
-	}
+	return updateFlacVorbis(filePath, func(f *flac.File, cmt *flacvorbis.MetaDataBlockVorbisComment) error {
+		applyVorbisFieldEdits(cmt, fields)
 
-	var cmtIdx int = -1
-	var cmt *flacvorbis.MetaDataBlockVorbisComment
-
-	for idx, meta := range f.Meta {
-		if meta.Type == flac.VorbisComment {
-			cmtIdx = idx
-			cmt, err = flacvorbis.ParseFromMetaDataBlock(*meta)
-			if err != nil {
-				return fmt.Errorf("failed to parse vorbis comment: %w", err)
+		coverPath := strings.TrimSpace(fields["cover_path"])
+		if coverPath != "" && fileExists(coverPath) {
+			if coverData, err := os.ReadFile(coverPath); err == nil && len(coverData) > 0 {
+				_ = replaceFlacPictures(f, "", coverData)
 			}
-			break
 		}
-	}
-	if cmt == nil {
-		cmt = flacvorbis.New()
-	}
+		return nil
+	})
+}
 
+// applyVorbisFieldEdits applies the editor's set-or-clear field semantics to a
+// Vorbis comment block. Shared by the FLAC and Ogg/Opus editors so both
+// formats interpret the fields map identically.
+func applyVorbisFieldEdits(cmt *flacvorbis.MetaDataBlockVorbisComment, fields map[string]string) {
 	artistMode := fields["artist_tag_mode"]
 
 	// Mapping from fields-map key → one or more Vorbis Comment keys.
@@ -528,31 +531,6 @@ func EditFlacFields(filePath string, fields map[string]string) error {
 			removeCommentKey(cmt, "UNSYNCEDLYRICS")
 		}
 	}
-
-	cmtBlock := cmt.Marshal()
-	if cmtIdx >= 0 {
-		f.Meta[cmtIdx] = &cmtBlock
-	} else {
-		f.Meta = append(f.Meta, &cmtBlock)
-	}
-
-	coverPath := strings.TrimSpace(fields["cover_path"])
-	if coverPath != "" && fileExists(coverPath) {
-		coverData, err := os.ReadFile(coverPath)
-		if err == nil && len(coverData) > 0 {
-			for i := len(f.Meta) - 1; i >= 0; i-- {
-				if f.Meta[i].Type == flac.Picture {
-					f.Meta = append(f.Meta[:i], f.Meta[i+1:]...)
-				}
-			}
-			picBlock, err := buildPictureBlock("", coverData)
-			if err == nil {
-				f.Meta = append(f.Meta, &picBlock)
-			}
-		}
-	}
-
-	return f.Save(filePath)
 }
 
 // writeVorbisMetadata writes all metadata fields to a Vorbis Comment block.
@@ -682,44 +660,11 @@ func setOrClearArtistComments(cmt *flacvorbis.MetaDataBlockVorbisComment, key, v
 // the last value survives when multiple -metadata ARTIST=X flags are used.
 // The native go-flac writer correctly handles multiple Vorbis comments.
 func RewriteSplitArtistTags(filePath, artist, albumArtist string) error {
-	if !shouldSplitVorbisArtistTags(artistTagModeSplitVorbis) {
+	return updateFlacVorbis(filePath, func(_ *flac.File, cmt *flacvorbis.MetaDataBlockVorbisComment) error {
+		setArtistComments(cmt, "ARTIST", artist, artistTagModeSplitVorbis)
+		setArtistComments(cmt, "ALBUMARTIST", albumArtist, artistTagModeSplitVorbis)
 		return nil
-	}
-
-	f, err := flac.ParseFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to parse FLAC file: %w", err)
-	}
-
-	var cmtIdx int = -1
-	var cmt *flacvorbis.MetaDataBlockVorbisComment
-
-	for idx, meta := range f.Meta {
-		if meta.Type == flac.VorbisComment {
-			cmtIdx = idx
-			cmt, err = flacvorbis.ParseFromMetaDataBlock(*meta)
-			if err != nil {
-				return fmt.Errorf("failed to parse vorbis comment: %w", err)
-			}
-			break
-		}
-	}
-
-	if cmt == nil {
-		cmt = flacvorbis.New()
-	}
-
-	setArtistComments(cmt, "ARTIST", artist, artistTagModeSplitVorbis)
-	setArtistComments(cmt, "ALBUMARTIST", albumArtist, artistTagModeSplitVorbis)
-
-	cmtMeta := cmt.Marshal()
-	if cmtIdx >= 0 {
-		f.Meta[cmtIdx] = &cmtMeta
-	} else {
-		f.Meta = append(f.Meta, &cmtMeta)
-	}
-
-	return f.Save(filePath)
+	})
 }
 
 func removeCommentKey(cmt *flacvorbis.MetaDataBlockVorbisComment, key string) {
@@ -816,16 +761,19 @@ func joinVorbisCommentValues(values []string) string {
 }
 
 func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
+	return CheckFileExists(path)
 }
 
 func ExtractCoverArt(filePath string) ([]byte, error) {
-	f, err := flac.ParseFile(filePath)
+	f, err := parseFlacFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse FLAC file: %w", err)
 	}
+	defer f.Close()
+	return coverArtFromParsedFlac(f)
+}
 
+func coverArtFromParsedFlac(f *flac.File) ([]byte, error) {
 	for _, meta := range f.Meta {
 		if meta.Type == flac.Picture {
 			pic, err := flacpicture.ParseFromMetaDataBlock(*meta)
@@ -854,85 +802,11 @@ func ExtractCoverArt(filePath string) ([]byte, error) {
 }
 
 func EmbedLyrics(filePath string, lyrics string) error {
-	f, err := flac.ParseFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to parse FLAC file: %w", err)
-	}
-
-	var cmtIdx int = -1
-	var cmt *flacvorbis.MetaDataBlockVorbisComment
-
-	for idx, meta := range f.Meta {
-		if meta.Type == flac.VorbisComment {
-			cmtIdx = idx
-			cmt, err = flacvorbis.ParseFromMetaDataBlock(*meta)
-			if err != nil {
-				return fmt.Errorf("failed to parse vorbis comment: %w", err)
-			}
-			break
-		}
-	}
-
-	if cmt == nil {
-		cmt = flacvorbis.New()
-	}
-
-	setComment(cmt, "LYRICS", lyrics)
-	setComment(cmt, "UNSYNCEDLYRICS", lyrics)
-
-	cmtBlock := cmt.Marshal()
-	if cmtIdx >= 0 {
-		f.Meta[cmtIdx] = &cmtBlock
-	} else {
-		f.Meta = append(f.Meta, &cmtBlock)
-	}
-
-	return f.Save(filePath)
-}
-
-func EmbedGenreLabel(filePath string, genre, label string) error {
-	if genre == "" && label == "" {
+	return updateFlacVorbis(filePath, func(_ *flac.File, cmt *flacvorbis.MetaDataBlockVorbisComment) error {
+		setComment(cmt, "LYRICS", lyrics)
+		setComment(cmt, "UNSYNCEDLYRICS", lyrics)
 		return nil
-	}
-
-	f, err := flac.ParseFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to parse FLAC file: %w", err)
-	}
-
-	var cmtIdx int = -1
-	var cmt *flacvorbis.MetaDataBlockVorbisComment
-
-	for idx, meta := range f.Meta {
-		if meta.Type == flac.VorbisComment {
-			cmtIdx = idx
-			cmt, err = flacvorbis.ParseFromMetaDataBlock(*meta)
-			if err != nil {
-				return fmt.Errorf("failed to parse vorbis comment: %w", err)
-			}
-			break
-		}
-	}
-
-	if cmt == nil {
-		cmt = flacvorbis.New()
-	}
-
-	if genre != "" {
-		setComment(cmt, "GENRE", genre)
-	}
-	if label != "" {
-		setComment(cmt, "ORGANIZATION", label)
-	}
-
-	cmtBlock := cmt.Marshal()
-	if cmtIdx >= 0 {
-		f.Meta[cmtIdx] = &cmtBlock
-	} else {
-		f.Meta = append(f.Meta, &cmtBlock)
-	}
-
-	return f.Save(filePath)
+	})
 }
 
 func ExtractLyrics(filePath string) (string, error) {
@@ -1025,12 +899,15 @@ func ReadM4ATags(filePath string) (*AudioMetadata, error) {
 	if err != nil {
 		return nil, err
 	}
+	return readM4ATagsFromIlst(f, fi.Size(), ilst)
+}
 
+func readM4ATagsFromIlst(f *os.File, fileSize int64, ilst atomHeader) (*AudioMetadata, error) {
 	metadata := &AudioMetadata{}
 	start := ilst.offset + ilst.headerSize
 	end := ilst.offset + ilst.size
 	for pos := start; pos+8 <= end; {
-		header, err := readAtomHeaderAt(f, pos, fi.Size())
+		header, err := readAtomHeaderAt(f, pos, fileSize)
 		if err != nil {
 			return nil, err
 		}
@@ -1043,32 +920,32 @@ func ReadM4ATags(filePath string) (*AudioMetadata, error) {
 
 		switch header.typ {
 		case "\xa9nam":
-			metadata.Title, _ = readM4ATextValue(f, header, fi.Size())
+			metadata.Title, _ = readM4ATextValue(f, header, fileSize)
 		case "\xa9ART":
-			metadata.Artist, _ = readM4ATextValue(f, header, fi.Size())
+			metadata.Artist, _ = readM4ATextValue(f, header, fileSize)
 		case "\xa9alb":
-			metadata.Album, _ = readM4ATextValue(f, header, fi.Size())
+			metadata.Album, _ = readM4ATextValue(f, header, fileSize)
 		case "aART":
-			metadata.AlbumArtist, _ = readM4ATextValue(f, header, fi.Size())
+			metadata.AlbumArtist, _ = readM4ATextValue(f, header, fileSize)
 		case "\xa9day":
-			metadata.Date, _ = readM4ATextValue(f, header, fi.Size())
+			metadata.Date, _ = readM4ATextValue(f, header, fileSize)
 			metadata.Year = metadata.Date
 		case "\xa9gen":
-			metadata.Genre, _ = readM4ATextValue(f, header, fi.Size())
+			metadata.Genre, _ = readM4ATextValue(f, header, fileSize)
 		case "\xa9wrt":
-			metadata.Composer, _ = readM4ATextValue(f, header, fi.Size())
+			metadata.Composer, _ = readM4ATextValue(f, header, fileSize)
 		case "\xa9cmt":
-			metadata.Comment, _ = readM4ATextValue(f, header, fi.Size())
+			metadata.Comment, _ = readM4ATextValue(f, header, fileSize)
 		case "cprt":
-			metadata.Copyright, _ = readM4ATextValue(f, header, fi.Size())
+			metadata.Copyright, _ = readM4ATextValue(f, header, fileSize)
 		case "\xa9lyr":
-			metadata.Lyrics, _ = readM4ATextValue(f, header, fi.Size())
+			metadata.Lyrics, _ = readM4ATextValue(f, header, fileSize)
 		case "trkn":
-			metadata.TrackNumber, metadata.TotalTracks, _ = readM4AIndexPair(f, header, fi.Size())
+			metadata.TrackNumber, metadata.TotalTracks, _ = readM4AIndexPair(f, header, fileSize)
 		case "disk":
-			metadata.DiscNumber, metadata.TotalDiscs, _ = readM4AIndexPair(f, header, fi.Size())
+			metadata.DiscNumber, metadata.TotalDiscs, _ = readM4AIndexPair(f, header, fileSize)
 		case "----":
-			name, value, freeformErr := readM4AFreeformValue(f, header, fi.Size())
+			name, value, freeformErr := readM4AFreeformValue(f, header, fileSize)
 			if freeformErr == nil {
 				switch strings.ToUpper(strings.TrimSpace(name)) {
 				case "ISRC":
@@ -1147,7 +1024,10 @@ func extractCoverFromM4A(filePath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return extractCoverFromM4AIlst(f, fileSize, ilst)
+}
 
+func extractCoverFromM4AIlst(f *os.File, fileSize int64, ilst atomHeader) ([]byte, error) {
 	bodyStart := ilst.offset + ilst.headerSize
 	bodySize := ilst.size - ilst.headerSize
 
@@ -1448,8 +1328,10 @@ func buildITunNORMTag(trackGain, trackPeak string) string {
 	return strings.Join(parts, " ")
 }
 
+var replayGainNumberPattern = regexp.MustCompile(`([+-]?\d+(?:\.\d+)?)`)
+
 func parseReplayGainDb(value string) (float64, bool) {
-	match := regexp.MustCompile(`([+-]?\d+(?:\.\d+)?)`).FindStringSubmatch(strings.TrimSpace(value))
+	match := replayGainNumberPattern.FindStringSubmatch(strings.TrimSpace(value))
 	if len(match) < 2 {
 		return 0, false
 	}
@@ -1586,8 +1468,10 @@ func writeM4AFreeformTags(filePath string, remove map[string]struct{}, tags []m4
 		return err
 	}
 
-	data, err := os.ReadFile(filePath)
-	if err != nil {
+	// Only the moov box is buffered; the audio bulk is streamed on write.
+	base := path.moov.offset
+	moovBuf := make([]byte, path.moov.size)
+	if _, err := f.ReadAt(moovBuf, base); err != nil {
 		return err
 	}
 
@@ -1617,7 +1501,7 @@ func writeM4AFreeformTags(filePath string, remove map[string]struct{}, tags []m4
 			}
 		}
 		if keep {
-			newBody = append(newBody, data[pos:pos+header.size]...)
+			newBody = append(newBody, moovBuf[pos-base:pos-base+header.size]...)
 		}
 
 		pos += header.size
@@ -1631,27 +1515,46 @@ func writeM4AFreeformTags(filePath string, remove map[string]struct{}, tags []m4
 	}
 
 	newIlst := buildM4AAtom("ilst", newBody)
-	updated := append([]byte{}, data[:path.ilst.offset]...)
+	ilstRel := path.ilst.offset - base
+	updated := append([]byte{}, moovBuf[:ilstRel]...)
 	updated = append(updated, newIlst...)
-	updated = append(updated, data[path.ilst.offset+path.ilst.size:]...)
+	updated = append(updated, moovBuf[ilstRel+path.ilst.size:]...)
 
+	// The path headers carry absolute file offsets; rebase them onto the
+	// moov-rooted buffer before patching sizes.
+	rel := func(h atomHeader) atomHeader {
+		h.offset -= base
+		return h
+	}
 	delta := int64(len(newIlst)) - path.ilst.size
-	if err := writeAtomSize(updated, path.ilst, path.ilst.size+delta); err != nil {
+	if err := writeAtomSize(updated, rel(path.ilst), path.ilst.size+delta); err != nil {
 		return err
 	}
-	if err := writeAtomSize(updated, path.meta, path.meta.size+delta); err != nil {
+	if err := writeAtomSize(updated, rel(path.meta), path.meta.size+delta); err != nil {
 		return err
 	}
 	if path.udta != nil {
-		if err := writeAtomSize(updated, *path.udta, path.udta.size+delta); err != nil {
+		if err := writeAtomSize(updated, rel(*path.udta), path.udta.size+delta); err != nil {
 			return err
 		}
 	}
-	if err := writeAtomSize(updated, path.moov, path.moov.size+delta); err != nil {
+	if err := writeAtomSize(updated, rel(path.moov), path.moov.size+delta); err != nil {
 		return err
 	}
+	// Keep sample pointers valid when moov precedes mdat: every stco/co64
+	// entry at or beyond the resized ilst must shift with it. Entries hold
+	// absolute file offsets, so compare against the absolute ilst position.
+	if delta != 0 {
+		if moov, ok := findChildMP4(updated, 0, int64(len(updated)), "moov"); ok {
+			shiftChunkOffsets(updated, moov, path.ilst.offset, delta)
+		}
+	}
 
-	return os.WriteFile(filePath, updated, 0o644)
+	// Release the read handle before replacing the file (required on Windows).
+	f.Close()
+	return replaceFileSectionsStreaming(filePath, []fileSection{
+		{start: base, end: base + path.moov.size, data: updated},
+	})
 }
 
 // EditM4AFreeformText writes ISRC and label tags into an M4A/MP4 file as iTunes
@@ -1701,10 +1604,11 @@ func extractLyricsFromSidecarLRC(filePath string) (string, error) {
 }
 
 func extractLyricsFromFlac(filePath string) (string, error) {
-	f, err := flac.ParseFile(filePath)
+	f, err := parseFlacFile(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse FLAC file: %w", err)
 	}
+	defer f.Close()
 
 	for _, meta := range f.Meta {
 		if meta.Type != flac.VorbisComment {
@@ -1755,6 +1659,34 @@ type AudioQuality struct {
 	Duration     int    `json:"duration"`
 	Bitrate      int    `json:"bitrate,omitempty"` // kbps, estimated for compressed MP4-family streams
 	Codec        string `json:"codec,omitempty"`
+}
+
+func audioQualityFromParsedFlac(f *flac.File) (AudioQuality, error) {
+	for _, meta := range f.Meta {
+		if meta.Type != flac.StreamInfo || len(meta.Data) < 18 {
+			continue
+		}
+		streamInfo := meta.Data
+		sampleRate := (int(streamInfo[10]) << 12) | (int(streamInfo[11]) << 4) | (int(streamInfo[12]) >> 4)
+		bitsPerSample := ((int(streamInfo[12]) & 0x01) << 4) | (int(streamInfo[13]) >> 4) + 1
+		totalSamples := int64(streamInfo[13]&0x0F)<<32 |
+			int64(streamInfo[14])<<24 |
+			int64(streamInfo[15])<<16 |
+			int64(streamInfo[16])<<8 |
+			int64(streamInfo[17])
+		duration := 0
+		if sampleRate > 0 && totalSamples > 0 {
+			duration = int(totalSamples / int64(sampleRate))
+		}
+		return AudioQuality{
+			BitDepth:     bitsPerSample,
+			SampleRate:   sampleRate,
+			TotalSamples: totalSamples,
+			Duration:     duration,
+			Codec:        "flac",
+		}, nil
+	}
+	return AudioQuality{}, fmt.Errorf("FLAC STREAMINFO block not found")
 }
 
 func GetAudioQuality(filePath string) (AudioQuality, error) {
@@ -1835,7 +1767,10 @@ func GetM4AQuality(filePath string) (AudioQuality, error) {
 		return AudioQuality{}, fmt.Errorf("failed to stat M4A file: %w", err)
 	}
 	fileSize := info.Size()
+	return m4aQualityFromFile(f, fileSize)
+}
 
+func m4aQualityFromFile(f *os.File, fileSize int64) (AudioQuality, error) {
 	moovHeader, moovFound, err := findAtomInRange(f, 0, fileSize, "moov", fileSize)
 	if err != nil {
 		return AudioQuality{}, fmt.Errorf("failed to find moov atom: %w", err)
@@ -1872,7 +1807,8 @@ func GetM4AQuality(filePath string) (AudioQuality, error) {
 	bitDepth := 0
 	codec := normalizeM4AAudioCodec(atomType)
 
-	if atomType == "alac" {
+	switch atomType {
+	case "alac":
 		bitDepth = int(buf[22])<<8 | int(buf[23])
 		if alacBitDepth, alacSampleRate, ok := readALACSpecificConfig(f, sampleOffset, fileSize); ok {
 			if alacBitDepth > 0 {
@@ -1882,7 +1818,7 @@ func GetM4AQuality(filePath string) (AudioQuality, error) {
 				sampleRate = alacSampleRate
 			}
 		}
-	} else if atomType == "fLaC" {
+	case "fLaC":
 		bitDepth = int(buf[22])<<8 | int(buf[23])
 		if flacBitDepth, flacSampleRate, flacTotalSamples, ok := readMP4FLACSpecificConfig(f, sampleOffset, fileSize); ok {
 			if flacBitDepth > 0 {
@@ -1949,7 +1885,7 @@ func readM4ADurationSeconds(f *os.File, moovHeader atomHeader, fileSize int64) i
 	return readM4ATrackDurationSeconds(f, moovHeader, fileSize)
 }
 
-func readMP4DurationAtomSeconds(f *os.File, header atomHeader, fileSize int64) int {
+func readMP4DurationAtomSeconds(f *os.File, header atomHeader, _ int64) int {
 	payloadOffset := header.offset + header.headerSize
 	versionBuf := make([]byte, 1)
 	if _, err := f.ReadAt(versionBuf, payloadOffset); err != nil {

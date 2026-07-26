@@ -69,6 +69,41 @@ func TestGetProviderMetadataPrefersEnabledDeezerExtension(t *testing.T) {
 	}
 }
 
+func TestExtensionTrackExportsPreserveExplicitFlag(t *testing.T) {
+	dir := t.TempDir()
+	if err := InitExtensionSystem(filepath.Join(dir, "extensions"), filepath.Join(dir, "data")); err != nil {
+		t.Fatalf("InitExtensionSystem: %v", err)
+	}
+
+	ext := newTestLoadedExtension(t, ExtensionTypeMetadataProvider)
+	manager := getExtensionManager()
+	manager.mu.Lock()
+	manager.extensions = map[string]*loadedExtension{ext.ID: ext}
+	manager.mu.Unlock()
+	defer CleanupExtensions()
+
+	assertExplicit := func(name, jsonText string, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !strings.Contains(jsonText, `"explicit":true`) {
+			t.Fatalf("%s dropped explicit flag: %s", name, jsonText)
+		}
+	}
+
+	jsonText, err := CustomSearchWithExtensionJSON(ext.ID, "needle", `{"filter":"tracks"}`)
+	assertExplicit("custom search", jsonText, err)
+
+	for _, resourceType := range []string{"track", "album", "playlist", "artist"} {
+		jsonText, err = GetProviderMetadataJSON(ext.ID, resourceType, resourceType+"-1")
+		assertExplicit("provider metadata "+resourceType, jsonText, err)
+	}
+
+	jsonText, err = HandleURLWithExtensionJSON("https://example.test/track/1")
+	assertExplicit("URL handler", jsonText, err)
+}
+
 func TestExportsJSONWrappersAndExtensionManagerSurface(t *testing.T) {
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "data")
@@ -91,17 +126,11 @@ func TestExportsJSONWrappersAndExtensionManagerSurface(t *testing.T) {
 		manager.mu.Unlock()
 	}()
 
-	if response, err := DownloadTrack(`{}`); err != nil || !strings.Contains(response, "retired") {
-		t.Fatalf("DownloadTrack = %q/%v", response, err)
-	}
 	if response, err := DownloadByStrategy(`not-json`); err != nil || !strings.Contains(response, "Invalid request") {
 		t.Fatalf("DownloadByStrategy invalid = %q/%v", response, err)
 	}
 	if response, err := DownloadByStrategy(`{"use_extensions":false}`); err != nil || !strings.Contains(response, "disabled") {
 		t.Fatalf("DownloadByStrategy disabled = %q/%v", response, err)
-	}
-	if response, err := DownloadWithFallback(`{}`); err != nil || !strings.Contains(response, "retired") {
-		t.Fatalf("DownloadWithFallback = %q/%v", response, err)
 	}
 
 	InitItemProgress("item-1")
@@ -183,12 +212,6 @@ func TestExportsJSONWrappersAndExtensionManagerSurface(t *testing.T) {
 		t.Fatalf("SanitizeFilename = %q", got)
 	}
 
-	if response, err := PreWarmTrackCacheJSON(`not-json`); err != nil || !strings.Contains(response, "Invalid JSON") {
-		t.Fatalf("PreWarmTrackCacheJSON invalid = %q/%v", response, err)
-	}
-	if response, err := PreWarmTrackCacheJSON(`[{"isrc":"ISRC","track_name":"Song","artist_name":"Artist"}]`); err != nil || !strings.Contains(response, "success") {
-		t.Fatalf("PreWarmTrackCacheJSON = %q/%v", response, err)
-	}
 	if GetTrackCacheSize() != 0 {
 		t.Fatal("expected empty track cache")
 	}
@@ -218,9 +241,6 @@ func TestExportsJSONWrappersAndExtensionManagerSurface(t *testing.T) {
 	}
 	if err := SetExtensionFallbackProviderIDsJSON(`["coverage-ext"]`); err != nil {
 		t.Fatalf("SetExtensionFallbackProviderIDsJSON: %v", err)
-	}
-	if jsonText, err := GetExtensionFallbackProviderIDsJSON(); err != nil || !strings.Contains(jsonText, "coverage-ext") {
-		t.Fatalf("GetExtensionFallbackProviderIDsJSON = %q/%v", jsonText, err)
 	}
 	if err := SetExtensionFallbackProviderIDsJSON(""); err != nil {
 		t.Fatalf("reset extension fallback IDs: %v", err)
@@ -399,14 +419,14 @@ func TestExportsJSONWrappersAndExtensionManagerSurface(t *testing.T) {
 	CancelExtensionRequestJSON("req-home")
 
 	storeDir := filepath.Join(dir, "store")
-	if err := InitExtensionStoreJSON(storeDir); err != nil {
-		t.Fatalf("InitExtensionStoreJSON: %v", err)
+	if err := InitExtensionRepoJSON(storeDir); err != nil {
+		t.Fatalf("InitExtensionRepoJSON: %v", err)
 	}
-	if err := SetStoreRegistryURLJSON("https://registry.example.com/index.json"); err != nil {
-		t.Fatalf("SetStoreRegistryURLJSON: %v", err)
+	if err := SetRepoRegistryURLJSON("https://registry.example.com/index.json"); err != nil {
+		t.Fatalf("SetRepoRegistryURLJSON: %v", err)
 	}
-	store := getExtensionStore()
-	store.cache = &storeRegistry{Extensions: []storeExtension{{
+	store := getExtensionRepo()
+	store.cache = &repoRegistry{Extensions: []repoExtension{{
 		ID:          "coverage-ext",
 		Name:        "coverage-ext",
 		Version:     "1.0.0",
@@ -416,44 +436,44 @@ func TestExportsJSONWrappersAndExtensionManagerSurface(t *testing.T) {
 		DownloadURL: "https://registry.example.com/coverage.spotiflac-ext",
 	}}}
 	store.cacheTime = time.Now()
-	if registryURL, err := GetStoreRegistryURLJSON(); err != nil || registryURL == "" {
-		t.Fatalf("GetStoreRegistryURLJSON = %q/%v", registryURL, err)
+	if registryURL, err := GetRepoRegistryURLJSON(); err != nil || registryURL == "" {
+		t.Fatalf("GetRepoRegistryURLJSON = %q/%v", registryURL, err)
 	}
-	if storeJSON, err := GetStoreExtensionsJSON(false); err != nil || !strings.Contains(storeJSON, "coverage-ext") {
-		t.Fatalf("GetStoreExtensionsJSON = %q/%v", storeJSON, err)
+	if storeJSON, err := GetRepoExtensionsJSON(false); err != nil || !strings.Contains(storeJSON, "coverage-ext") {
+		t.Fatalf("GetRepoExtensionsJSON = %q/%v", storeJSON, err)
 	}
-	if storeJSON, err := SearchStoreExtensionsJSON("coverage", CategoryMetadata); err != nil || !strings.Contains(storeJSON, "coverage-ext") {
-		t.Fatalf("SearchStoreExtensionsJSON = %q/%v", storeJSON, err)
+	if storeJSON, err := SearchRepoExtensionsJSON("coverage", CategoryMetadata); err != nil || !strings.Contains(storeJSON, "coverage-ext") {
+		t.Fatalf("SearchRepoExtensionsJSON = %q/%v", storeJSON, err)
 	}
-	if catsJSON, err := GetStoreCategoriesJSON(); err != nil || !strings.Contains(catsJSON, "metadata") {
-		t.Fatalf("GetStoreCategoriesJSON = %q/%v", catsJSON, err)
+	if catsJSON, err := GetRepoCategoriesJSON(); err != nil || !strings.Contains(catsJSON, "metadata") {
+		t.Fatalf("GetRepoCategoriesJSON = %q/%v", catsJSON, err)
 	}
-	if dest, err := buildStoreExtensionDestPath(
+	if dest, err := buildRepoExtensionDestPath(
 		dir,
 		"coverage/ext",
 		"https://registry.example.com/coverage.spotiflac-ext",
 	); err != nil || !strings.HasSuffix(dest, ".spotiflac-ext") {
-		t.Fatalf("buildStoreExtensionDestPath = %q/%v", dest, err)
+		t.Fatalf("buildRepoExtensionDestPath = %q/%v", dest, err)
 	}
-	if dest, err := buildStoreExtensionDestPath(
+	if dest, err := buildRepoExtensionDestPath(
 		dir,
 		"coverage/ext",
 		"https://registry.example.com/coverage.sflx",
 	); err != nil || !strings.HasSuffix(dest, ".sflx") {
-		t.Fatalf("buildStoreExtensionDestPath sflx = %q/%v", dest, err)
+		t.Fatalf("buildRepoExtensionDestPath sflx = %q/%v", dest, err)
 	}
-	if _, err := buildStoreExtensionDestPath(
+	if _, err := buildRepoExtensionDestPath(
 		dir,
 		" ",
 		"https://registry.example.com/coverage.sflx",
 	); err == nil {
 		t.Fatal("expected invalid extension id")
 	}
-	if err := ClearStoreCacheJSON(); err != nil {
-		t.Fatalf("ClearStoreCacheJSON: %v", err)
+	if err := ClearRepoCacheJSON(); err != nil {
+		t.Fatalf("ClearRepoCacheJSON: %v", err)
 	}
-	if err := ClearStoreRegistryURLJSON(); err != nil {
-		t.Fatalf("ClearStoreRegistryURLJSON: %v", err)
+	if err := ClearRepoRegistryURLJSON(); err != nil {
+		t.Fatalf("ClearRepoRegistryURLJSON: %v", err)
 	}
 
 	SetLibraryCoverCacheDirJSON(filepath.Join(dir, "covers"))
@@ -483,9 +503,6 @@ func TestExportsJSONWrappersAndExtensionManagerSurface(t *testing.T) {
 	CancelLibraryScanJSON()
 	if metadataJSON, err := ReadAudioMetadataJSON(filepath.Join(libraryDir, "missing.mp3")); err != nil || metadataJSON == "" {
 		t.Fatalf("ReadAudioMetadataJSON = %q/%v", metadataJSON, err)
-	}
-	if metadataJSON, err := ReadAudioMetadataWithHintJSON(filepath.Join(libraryDir, "missing.mp3"), "Missing"); err != nil || metadataJSON == "" {
-		t.Fatalf("ReadAudioMetadataWithHintJSON = %q/%v", metadataJSON, err)
 	}
 	if metadataJSON, err := ReadAudioMetadataWithHintAndCoverCacheKeyJSON(filepath.Join(libraryDir, "missing.mp3"), "Missing", "key"); err != nil || metadataJSON == "" {
 		t.Fatalf("ReadAudioMetadataWithHintAndCoverCacheKeyJSON = %q/%v", metadataJSON, err)

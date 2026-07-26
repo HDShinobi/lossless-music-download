@@ -2,6 +2,7 @@ package gobackend
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -230,58 +231,21 @@ func markLyricsProviderUnavailable(providerName string, err error) {
 	GoLog("[Lyrics] Provider %s marked unavailable for %s: %s\n", providerName, lyricsProviderUnavailableCooldown, reason)
 }
 
-var lyricsNotFoundSignals = []string{
-	"lyrics not found",
-	"no lyrics found",
-	"no songs found",
-	"not found on",
-	"empty track",
-	"empty search query",
-	"needs a deezer id",
-}
-
-// Provider/API-level failures that should temporarily disable a lyrics source.
-// Transport failures are handled by isConnectivityFailure via typed errors.
-var lyricsServiceUnavailableSignals = []string{
-	"fetch failed",
-	"missing required parameters",
-	"request failed",
-	"request unsuccessful",
-	"search failed",
-	"search unavailable",
-	"rate limit",
-	"too many requests",
-	"operation too frequent",
-	"操作频繁",
-	"proxy returned http 429",
-	"proxy returned http 5",
-	"unexpected status code: 429",
-	"unexpected status code: 5",
-	"unexpected response code",
-	"returned http 429",
-	"returned http 5",
-}
-
+// isLyricsProviderUnavailableError reports whether err is a provider/API-level
+// failure that should temporarily disable a lyrics source. Providers classify
+// their failures with the typed errors in lyrics_errors.go at the point of
+// origin; transport failures are handled by isConnectivityFailure.
 func isLyricsProviderUnavailableError(err error) bool {
 	if err == nil {
 		return false
 	}
-
-	msg := strings.ToLower(err.Error())
-	for _, signal := range lyricsNotFoundSignals {
-		if strings.Contains(msg, signal) {
-			return false
-		}
+	if errors.Is(err, errLyricsNotFound) {
+		return false
 	}
-	if isConnectivityFailure(err) {
+	if errors.Is(err, errLyricsServiceUnavailable) {
 		return true
 	}
-	for _, signal := range lyricsServiceUnavailableSignals {
-		if strings.Contains(msg, signal) {
-			return true
-		}
-	}
-	return false
+	return isConnectivityFailure(err)
 }
 
 func GetLyricsProviderOrder() []string {
@@ -297,8 +261,8 @@ func GetLyricsProviderOrder() []string {
 	return result
 }
 
-func GetAvailableLyricsProviders() []map[string]interface{} {
-	return []map[string]interface{}{
+func GetAvailableLyricsProviders() []map[string]any {
+	return []map[string]any{
 		{"id": LyricsProviderLRCLIB, "name": "LRCLIB", "has_proxy_dependency": false, "description": "Open-source synced lyrics database"},
 		{"id": LyricsProviderNetease, "name": "Netease", "has_proxy_dependency": true, "description": "NetEase Cloud Music lyrics"},
 		{"id": LyricsProviderMusixmatch, "name": "Musixmatch", "has_proxy_dependency": true, "description": "Musixmatch lyrics"},
@@ -387,9 +351,33 @@ func (c *lyricsCache) Get(artist, track string, durationSec float64) (*LyricsRes
 	return entry.response, true
 }
 
+const lyricsCacheMaxEntries = 500
+
 func (c *lyricsCache) Set(artist, track string, durationSec float64, response *LyricsResponse) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	// Bound the cache: without eviction a long session accumulates every
+	// looked-up track's full lyrics forever.
+	if len(c.cache) >= lyricsCacheMaxEntries {
+		now := time.Now()
+		for key, entry := range c.cache {
+			if now.After(entry.expiresAt) {
+				delete(c.cache, key)
+			}
+		}
+		for len(c.cache) >= lyricsCacheMaxEntries {
+			var oldestKey string
+			var oldestAt time.Time
+			for key, entry := range c.cache {
+				if oldestKey == "" || entry.expiresAt.Before(oldestAt) {
+					oldestKey = key
+					oldestAt = entry.expiresAt
+				}
+			}
+			delete(c.cache, oldestKey)
+		}
+	}
 
 	key := c.generateKey(artist, track, durationSec)
 	c.cache[key] = &lyricsCacheEntry{
@@ -440,6 +428,16 @@ type LRCLibResponse struct {
 	SyncedLyrics string  `json:"syncedLyrics"`
 }
 
+func lrclibTrackName(response *LRCLibResponse) string {
+	if response == nil {
+		return ""
+	}
+	if trackName := strings.TrimSpace(response.TrackName); trackName != "" {
+		return trackName
+	}
+	return strings.TrimSpace(response.Name)
+}
+
 type LyricsLine struct {
 	StartTimeMs int64  `json:"startTimeMs"`
 	Words       string `json:"words"`
@@ -465,103 +463,110 @@ func NewLyricsClient() *LyricsClient {
 	}
 }
 
-func (c *LyricsClient) FetchLyricsWithMetadata(artist, track string) (*LyricsResponse, error) {
-	baseURL := "https://lrclib.net/api/get"
-	params := url.Values{}
-	params.Set("artist_name", artist)
-	params.Set("track_name", track)
-
-	fullURL := baseURL + "?" + params.Encode()
-
-	req, err := http.NewRequest("GET", fullURL, nil)
+// lrclibGet performs a GET against lrclib.net and decodes the JSON body into
+// dst. 404 is reported as a typed lyrics-not-found error.
+func (c *LyricsClient) lrclibGet(path string, params url.Values, dst any) error {
+	req, err := http.NewRequest("GET", "https://lrclib.net"+path+"?"+params.Encode(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("User-Agent", getRandomUserAgent())
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch lyrics: %w", err)
+		return fmt.Errorf("failed to fetch lyrics: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		return nil, fmt.Errorf("lyrics not found")
+		return lyricsNotFoundErrorf("lyrics not found")
+	}
+	if resp.StatusCode != 200 {
+		return lyricsHTTPStatusError(resp.StatusCode, "unexpected status code: %d", resp.StatusCode)
 	}
 
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	if err := json.NewDecoder(resp.Body).Decode(dst); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
 	}
+	return nil
+}
+
+func (c *LyricsClient) FetchLyricsWithMetadata(artist, track string) (*LyricsResponse, error) {
+	params := url.Values{}
+	params.Set("artist_name", artist)
+	params.Set("track_name", track)
 
 	var lrcResp LRCLibResponse
-	if err := json.NewDecoder(resp.Body).Decode(&lrcResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	if err := c.lrclibGet("/api/get", params, &lrcResp); err != nil {
+		return nil, err
+	}
+	if !lyricsSearchTitlesMatch(lrclibTrackName(&lrcResp), track, false) ||
+		!lyricsSearchArtistsMatch(lrcResp.ArtistName, artist) {
+		return nil, lyricsNotFoundErrorf("LRCLIB returned mismatched track metadata")
 	}
 
 	return c.parseLRCLibResponse(&lrcResp), nil
 }
 
 func (c *LyricsClient) FetchLyricsFromLRCLibSearch(query string, durationSec float64) (*LyricsResponse, error) {
-	baseURL := "https://lrclib.net/api/search"
+	return c.fetchLyricsFromLRCLibSearch(query, "", "", durationSec)
+}
+
+func (c *LyricsClient) fetchLyricsFromLRCLibSearch(query, trackName, artistName string, durationSec float64) (*LyricsResponse, error) {
 	params := url.Values{}
 	params.Set("q", query)
 
-	fullURL := baseURL + "?" + params.Encode()
-
-	req, err := http.NewRequest("GET", fullURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("User-Agent", getRandomUserAgent())
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search lyrics: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
 	var results []LRCLibResponse
-	if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	if err := c.lrclibGet("/api/search", params, &results); err != nil {
+		return nil, err
 	}
 
 	if len(results) == 0 {
-		return nil, fmt.Errorf("no lyrics found")
+		return nil, lyricsNotFoundErrorf("no lyrics found")
 	}
 
-	bestMatch := c.findBestMatch(results, durationSec)
+	bestMatch := c.findBestLRCLibSearchMatch(results, query, trackName, artistName, durationSec)
 	if bestMatch != nil {
 		return c.parseLRCLibResponse(bestMatch), nil
 	}
 
-	for _, result := range results {
-		if result.SyncedLyrics != "" {
-			return c.parseLRCLibResponse(&result), nil
-		}
-	}
-
-	return c.parseLRCLibResponse(&results[0]), nil
+	return nil, lyricsNotFoundErrorf("no matching lyrics found")
 }
 
-func (c *LyricsClient) findBestMatch(results []LRCLibResponse, targetDurationSec float64) *LRCLibResponse {
+func lrclibSearchResultMatches(result *LRCLibResponse, query, trackName, artistName string, durationSec float64) bool {
+	if result == nil || !lyricsSearchDurationMatches(result.Duration, durationSec) {
+		return false
+	}
+
+	candidateTrack := lrclibTrackName(result)
+	if strings.TrimSpace(trackName) != "" || strings.TrimSpace(artistName) != "" {
+		return lyricsSearchTitlesMatch(candidateTrack, trackName, false) &&
+			lyricsSearchArtistsMatch(result.ArtistName, artistName)
+	}
+
+	normalizedQuery := normalizeLooseArtistName(query)
+	normalizedTrack := normalizeLooseArtistName(simplifyTrackName(candidateTrack))
+	normalizedArtist := normalizeLooseArtistName(normalizeArtistName(result.ArtistName))
+	return normalizedQuery != "" &&
+		normalizedTrack != "" &&
+		normalizedArtist != "" &&
+		containsWordSequence(normalizedQuery, normalizedTrack) &&
+		containsWordSequence(normalizedQuery, normalizedArtist)
+}
+
+func (c *LyricsClient) findBestLRCLibSearchMatch(results []LRCLibResponse, query, trackName, artistName string, targetDurationSec float64) *LRCLibResponse {
 	var bestSynced *LRCLibResponse
 	var bestPlain *LRCLibResponse
 
 	for i := range results {
 		result := &results[i]
-
-		durationMatches := targetDurationSec == 0 || c.durationMatches(result.Duration, targetDurationSec)
-
-		if durationMatches {
-			if result.SyncedLyrics != "" && bestSynced == nil {
-				bestSynced = result
-			} else if result.PlainLyrics != "" && bestPlain == nil {
-				bestPlain = result
-			}
+		if !lrclibSearchResultMatches(result, query, trackName, artistName, targetDurationSec) {
+			continue
+		}
+		if result.SyncedLyrics != "" && bestSynced == nil {
+			bestSynced = result
+		} else if result.PlainLyrics != "" && bestPlain == nil {
+			bestPlain = result
 		}
 	}
 
@@ -1027,7 +1032,7 @@ func (c *LyricsClient) tryLRCLIB(primaryArtist, artistName, trackName, simplifie
 	}
 
 	query := primaryArtist + " " + trackName
-	lyrics, err = c.FetchLyricsFromLRCLibSearch(query, durationSec)
+	lyrics, err = c.fetchLyricsFromLRCLibSearch(query, trackName, primaryArtist, durationSec)
 	if err == nil && lyrics != nil && (len(lyrics.Lines) > 0 || lyrics.Instrumental) {
 		lyrics.Source = "LRCLIB Search"
 		return lyrics, nil
@@ -1038,7 +1043,7 @@ func (c *LyricsClient) tryLRCLIB(primaryArtist, artistName, trackName, simplifie
 
 	if simplifiedTrack != trackName {
 		query = primaryArtist + " " + simplifiedTrack
-		lyrics, err = c.FetchLyricsFromLRCLibSearch(query, durationSec)
+		lyrics, err = c.fetchLyricsFromLRCLibSearch(query, simplifiedTrack, primaryArtist, durationSec)
 		if err == nil && lyrics != nil && (len(lyrics.Lines) > 0 || lyrics.Instrumental) {
 			lyrics.Source = "LRCLIB Search (simplified)"
 			return lyrics, nil
@@ -1048,7 +1053,7 @@ func (c *LyricsClient) tryLRCLIB(primaryArtist, artistName, trackName, simplifie
 		}
 	}
 
-	return nil, fmt.Errorf("LRCLIB: no lyrics found")
+	return nil, lyricsNotFoundErrorf("LRCLIB: no lyrics found")
 }
 
 func (c *LyricsClient) parseLRCLibResponse(resp *LRCLibResponse) *LyricsResponse {
@@ -1078,9 +1083,10 @@ func (c *LyricsClient) parseLRCLibResponse(resp *LRCLibResponse) *LyricsResponse
 	return result
 }
 
+var lrcLinePattern = regexp.MustCompile(`\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)`)
+
 func parseSyncedLyrics(syncedLyrics string) []LyricsLine {
 	var lines []LyricsLine
-	lrcPattern := regexp.MustCompile(`\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)`)
 
 	for _, line := range strings.Split(syncedLyrics, "\n") {
 		line = strings.TrimSpace(line)
@@ -1095,7 +1101,7 @@ func parseSyncedLyrics(syncedLyrics string) []LyricsLine {
 			continue
 		}
 
-		matches := lrcPattern.FindStringSubmatch(line)
+		matches := lrcLinePattern.FindStringSubmatch(line)
 		if len(matches) == 5 {
 			startMs := lrcTimestampToMs(matches[1], matches[2], matches[3])
 			words := strings.TrimSpace(matches[4])
@@ -1162,7 +1168,7 @@ func detectLyricsErrorPayload(raw string) (string, bool) {
 		return "", false
 	}
 
-	var payload map[string]interface{}
+	var payload map[string]any
 	if err := json.Unmarshal([]byte(trimmed), &payload); err != nil {
 		return "", false
 	}
@@ -1314,10 +1320,10 @@ func convertToLRCWithMetadata(lyrics *LyricsResponse, trackName, artistName stri
 	return builder.String()
 }
 
-func simplifyTrackName(name string) string {
+var simplifyTrackNamePatterns = func() []*regexp.Regexp {
 	patterns := []string{
-		`\s*\(feat\..*?\)`,
-		`\s*\(ft\..*?\)`,
+		`\s*\(feat\.?.*?\)`,
+		`\s*\(ft\.?.*?\)`,
 		`\s*\(featuring.*?\)`,
 		`\s*\(with.*?\)`,
 		`\s*-\s*Remaster(ed)?.*$`,
@@ -1330,10 +1336,16 @@ func simplifyTrackName(name string) string {
 		`\s*\(Radio Edit\)`,
 		`\s*\(Single Version\)`,
 	}
+	compiled := make([]*regexp.Regexp, len(patterns))
+	for i, pattern := range patterns {
+		compiled[i] = regexp.MustCompile("(?i)" + pattern)
+	}
+	return compiled
+}()
 
+func simplifyTrackName(name string) string {
 	result := name
-	for _, pattern := range patterns {
-		re := regexp.MustCompile("(?i)" + pattern)
+	for _, re := range simplifyTrackNamePatterns {
 		result = re.ReplaceAllString(result, "")
 	}
 	result = strings.TrimSpace(result)
@@ -1346,6 +1358,71 @@ func simplifyTrackName(name string) string {
 	}
 
 	return result
+}
+
+func normalizedLyricsSearchTitle(name string) string {
+	return strings.ToLower(strings.TrimSpace(simplifyTrackName(name)))
+}
+
+func containsWordSequence(value, sequence string) bool {
+	valueWords := strings.Fields(value)
+	sequenceWords := strings.Fields(sequence)
+	if len(valueWords) == 0 || len(sequenceWords) == 0 || len(sequenceWords) > len(valueWords) {
+		return false
+	}
+
+	for start := 0; start <= len(valueWords)-len(sequenceWords); start++ {
+		matches := true
+		for offset := range sequenceWords {
+			if valueWords[start+offset] != sequenceWords[offset] {
+				matches = false
+				break
+			}
+		}
+		if matches {
+			return true
+		}
+	}
+	return false
+}
+
+func lyricsSearchTitlesMatch(candidateTrack, trackName string, allowDecoratedCandidate bool) bool {
+	expected := normalizedLyricsSearchTitle(trackName)
+	candidate := normalizedLyricsSearchTitle(candidateTrack)
+	if expected == "" || candidate == "" {
+		return false
+	}
+	if candidate == expected {
+		return true
+	}
+	return allowDecoratedCandidate && containsWordSequence(candidate, expected)
+}
+
+func lyricsSearchArtistsMatch(candidateArtist, artistName string) bool {
+	expected := normalizeLooseArtistName(normalizeArtistName(artistName))
+	if expected == "" {
+		return true
+	}
+	candidate := normalizeLooseArtistName(normalizeArtistName(candidateArtist))
+	if candidate == "" {
+		return false
+	}
+	return candidate == expected || sameWordsUnordered(candidate, expected)
+}
+
+func lyricsSearchDurationMatches(candidateDuration, durationSec float64) bool {
+	if candidateDuration <= 0 || durationSec <= 0 {
+		return true
+	}
+	return math.Abs(candidateDuration-durationSec) <= durationToleranceSec
+}
+
+func lyricsSearchArtistAppearsInTitle(candidateTrack, artistName string) bool {
+	expectedArtist := normalizeLooseArtistName(normalizeArtistName(artistName))
+	candidateTitle := normalizeLooseArtistName(candidateTrack)
+	return expectedArtist != "" &&
+		candidateTitle != "" &&
+		containsWordSequence(candidateTitle, expectedArtist)
 }
 
 func normalizeArtistName(name string) string {

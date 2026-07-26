@@ -16,9 +16,13 @@ source of truth for *what we inherit, what we changed, and how to sync*.
 | | |
 | --- | --- |
 | Baseline tag | `vendor/spotiflac-base` |
-| Synced to | **v4.7.1** (`a493200a`, "v4.7.1") |
+| Synced to | **v4.8.0** (commit `eabafeca`) |
 | Upstream remote | `upstream` → `https://github.com/spotiflacapp/SpotiFLAC-Mobile.git` |
-| Last sync | 2026-07-02 (v4.7.0 → v4.7.1, 3-way apply with conflicts in `ac4_config.go` and `extension_providers.go` — both registry files, resolved manually, see registry below) |
+| Last sync | 2026-07-26 (v4.7.1 → v4.8.0, 113 files. One conflict, in `extension_providers.go`: upstream split ~3400 lines out of it into `extension_fallback.go` / `extension_provider_wrapper.go` / `extension_provider_types.go`, which git presents as a single whole-file modify/delete. Resolved by taking upstream's 391-line version verbatim and re-applying our hook at its new home. Also bumped `native/bridge/go.mod` to `go 1.26.5` and ran `go mod tidy` there.) |
+
+> Record **commit** SHAs here, not tag-object SHAs. Upstream re-tags releases —
+> `v4.7.1` resolves to different tag objects in different clones (the old
+> `a493200a` in this table was one), so always compare with `<tag>^{commit}`.
 
 `vendor/spotiflac-base` always points at the exact upstream commit our
 inherited code currently matches. **Advance it only after a sync builds and
@@ -51,7 +55,8 @@ Every edit to an inherited (`go_backend/`) file lives here. These are the
 | `go_backend/embed_after_download.go` | **New file** | Post-download lyrics resolution (Feature 1). Since 2026-07-26 this is a **thin wrapper**: it resolves lyrics (extension-supplied first, our providers as fallback, `[instrumental:true]` sentinel dropped) and then delegates the actual tag/cover write to upstream's `embedExtensionDownloadMetadata`. It used to be a full copy of that function; the copy was retired because upstream's body and ours were identical apart from the lyrics block, so the copy could only rot. Upstream improvements to the embed body (e.g. v4.8.0's atomic-write `flac_save.go` path) now land with no action here. | n/a (own file) |
 | `go_backend/embed_after_download_test.go` | **New file** | Tests for the above | n/a |
 | `go_backend/testdata/silence.flac` | **New fixture** | Test asset | n/a |
-| `go_backend/extension_providers.go` | **In-place edit** (2 sites, inside `DownloadWithExtensionFallback`) | (1) `SetItemDownloading(req.ItemID)` at the two download start points (UI progress state) — unchanged since v4.7.0. (2) Both post-download embed call sites now call our own `embedMetadataAfterDownload(resp, req, alreadyExists)` instead of upstream's v4.7.1 `embedExtensionDownloadMetadata(resp, req, alreadyExists)`. Our helper **calls** upstream's `embedExtensionDownloadMetadata` (see the row above), so upstream's function and its `firstPositiveInt` helper are live code, not dead weight — if upstream ever renames or deletes them we get a compile error instead of a silent divergence. | ✅ Wrapped in `// LM-FORK` (4 sites) |
+| `go_backend/extension_fallback.go` | **In-place edit** (1 site, inside `DownloadWithExtensionFallback`) | The post-download embed call site calls our own `embedMetadataAfterDownload(built, req, alreadyExists)` instead of upstream's `embedExtensionDownloadMetadata(built, req, alreadyExists)`. Our helper **calls** upstream's function (see the row above), so upstream's function and its `firstPositiveInt` helper are live code, not dead weight — if upstream ever renames or deletes them we get a compile error instead of a silent divergence. Moved here from `extension_providers.go` in the v4.8.0 sync, when upstream split that file. | ✅ Wrapped in `// LM-FORK` (1 site) |
+| ~~`go_backend/extension_providers.go` — `SetItemDownloading` hook~~ | **Retired 2026-07-26** | We used to call `SetItemDownloading(req.ItemID)` right after `StartItemProgress(req.ItemID)` at the two download start points, because `StartItemProgress` creates the item with `IsDownloading: false` and our queue UI needed the flag set. v4.8.0 added `SetItemPreparingStage(req.ItemID, "resolving_metadata")` at exactly that spot, and it already sets `IsDownloading = true` — plus a `Status`/`Stage` pair that is more accurate than ours. Re-applying our hook would have *wiped* `Stage` and downgraded `Status` from `preparing` to `downloading` while metadata was still resolving. Safe to drop on the Dart side: `_mapStatus` in `download_queue_provider.dart` falls back to the entry's existing status for unrecognized backend strings, and nothing in `lib/` reads the `is_downloading` flag. Same precedent as the `ac4_config.go` row below. | n/a (patch retired) |
 | ~~`go_backend/ac4_config.go`~~ | **Removed 2026-07-02** | Upstream's v4.7.1 shipped an equivalent (and slightly more thorough) bounds-check fix for the same truncated-AC4-entry issue we reported (`audioSampleEntryHeaderLen` now returns `(hdrLen, ok)`; both call sites check `ok`). Our `// LM-FORK` guards at both sites were removed as redundant during the v4.7.0→v4.7.1 sync. Our own regression test (`ac4_config_truncated_entry_test.go`) is kept alongside upstream's new `ac4_config_test.go` for belt-and-suspenders coverage — no action needed unless it starts failing. | n/a (patch retired) |
 
 The edits are deliberately thin call-sites — the real feature code lives in the
@@ -81,6 +86,16 @@ grep -rn 'LM-FORK' go_backend/
 ---
 
 ## Sync protocol
+
+> **Do not trust the preview's "Clean — applies without conflicts."**
+> The dry run uses `git apply --3way --check`, which does not fully simulate the
+> real apply: the v4.8.0 sync was reported clean and then conflicted on
+> `extension_providers.go`. Treat the preview as a size estimate only, and always
+> run step 3 after `--apply`.
+>
+> Also note the preview can be *pessimistic* in the other direction: a plain
+> `git apply --check` (no `--3way`) rejects any file we edited in place, which
+> looks alarming but only reflects our registry divergences.
 
 ```bash
 # 1. Preview what an upstream release changes in our inherited paths

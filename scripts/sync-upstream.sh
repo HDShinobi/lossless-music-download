@@ -33,7 +33,12 @@ APPLY=false
 INHERIT_PATHS=(go_backend)
 
 echo "==> Fetching upstream tags…"
-git fetch upstream --tags --quiet
+# Non-fatal: a sync can legitimately run offline against tags already in this
+# repo (or against a local clone). If the target ref is genuinely missing the
+# resolve check below fails with a clear message anyway.
+if ! git fetch upstream --tags --quiet 2>/dev/null; then
+  echo "    Fetch failed (offline?) — using the tags already present locally."
+fi
 
 if ! git rev-parse --verify --quiet "$BASE_TAG" >/dev/null; then
   echo "ERROR: baseline tag '$BASE_TAG' not found. Create it first:" >&2

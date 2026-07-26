@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -49,6 +50,75 @@ func isExtensionPackagePath(filePath string) bool {
 	return strings.HasSuffix(lowerPath, ".spotiflac-ext") || strings.HasSuffix(lowerPath, ".sflx")
 }
 
+func managedExtensionPath(root, extensionID string) (string, error) {
+	if root == "" {
+		return "", fmt.Errorf("extension directory is not configured")
+	}
+	if !extensionIDPattern.MatchString(extensionID) {
+		return "", fmt.Errorf("invalid extension ID %q", extensionID)
+	}
+	fullPath := filepath.Join(root, extensionID)
+	if !isPathWithinBase(root, fullPath) {
+		return "", fmt.Errorf("extension path escapes its managed directory")
+	}
+	return fullPath, nil
+}
+
+func safeExtensionAssetPath(root, assetPath string) (string, bool) {
+	if root == "" || assetPath == "" || filepath.IsAbs(assetPath) || strings.Contains(assetPath, `\`) {
+		return "", false
+	}
+	cleaned := path.Clean(assetPath)
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", false
+	}
+	fullPath := filepath.Join(root, filepath.FromSlash(cleaned))
+	return fullPath, isPathWithinBase(root, fullPath)
+}
+
+func extractExtensionArchive(zipReader *zip.ReadCloser, destination string) error {
+	for _, file := range zipReader.File {
+		if file.FileInfo().IsDir() {
+			continue
+		}
+		if file.FileInfo().Mode()&os.ModeSymlink != 0 || strings.Contains(file.Name, `\`) {
+			return fmt.Errorf("unsafe path in extension archive: %s", file.Name)
+		}
+
+		relPath := path.Clean(file.Name)
+		if relPath == "." || relPath == ".." || strings.HasPrefix(relPath, "../") || path.IsAbs(relPath) {
+			return fmt.Errorf("unsafe path in extension archive: %s", file.Name)
+		}
+		destPath := filepath.Join(destination, filepath.FromSlash(relPath))
+		if !isPathWithinBase(destination, destPath) {
+			return fmt.Errorf("unsafe path in extension archive: %s", file.Name)
+		}
+
+		if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+			return fmt.Errorf("failed to create extension directory: %w", err)
+		}
+		destFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+		if err != nil {
+			return fmt.Errorf("failed to create extension file: %w", err)
+		}
+		srcFile, err := file.Open()
+		if err != nil {
+			destFile.Close()
+			return fmt.Errorf("failed to open file in archive: %w", err)
+		}
+		_, copyErr := io.Copy(destFile, srcFile)
+		closeSrcErr := srcFile.Close()
+		closeDestErr := destFile.Close()
+		if copyErr != nil {
+			return fmt.Errorf("failed to extract extension file: %w", copyErr)
+		}
+		if closeSrcErr != nil || closeDestErr != nil {
+			return fmt.Errorf("failed to close extracted extension file")
+		}
+	}
+	return nil
+}
+
 type loadedExtension struct {
 	ID           string             `json:"id"`
 	Manifest     *ExtensionManifest `json:"manifest"`
@@ -62,15 +132,23 @@ type loadedExtension struct {
 	DataDir      string `json:"data_dir"`
 	SourceDir    string `json:"source_dir"`
 	IconPath     string `json:"icon_path"`
+
+	isolatedPoolMu sync.Mutex
+	isolatedPool   []*isolatedRuntimeHandle
 }
 
-func getExtensionInitSettings(extensionID string) map[string]interface{} {
+type isolatedRuntimeHandle struct {
+	vm      *goja.Runtime
+	runtime *extensionRuntime
+}
+
+func getExtensionInitSettings(extensionID string) map[string]any {
 	settings := GetExtensionSettingsStore().GetAll(extensionID)
 	if len(settings) == 0 {
 		return settings
 	}
 
-	filtered := make(map[string]interface{}, len(settings))
+	filtered := make(map[string]any, len(settings))
 	for key, value := range settings {
 		if strings.HasPrefix(key, "_") {
 			continue
@@ -243,48 +321,33 @@ func (m *extensionManager) loadExtensionFromFileLocked(filePath string) (*loaded
 		return nil, fmt.Errorf("extension '%s' was installed by another process", manifest.DisplayName)
 	}
 
-	extDir := filepath.Join(m.extensionsDir, manifest.Name)
-	if err := os.MkdirAll(extDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create extension directory: %w", err)
+	extDir, err := managedExtensionPath(m.extensionsDir, manifest.Name)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Lstat(extDir); err == nil {
+		return nil, fmt.Errorf("extension directory already exists for %q", manifest.Name)
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to inspect extension directory: %w", err)
+	}
+	stagingDir, err := os.MkdirTemp(m.extensionsDir, "."+manifest.Name+"-install-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create extension staging directory: %w", err)
+	}
+	stagingCommitted := false
+	defer func() {
+		if !stagingCommitted {
+			_ = os.RemoveAll(stagingDir)
+		}
+	}()
+	if err := extractExtensionArchive(zipReader, stagingDir); err != nil {
+		return nil, err
 	}
 
-	for _, file := range zipReader.File {
-		if file.FileInfo().IsDir() {
-			continue
-		}
-
-		relPath := filepath.Clean(file.Name)
-		if strings.HasPrefix(relPath, "..") || filepath.IsAbs(relPath) {
-			GoLog("[Extension] Skipping unsafe path in archive: %s\n", file.Name)
-			continue
-		}
-		destPath := filepath.Join(extDir, relPath)
-
-		destDir := filepath.Dir(destPath)
-		if err := os.MkdirAll(destDir, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create directory %s: %w", destDir, err)
-		}
-
-		destFile, err := os.Create(destPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create file %s: %w", destPath, err)
-		}
-
-		srcFile, err := file.Open()
-		if err != nil {
-			destFile.Close()
-			return nil, fmt.Errorf("failed to open file in archive: %w", err)
-		}
-
-		_, err = io.Copy(destFile, srcFile)
-		srcFile.Close()
-		destFile.Close()
-		if err != nil {
-			return nil, fmt.Errorf("failed to extract file: %w", err)
-		}
+	extDataDir, err := managedExtensionPath(m.dataDir, manifest.Name)
+	if err != nil {
+		return nil, err
 	}
-
-	extDataDir := filepath.Join(m.dataDir, manifest.Name)
 	if err := os.MkdirAll(extDataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create extension data directory: %w", err)
 	}
@@ -294,7 +357,7 @@ func (m *extensionManager) loadExtensionFromFileLocked(filePath string) (*loaded
 		Manifest:  manifest,
 		Enabled:   false, // New extensions start disabled
 		DataDir:   extDataDir,
-		SourceDir: extDir,
+		SourceDir: stagingDir,
 	}
 
 	if err := validateExtensionLoad(ext); err != nil {
@@ -302,6 +365,11 @@ func (m *extensionManager) loadExtensionFromFileLocked(filePath string) (*loaded
 		ext.Enabled = false
 		GoLog("[Extension] Failed to validate extension %s: %v\n", manifest.Name, err)
 	}
+	if err := os.Rename(stagingDir, extDir); err != nil {
+		return nil, fmt.Errorf("failed to activate extension: %w", err)
+	}
+	stagingCommitted = true
+	ext.SourceDir = extDir
 
 	m.extensions[manifest.Name] = ext
 	GoLog("[Extension] Loaded extension: %s v%s\n", manifest.DisplayName, manifest.Version)
@@ -335,7 +403,7 @@ func initializeVMLocked(ext *loadedExtension) error {
 
 	console := vm.NewObject()
 	console.Set("log", func(call goja.FunctionCall) goja.Value {
-		args := make([]interface{}, len(call.Arguments))
+		args := make([]any, len(call.Arguments))
 		for i, arg := range call.Arguments {
 			args[i] = arg.Export()
 		}
@@ -382,13 +450,12 @@ func newIsolatedExtensionRuntime(ext *loadedExtension) (*goja.Runtime, *extensio
 	}
 
 	runtime := &extensionRuntime{
-		extensionID:       ext.ID,
-		manifest:          ext.Manifest,
-		settings:          make(map[string]interface{}),
-		cookieJar:         nil,
-		dataDir:           ext.DataDir,
-		vm:                vm,
-		storageFlushDelay: defaultStorageFlushDelay,
+		extensionID: ext.ID,
+		manifest:    ext.Manifest,
+		settings:    make(map[string]any),
+		cookieJar:   nil,
+		dataDir:     ext.DataDir,
+		vm:          vm,
 	}
 	if ext.runtime != nil && ext.runtime.cookieJar != nil {
 		runtime.cookieJar = ext.runtime.cookieJar
@@ -403,7 +470,7 @@ func newIsolatedExtensionRuntime(ext *loadedExtension) (*goja.Runtime, *extensio
 
 	console := vm.NewObject()
 	console.Set("log", func(call goja.FunctionCall) goja.Value {
-		args := make([]interface{}, len(call.Arguments))
+		args := make([]any, len(call.Arguments))
 		for i, arg := range call.Arguments {
 			args[i] = arg.Export()
 		}
@@ -442,6 +509,109 @@ func newIsolatedExtensionRuntime(ext *loadedExtension) (*goja.Runtime, *extensio
 	return vm, runtime, nil
 }
 
+// A goja runtime plus an executed extension program is several MB of live
+// heap; rebuilding one per download multiplies that by the number of tracks.
+// Extensions already serve many calls on the persistent shared VM, so reusing
+// an initialized isolated runtime for consecutive downloads is the same
+// lifecycle contract.
+const maxIdleIsolatedRuntimes = 1
+
+// acquireIsolatedExtensionRuntime pops an idle pooled runtime or builds one.
+func acquireIsolatedExtensionRuntime(ext *loadedExtension) (*goja.Runtime, *extensionRuntime, error) {
+	ext.isolatedPoolMu.Lock()
+	if n := len(ext.isolatedPool); n > 0 {
+		handle := ext.isolatedPool[n-1]
+		ext.isolatedPool = ext.isolatedPool[:n-1]
+		ext.isolatedPoolMu.Unlock()
+		return handle.vm, handle.runtime, nil
+	}
+	ext.isolatedPoolMu.Unlock()
+
+	ext.VMMu.Lock()
+	defer ext.VMMu.Unlock()
+	return newIsolatedExtensionRuntime(ext)
+}
+
+// releaseIsolatedExtensionRuntime pools a healthy runtime for reuse or tears
+// it down. Pass healthy=false after an interrupt/timeout/script error, whose
+// VM state can't be trusted for reuse.
+func releaseIsolatedExtensionRuntime(ext *loadedExtension, vm *goja.Runtime, runtime *extensionRuntime, healthy, cleanupSafe bool) {
+	if runtime != nil {
+		if err := runtime.flushStorageNow(); err != nil {
+			GoLog("[Extension:%s] isolated download storage flush failed: %v\n", ext.ID, err)
+		}
+	}
+
+	if healthy && vm != nil && runtime != nil && ext.Enabled {
+		ext.isolatedPoolMu.Lock()
+		if len(ext.isolatedPool) < maxIdleIsolatedRuntimes {
+			ext.isolatedPool = append(ext.isolatedPool, &isolatedRuntimeHandle{vm: vm, runtime: runtime})
+			ext.isolatedPoolMu.Unlock()
+			return
+		}
+		ext.isolatedPoolMu.Unlock()
+	}
+
+	if cleanupSafe {
+		if cleanupErr := runCleanupOnVM(vm); cleanupErr != nil {
+			GoLog("[Extension:%s] isolated download cleanup failed: %v\n", ext.ID, cleanupErr)
+		}
+	}
+	if runtime != nil {
+		runtime.closeStorageFlusher()
+	}
+}
+
+// quarantineRuntimeLocked detaches a VM that remained busy after interrupt.
+// The caller holds VMMu. Touching or cleaning up that VM would race its stuck
+// goroutine; a later call will build a fresh runtime from indexProgram.
+func quarantineRuntimeLocked(ext *loadedExtension, vm *goja.Runtime) {
+	if ext == nil || ext.VM != vm {
+		return
+	}
+	ext.VM = nil
+	ext.runtime = nil
+	ext.initialized = false
+	ext.Error = "extension runtime was quarantined after an unresponsive script"
+}
+
+// drainIsolatedRuntimePool tears down idle isolated runtimes. Called on
+// extension teardown and on app-wide memory release.
+func drainIsolatedRuntimePool(ext *loadedExtension) {
+	ext.isolatedPoolMu.Lock()
+	pool := ext.isolatedPool
+	ext.isolatedPool = nil
+	ext.isolatedPoolMu.Unlock()
+
+	for _, handle := range pool {
+		if cleanupErr := runCleanupOnVM(handle.vm); cleanupErr != nil {
+			GoLog("[Extension:%s] isolated pool cleanup failed: %v\n", ext.ID, cleanupErr)
+		}
+		if handle.runtime != nil {
+			if err := handle.runtime.flushStorageNow(); err != nil {
+				GoLog("[Extension:%s] isolated pool storage flush failed: %v\n", ext.ID, err)
+			}
+			handle.runtime.closeStorageFlusher()
+		}
+	}
+}
+
+// drainAllIsolatedRuntimePools releases every extension's idle isolated
+// runtimes (memory-pressure hook).
+func drainAllIsolatedRuntimePools() {
+	m := getExtensionManager()
+	m.mu.RLock()
+	exts := make([]*loadedExtension, 0, len(m.extensions))
+	for _, ext := range m.extensions {
+		exts = append(exts, ext)
+	}
+	m.mu.RUnlock()
+
+	for _, ext := range exts {
+		drainIsolatedRuntimePool(ext)
+	}
+}
+
 func (m *extensionManager) initializeVM(ext *loadedExtension) error {
 	ext.VMMu.Lock()
 	defer ext.VMMu.Unlock()
@@ -451,7 +621,7 @@ func (m *extensionManager) initializeVM(ext *loadedExtension) error {
 func initializeExtensionRuntimeWithSettings(
 	vm *goja.Runtime,
 	extensionID string,
-	settings map[string]interface{},
+	settings map[string]any,
 ) error {
 	settingsJSON, err := json.Marshal(settings)
 	if err != nil {
@@ -481,7 +651,7 @@ func initializeExtensionRuntimeWithSettings(
 
 	if result != nil && !goja.IsUndefined(result) {
 		exported := result.Export()
-		if resultMap, ok := exported.(map[string]interface{}); ok {
+		if resultMap, ok := exported.(map[string]any); ok {
 			if success, ok := resultMap["success"].(bool); ok && !success {
 				errMsg := "unknown error"
 				if e, ok := resultMap["error"].(string); ok {
@@ -498,7 +668,7 @@ func initializeExtensionRuntimeWithSettings(
 
 func initializeExtensionWithSettingsLocked(
 	ext *loadedExtension,
-	settings map[string]interface{},
+	settings map[string]any,
 ) error {
 	if ext.VM == nil {
 		return fmt.Errorf("extension failed to load: please reinstall the extension")
@@ -553,7 +723,7 @@ func runCleanupOnVM(vm *goja.Runtime) error {
 
 	if result != nil && !goja.IsUndefined(result) {
 		exported := result.Export()
-		if resultMap, ok := exported.(map[string]interface{}); ok {
+		if resultMap, ok := exported.(map[string]any); ok {
 			if success, ok := resultMap["success"].(bool); ok && !success {
 				errMsg := "unknown error"
 				if e, ok := resultMap["error"].(string); ok {
@@ -568,6 +738,7 @@ func runCleanupOnVM(vm *goja.Runtime) error {
 }
 
 func teardownVMLocked(ext *loadedExtension) {
+	drainIsolatedRuntimePool(ext)
 	if err := runCleanupLocked(ext); err != nil {
 		GoLog("[Extension] Error calling cleanup for %s: %v\n", ext.ID, err)
 	}
@@ -593,6 +764,16 @@ func validateExtensionLoad(ext *loadedExtension) error {
 	return nil
 }
 
+func teardownExtension(ext *loadedExtension) {
+	if ext == nil {
+		return
+	}
+	ext.Enabled = false
+	ext.VMMu.Lock()
+	teardownVMLocked(ext)
+	ext.VMMu.Unlock()
+}
+
 func (m *extensionManager) UnloadExtension(extensionID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -602,6 +783,7 @@ func (m *extensionManager) UnloadExtension(extensionID string) error {
 		return fmt.Errorf("extension not found")
 	}
 
+	ext.Enabled = false
 	ext.VMMu.Lock()
 	teardownVMLocked(ext)
 	ext.VMMu.Unlock()
@@ -731,7 +913,14 @@ func (m *extensionManager) loadExtensionFromDirectory(dirPath string) (*loadedEx
 		return existing, nil
 	}
 
-	extDataDir := filepath.Join(m.dataDir, manifest.Name)
+	expectedSourceDir, err := managedExtensionPath(m.extensionsDir, manifest.Name)
+	if err != nil || filepath.Clean(dirPath) != filepath.Clean(expectedSourceDir) {
+		return nil, fmt.Errorf("extension directory name must match manifest name %q", manifest.Name)
+	}
+	extDataDir, err := managedExtensionPath(m.dataDir, manifest.Name)
+	if err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(extDataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create extension data directory: %w", err)
 	}
@@ -773,14 +962,27 @@ func (m *extensionManager) RemoveExtension(extensionID string) error {
 		return err
 	}
 
+	sourceDir, err := managedExtensionPath(m.extensionsDir, ext.ID)
+	if err != nil || !isPathWithinBase(m.extensionsDir, ext.SourceDir) || filepath.Clean(ext.SourceDir) != filepath.Clean(sourceDir) {
+		return fmt.Errorf("refusing to remove extension outside the managed source directory")
+	}
+	dataDir, err := managedExtensionPath(m.dataDir, ext.ID)
+	if err != nil || !isPathWithinBase(m.dataDir, ext.DataDir) || filepath.Clean(ext.DataDir) != filepath.Clean(dataDir) {
+		return fmt.Errorf("refusing to remove extension outside the managed data directory")
+	}
+
 	if err := m.UnloadExtension(extensionID); err != nil {
 		return err
 	}
 
-	if ext.SourceDir != "" {
-		if err := os.RemoveAll(ext.SourceDir); err != nil {
-			GoLog("[Extension] Warning: failed to remove source dir: %v\n", err)
-		}
+	if err := os.RemoveAll(sourceDir); err != nil {
+		GoLog("[Extension] Warning: failed to remove source dir: %v\n", err)
+	}
+
+	// Uninstall means gone: storage.json and encrypted credentials must not
+	// linger on disk after the extension is removed.
+	if err := os.RemoveAll(dataDir); err != nil {
+		GoLog("[Extension] Warning: failed to remove data dir: %v\n", err)
 	}
 
 	return nil
@@ -855,56 +1057,28 @@ func (m *extensionManager) upgradeExtensionLocked(filePath string) (*loadedExten
 
 	GoLog("[Extension] Upgrading %s from v%s to v%s\n", newManifest.DisplayName, existing.Manifest.Version, newManifest.Version)
 
-	extDataDir := existing.DataDir
-	extDir := existing.SourceDir
+	extDataDir, err := managedExtensionPath(m.dataDir, newManifest.Name)
+	if err != nil || filepath.Clean(existing.DataDir) != filepath.Clean(extDataDir) {
+		return nil, fmt.Errorf("installed extension has an invalid data directory")
+	}
+	extDir, err := managedExtensionPath(m.extensionsDir, newManifest.Name)
+	if err != nil || filepath.Clean(existing.SourceDir) != filepath.Clean(extDir) {
+		return nil, fmt.Errorf("installed extension has an invalid source directory")
+	}
 	wasEnabled := existing.Enabled
 
-	m.UnloadExtension(existing.ID)
-
-	if extDir != "" {
-		if err := os.RemoveAll(extDir); err != nil {
-			GoLog("[Extension] Warning: failed to remove old source dir: %v\n", err)
-		}
+	stagingDir, err := os.MkdirTemp(m.extensionsDir, "."+newManifest.Name+"-upgrade-*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create upgrade staging directory: %w", err)
 	}
-
-	if err := os.MkdirAll(extDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create extension directory: %w", err)
-	}
-
-	for _, file := range zipReader.File {
-		if file.FileInfo().IsDir() {
-			continue
+	stagingActive := true
+	defer func() {
+		if stagingActive {
+			_ = os.RemoveAll(stagingDir)
 		}
-
-		relPath := filepath.Clean(file.Name)
-		if strings.HasPrefix(relPath, "..") || filepath.IsAbs(relPath) {
-			GoLog("[Extension] Skipping unsafe path in archive: %s\n", file.Name)
-			continue
-		}
-		destPath := filepath.Join(extDir, relPath)
-
-		destDir := filepath.Dir(destPath)
-		if err := os.MkdirAll(destDir, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create directory %s: %w", destDir, err)
-		}
-
-		destFile, err := os.Create(destPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create file %s: %w", destPath, err)
-		}
-
-		srcFile, err := file.Open()
-		if err != nil {
-			destFile.Close()
-			return nil, fmt.Errorf("failed to open file in archive: %w", err)
-		}
-
-		_, err = io.Copy(destFile, srcFile)
-		srcFile.Close()
-		destFile.Close()
-		if err != nil {
-			return nil, fmt.Errorf("failed to extract file: %w", err)
-		}
+	}()
+	if err := extractExtensionArchive(zipReader, stagingDir); err != nil {
+		return nil, err
 	}
 
 	ext := &loadedExtension{
@@ -912,22 +1086,53 @@ func (m *extensionManager) upgradeExtensionLocked(filePath string) (*loadedExten
 		Manifest:  newManifest,
 		Enabled:   wasEnabled, // Preserve enabled state from before upgrade
 		DataDir:   extDataDir,
-		SourceDir: extDir,
+		SourceDir: stagingDir,
 	}
 
 	if wasEnabled {
 		if err := ext.ensureRuntimeReady(); err != nil {
-			GoLog("[Extension] Failed to initialize upgraded extension %s: %v\n", newManifest.Name, err)
+			return nil, fmt.Errorf("upgraded extension failed validation: %w", err)
 		}
 	} else if err := validateExtensionLoad(ext); err != nil {
-		ext.Error = err.Error()
-		ext.Enabled = false
-		GoLog("[Extension] Failed to validate upgraded extension %s: %v\n", newManifest.Name, err)
+		return nil, fmt.Errorf("upgraded extension failed validation: %w", err)
+	}
+
+	backupDir, err := os.MkdirTemp(m.extensionsDir, "."+newManifest.Name+"-backup-*")
+	if err != nil {
+		teardownExtension(ext)
+		return nil, fmt.Errorf("failed to prepare upgrade backup: %w", err)
+	}
+	if err := os.Remove(backupDir); err != nil {
+		teardownExtension(ext)
+		return nil, fmt.Errorf("failed to prepare upgrade backup: %w", err)
+	}
+	if err := os.Rename(extDir, backupDir); err != nil {
+		teardownExtension(ext)
+		return nil, fmt.Errorf("failed to preserve current extension: %w", err)
+	}
+	if err := os.Rename(stagingDir, extDir); err != nil {
+		_ = os.Rename(backupDir, extDir)
+		teardownExtension(ext)
+		return nil, fmt.Errorf("failed to activate upgraded extension: %w", err)
+	}
+	stagingActive = false
+	ext.SourceDir = extDir
+
+	existing.Enabled = false
+	if err := m.UnloadExtension(existing.ID); err != nil {
+		_ = os.RemoveAll(extDir)
+		_ = os.Rename(backupDir, extDir)
+		existing.Enabled = wasEnabled
+		teardownExtension(ext)
+		return nil, fmt.Errorf("failed to unload current extension: %w", err)
 	}
 
 	m.mu.Lock()
 	m.extensions[newManifest.Name] = ext
 	m.mu.Unlock()
+	if err := os.RemoveAll(backupDir); err != nil {
+		GoLog("[Extension] Warning: failed to remove upgrade backup: %v\n", err)
+	}
 
 	GoLog("[Extension] Upgraded extension: %s to v%s\n", newManifest.DisplayName, newManifest.Version)
 
@@ -1043,7 +1248,7 @@ func (m *extensionManager) GetInstalledExtensionsJSON() (string, error) {
 		TrackMatching          *TrackMatchingConfig   `json:"track_matching,omitempty"`
 		PostProcessing         *PostProcessingConfig  `json:"post_processing,omitempty"`
 		ServiceHealth          []ExtensionHealthCheck `json:"service_health,omitempty"`
-		Capabilities           map[string]interface{} `json:"capabilities,omitempty"`
+		Capabilities           map[string]any         `json:"capabilities,omitempty"`
 	}
 
 	infos := make([]ExtensionInfo, len(extensions))
@@ -1055,6 +1260,15 @@ func (m *extensionManager) GetInstalledExtensionsJSON() (string, error) {
 		if ext.Manifest.Permissions.Storage {
 			permissions = append(permissions, "storage:enabled")
 		}
+		if ext.Manifest.Permissions.File {
+			permissions = append(permissions, "file:enabled")
+		}
+		if ext.Manifest.Permissions.AllowHTTP {
+			permissions = append(permissions, "network:http")
+		}
+		if ext.Manifest.HasCapability("rawFfmpeg") {
+			permissions = append(permissions, "ffmpeg:raw")
+		}
 
 		status := "loaded"
 		if ext.Error != "" {
@@ -1065,15 +1279,19 @@ func (m *extensionManager) GetInstalledExtensionsJSON() (string, error) {
 
 		iconPath := ""
 		if ext.Manifest.Icon != "" && ext.SourceDir != "" {
-			possibleIcon := filepath.Join(ext.SourceDir, ext.Manifest.Icon)
-			if _, err := os.Stat(possibleIcon); err == nil {
-				iconPath = possibleIcon
+			possibleIcon, safe := safeExtensionAssetPath(ext.SourceDir, ext.Manifest.Icon)
+			if safe {
+				if _, err := os.Stat(possibleIcon); err == nil {
+					iconPath = possibleIcon
+				}
 			}
 		}
 		if iconPath == "" && ext.SourceDir != "" {
-			possibleIcon := filepath.Join(ext.SourceDir, "icon.png")
-			if _, err := os.Stat(possibleIcon); err == nil {
-				iconPath = possibleIcon
+			possibleIcon, safe := safeExtensionAssetPath(ext.SourceDir, "icon.png")
+			if safe {
+				if _, err := os.Stat(possibleIcon); err == nil {
+					iconPath = possibleIcon
+				}
 			}
 		}
 
@@ -1114,7 +1332,7 @@ func (m *extensionManager) GetInstalledExtensionsJSON() (string, error) {
 	return string(jsonBytes), nil
 }
 
-func (m *extensionManager) InitializeExtension(extensionID string, settings map[string]interface{}) error {
+func (m *extensionManager) InitializeExtension(extensionID string, settings map[string]any) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -1169,7 +1387,7 @@ func (m *extensionManager) UnloadAllExtensions() {
 	GoLog("[Extension] All extensions unloaded\n")
 }
 
-func (m *extensionManager) InvokeAction(extensionID string, actionName string) (map[string]interface{}, error) {
+func (m *extensionManager) InvokeAction(extensionID string, actionName string) (map[string]any, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -1229,19 +1447,22 @@ func (m *extensionManager) InvokeAction(extensionID string, actionName string) (
 
 	result, err := RunWithTimeoutAndRecover(vm, script, DefaultJSTimeout)
 	if err != nil {
+		if IsRuntimeUnsafeError(err) {
+			quarantineRuntimeLocked(ext, vm)
+		}
 		GoLog("[Extension] InvokeAction error for %s.%s: %v\n", extensionID, actionName, err)
 		return nil, fmt.Errorf("action failed: %v", err)
 	}
 
 	if result == nil || goja.IsUndefined(result) {
-		return map[string]interface{}{"success": true}, nil
+		return map[string]any{"success": true}, nil
 	}
 
 	exported := result.Export()
-	if resultMap, ok := exported.(map[string]interface{}); ok {
+	if resultMap, ok := exported.(map[string]any); ok {
 		GoLog("[Extension] InvokeAction %s.%s result: %v\n", extensionID, actionName, resultMap)
 		return resultMap, nil
 	}
 
-	return map[string]interface{}{"success": true, "result": exported}, nil
+	return map[string]any{"success": true, "result": exported}, nil
 }

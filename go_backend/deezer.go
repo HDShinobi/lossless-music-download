@@ -163,17 +163,26 @@ func (c *DeezerClient) maybeCleanupCachesLocked(now time.Time) {
 }
 
 type deezerTrack struct {
-	ID            int64             `json:"id"`
-	Title         string            `json:"title"`
-	Duration      int               `json:"duration"`
-	TrackPosition int               `json:"track_position"`
-	DiskNumber    int               `json:"disk_number"`
-	ISRC          string            `json:"isrc"`
-	Link          string            `json:"link"`
-	ReleaseDate   string            `json:"release_date"`
-	Artist        deezerArtist      `json:"artist"`
-	Album         deezerAlbumSimple `json:"album"`
-	Contributors  []deezerArtist    `json:"contributors"`
+	ID                    int64             `json:"id"`
+	Title                 string            `json:"title"`
+	Duration              int               `json:"duration"`
+	TrackPosition         int               `json:"track_position"`
+	DiskNumber            int               `json:"disk_number"`
+	ISRC                  string            `json:"isrc"`
+	Link                  string            `json:"link"`
+	ReleaseDate           string            `json:"release_date"`
+	ExplicitLyrics        bool              `json:"explicit_lyrics"`
+	ExplicitContentLyrics int               `json:"explicit_content_lyrics"`
+	Artist                deezerArtist      `json:"artist"`
+	Album                 deezerAlbumSimple `json:"album"`
+	Contributors          []deezerArtist    `json:"contributors"`
+}
+
+// deezerTrackIsExplicit maps Deezer's parental-advisory fields to a boolean:
+// explicit_lyrics is the boolean flag, explicit_content_lyrics uses 1 to mean
+// explicit (0 = clean, 2 = unknown).
+func deezerTrackIsExplicit(track deezerTrack) bool {
+	return track.ExplicitLyrics || track.ExplicitContentLyrics == 1
 }
 
 type deezerArtist struct {
@@ -245,6 +254,7 @@ func (c *DeezerClient) convertTrack(track deezerTrack) TrackMetadata {
 		ISRC:        track.ISRC,
 		AlbumID:     fmt.Sprintf("deezer:%d", track.Album.ID),
 		ArtistID:    fmt.Sprintf("deezer:%d", track.Artist.ID),
+		Explicit:    deezerTrackIsExplicit(track),
 	}
 }
 
@@ -670,6 +680,7 @@ func (c *DeezerClient) GetAlbum(ctx context.Context, albumID string) (*AlbumResp
 			ISRC:        isrc,
 			AlbumID:     fmt.Sprintf("deezer:%d", album.ID),
 			AlbumType:   albumType,
+			Explicit:    deezerTrackIsExplicit(track),
 		})
 	}
 
@@ -979,6 +990,7 @@ func (c *DeezerClient) GetPlaylist(ctx context.Context, playlistID string) (*Pla
 			ExternalURL: track.Link,
 			ISRC:        isrc,
 			AlbumID:     fmt.Sprintf("deezer:%d", track.Album.ID),
+			Explicit:    deezerTrackIsExplicit(track),
 		})
 	}
 
@@ -1251,12 +1263,16 @@ func (c *DeezerClient) GetExtendedMetadataByISRC(ctx context.Context, isrc strin
 	return c.GetExtendedMetadataByTrackID(ctx, deezerID)
 }
 
-func (c *DeezerClient) getJSON(ctx context.Context, endpoint string, dst interface{}) error {
+func (c *DeezerClient) getJSON(ctx context.Context, endpoint string, dst any) error {
 	var lastErr error
 
 	for attempt := 0; attempt <= deezerMaxRetries; attempt++ {
 		if attempt > 0 {
 			delay := deezerRetryDelay * time.Duration(1<<(attempt-1))
+			var apiErr *deezerAPIError
+			if errors.As(lastErr, &apiErr) && apiErr.RetryAfter > 0 {
+				delay = apiErr.RetryAfter
+			}
 			GoLog("[Deezer] Retry %d/%d after %v...\n", attempt, deezerMaxRetries, delay)
 			time.Sleep(delay)
 		}
@@ -1280,6 +1296,7 @@ func (c *DeezerClient) getJSON(ctx context.Context, endpoint string, dst interfa
 type deezerAPIError struct {
 	StatusCode int
 	Body       string
+	RetryAfter time.Duration
 }
 
 func (e *deezerAPIError) Error() string {
@@ -1297,13 +1314,17 @@ func isDeezerRetryableError(err error) bool {
 	return false
 }
 
-func (c *DeezerClient) doGetJSON(ctx context.Context, endpoint string, dst interface{}) error {
+func (c *DeezerClient) doGetJSON(ctx context.Context, endpoint string, dst any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return err
 	}
 
 	req.Header.Set("Accept", "application/json")
+	// Without an explicit language Deezer localizes artist/genre names by
+	// the caller's IP geolocation (issue #480: Arabic metadata on an
+	// English device). Follow the app's display language instead.
+	req.Header.Set("Accept-Language", metadataAcceptLanguage())
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -1317,7 +1338,7 @@ func (c *DeezerClient) doGetJSON(ctx context.Context, endpoint string, dst inter
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return &deezerAPIError{StatusCode: resp.StatusCode, Body: string(body)}
+		return &deezerAPIError{StatusCode: resp.StatusCode, Body: string(body), RetryAfter: getRetryAfterDuration(resp)}
 	}
 
 	return json.Unmarshal(body, dst)

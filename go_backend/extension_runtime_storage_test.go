@@ -11,7 +11,7 @@ import (
 	"github.com/dop251/goja"
 )
 
-func setStorageValue(t *testing.T, runtime *extensionRuntime, key string, value interface{}) {
+func setStorageValue(t *testing.T, runtime *extensionRuntime, key string, value any) {
 	t.Helper()
 	result := runtime.storageSet(goja.FunctionCall{
 		Arguments: []goja.Value{
@@ -24,21 +24,91 @@ func setStorageValue(t *testing.T, runtime *extensionRuntime, key string, value 
 	}
 }
 
-func readStorageMap(t *testing.T, storagePath string) map[string]interface{} {
+func TestExtensionRuntimeStorageConcurrentRuntimesMergeWrites(t *testing.T) {
+	dataDir := t.TempDir()
+	ext := &loadedExtension{ID: "merge-test", Manifest: &ExtensionManifest{Name: "merge-test"}, DataDir: dataDir}
+	runtimeA := newExtensionRuntime(ext)
+	runtimeB := newExtensionRuntime(ext)
+	runtimeA.RegisterAPIs(goja.New())
+	runtimeB.RegisterAPIs(goja.New())
+
+	start := make(chan struct{})
+	done := make(chan bool, 2)
+	go func() {
+		<-start
+		result := runtimeA.storageSet(goja.FunctionCall{Arguments: []goja.Value{
+			runtimeA.vm.ToValue("from_a"), runtimeA.vm.ToValue("a"),
+		}})
+		done <- result.ToBoolean()
+	}()
+	go func() {
+		<-start
+		result := runtimeB.storageSet(goja.FunctionCall{Arguments: []goja.Value{
+			runtimeB.vm.ToValue("from_b"), runtimeB.vm.ToValue("b"),
+		}})
+		done <- result.ToBoolean()
+	}()
+	close(start)
+	if !<-done || !<-done {
+		t.Fatal("concurrent storage write failed")
+	}
+
+	storage := readStorageMap(t, filepath.Join(dataDir, "storage.json"))
+	if storage["from_a"] != "a" || storage["from_b"] != "b" {
+		t.Fatalf("concurrent storage writes were not merged: %#v", storage)
+	}
+
+	credStart := make(chan struct{})
+	credDone := make(chan struct{}, 2)
+	for _, item := range []struct {
+		runtime *extensionRuntime
+		key     string
+	}{
+		{runtimeA, "token_a"},
+		{runtimeB, "token_b"},
+	} {
+		item := item
+		go func() {
+			<-credStart
+			result := item.runtime.credentialsStore(goja.FunctionCall{Arguments: []goja.Value{
+				item.runtime.vm.ToValue(item.key),
+				item.runtime.vm.ToValue(item.key + "_value"),
+			}})
+			if success, _ := result.Export().(map[string]any)["success"].(bool); !success {
+				t.Errorf("credentialsStore(%s) failed", item.key)
+			}
+			credDone <- struct{}{}
+		}()
+	}
+	close(credStart)
+	<-credDone
+	<-credDone
+
+	reader := newExtensionRuntime(ext)
+	reader.RegisterAPIs(goja.New())
+	for _, key := range []string{"token_a", "token_b"} {
+		got := reader.credentialsGet(goja.FunctionCall{Arguments: []goja.Value{reader.vm.ToValue(key)}}).String()
+		if got != key+"_value" {
+			t.Fatalf("credential %s = %q", key, got)
+		}
+	}
+}
+
+func readStorageMap(t *testing.T, storagePath string) map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(storagePath)
 	if err != nil {
 		t.Fatalf("failed to read storage file: %v", err)
 	}
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("failed to unmarshal storage file: %v", err)
 	}
 	return parsed
 }
 
-func TestExtensionRuntimeStorage_DebouncedWriteCompactJSON(t *testing.T) {
+func TestExtensionRuntimeStorage_AtomicWriteCompactJSON(t *testing.T) {
 	ext := &loadedExtension{
 		ID: "storage-test",
 		Manifest: &ExtensionManifest{
@@ -48,7 +118,6 @@ func TestExtensionRuntimeStorage_DebouncedWriteCompactJSON(t *testing.T) {
 	}
 
 	runtime := newExtensionRuntime(ext)
-	runtime.storageFlushDelay = 25 * time.Millisecond
 	runtime.RegisterAPIs(goja.New())
 
 	setStorageValue(t, runtime, "k1", "v1")
@@ -70,7 +139,7 @@ func TestExtensionRuntimeStorage_DebouncedWriteCompactJSON(t *testing.T) {
 		t.Fatalf("storage.json was not written within timeout")
 	}
 
-	var parsed map[string]interface{}
+	var parsed map[string]any
 	if err := json.Unmarshal(raw, &parsed); err != nil {
 		t.Fatalf("failed to unmarshal storage file: %v", err)
 	}
@@ -96,7 +165,6 @@ func TestUnloadExtension_FlushesPendingStorage(t *testing.T) {
 	}
 
 	runtime := newExtensionRuntime(ext)
-	runtime.storageFlushDelay = time.Hour
 	runtime.RegisterAPIs(ext.VM)
 	ext.runtime = runtime
 

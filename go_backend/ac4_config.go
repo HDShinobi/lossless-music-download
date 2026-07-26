@@ -3,6 +3,7 @@ package gobackend
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -25,13 +26,14 @@ func readMP4Box(data []byte, pos int64) (mp4Box, bool) {
 	size := int64(binary.BigEndian.Uint32(data[pos : pos+4]))
 	typ := string(data[pos+4 : pos+8])
 	hdr := int64(8)
-	if size == 1 {
+	switch size {
+	case 1:
 		if pos+16 > n {
 			return mp4Box{}, false
 		}
 		size = int64(binary.BigEndian.Uint64(data[pos+8 : pos+16]))
 		hdr = 16
-	} else if size == 0 {
+	case 0:
 		size = n - pos
 	}
 	if size < hdr || pos+size > n {
@@ -206,23 +208,33 @@ func shiftChunkOffsets(data []byte, moov mp4Box, insertPos, delta int64) {
 	})
 }
 
-// normalizeQuickTimeAudioToMP4 rewrites a QuickTime-flavored file (FFmpeg mov
-// muxer output: ftyp brand "qt  " and a version-1 sound sample entry) into a
-// standard ISO MP4: an isom/mp42 brand and a plain version-0 AudioSampleEntry.
-// Windows Media Foundation (and other strict parsers) reject the QuickTime
-// flavor for AC-4 even when dac4 is present.
-func normalizeQuickTimeAudioToMP4(data []byte) []byte {
-	if ftyp, ok := findChildMP4(data, 0, int64(len(data)), "ftyp"); ok {
-		if ftyp.body()+4 <= int64(len(data)) {
-			copy(data[ftyp.body():ftyp.body()+4], []byte("mp42"))
-		}
-		for p := ftyp.body() + 8; p+4 <= ftyp.end(); p += 4 {
-			if string(data[p:p+4]) == "qt  " {
-				copy(data[p:p+4], []byte("isom"))
-			}
+// normalizeQuickTimeBrandsInBuf rewrites a "qt  " ftyp brand to isom/mp42 in
+// place. Works on any buffer whose top level contains the ftyp box (whole file
+// or the ftyp box alone). Returns whether anything changed.
+func normalizeQuickTimeBrandsInBuf(data []byte) bool {
+	ftyp, ok := findChildMP4(data, 0, int64(len(data)), "ftyp")
+	if !ok {
+		return false
+	}
+	changed := false
+	if ftyp.body()+4 <= int64(len(data)) && string(data[ftyp.body():ftyp.body()+4]) != "mp42" {
+		copy(data[ftyp.body():ftyp.body()+4], []byte("mp42"))
+		changed = true
+	}
+	for p := ftyp.body() + 8; p+4 <= ftyp.end(); p += 4 {
+		if string(data[p:p+4]) == "qt  " {
+			copy(data[p:p+4], []byte("isom"))
+			changed = true
 		}
 	}
+	return changed
+}
 
+// normalizeQuickTimeAudioEntry rewrites a version-1 QuickTime sound sample
+// entry into a plain version-0 AudioSampleEntry, dropping the 16-byte v1
+// extension. base is the buffer's absolute file offset (0 for a whole-file
+// buffer, the moov offset for a moov-only buffer).
+func normalizeQuickTimeAudioEntry(data []byte, base int64) []byte {
 	loc, ok := locateAC4Entry(data)
 	if !ok {
 		return data
@@ -246,7 +258,7 @@ func normalizeQuickTimeAudioToMP4(data []byte) []byte {
 	delta := int64(-16)
 
 	binary.BigEndian.PutUint16(data[verPos:verPos+2], 0)
-	shiftChunkOffsets(data, loc.chain[0], extStart, delta)
+	shiftChunkOffsets(data, loc.chain[0], base+extStart, delta)
 	for _, b := range loc.chain {
 		growBoxSize(data, b, delta)
 	}
@@ -258,22 +270,67 @@ func normalizeQuickTimeAudioToMP4(data []byte) []byte {
 	return out
 }
 
+// normalizeQuickTimeAudioToMP4 rewrites a QuickTime-flavored file (FFmpeg mov
+// muxer output: ftyp brand "qt  " and a version-1 sound sample entry) into a
+// standard ISO MP4: an isom/mp42 brand and a plain version-0 AudioSampleEntry.
+// Windows Media Foundation (and other strict parsers) reject the QuickTime
+// flavor for AC-4 even when dac4 is present.
+func normalizeQuickTimeAudioToMP4(data []byte) []byte {
+	normalizeQuickTimeBrandsInBuf(data)
+	return normalizeQuickTimeAudioEntry(data, 0)
+}
+
 // EnsureAC4ConfigBox makes a decrypted AC-4 MP4 standards-compliant and
 // playable: it normalizes FFmpeg's QuickTime-flavored mov output to an ISO MP4
 // and injects the AC-4 configuration box (dac4) into the ac-4 sample entry. The
 // dac4 box is copied verbatim from sourcePath (the original MP4, whose plaintext
-// moov still carries it). No-op when the file has no AC-4 track.
+// moov still carries it). No-op when the file has no AC-4 track. Only the ftyp
+// and moov boxes are held in memory; the audio bulk is streamed.
 func EnsureAC4ConfigBox(decryptedPath, sourcePath string) error {
-	dst, err := os.ReadFile(decryptedPath)
+	f, err := os.Open(decryptedPath)
 	if err != nil {
 		return err
 	}
+	info, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return err
+	}
+	// A non-MP4 decrypt output (e.g. a raw FLAC stream) is not an AC-4 file;
+	// bail out before the box parser reports it as a corrupt MP4. A real
+	// ISO-BMFF box type is four printable ASCII bytes.
+	var head [8]byte
+	if _, err := f.ReadAt(head[:], 0); err != nil {
+		f.Close()
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			return nil
+		}
+		return err
+	}
+	for _, c := range head[4:8] {
+		if c < 0x20 || c > 0x7e {
+			f.Close()
+			return nil
+		}
+	}
+	moovBuf, moovOffset, moovFound, err := loadTopLevelMP4Box(f, info.Size(), "moov")
+	if err != nil || !moovFound {
+		f.Close()
+		return err // parse/read failure, or no moov: nothing to do
+	}
+	ftypBuf, ftypOffset, ftypFound, err := loadTopLevelMP4Box(f, info.Size(), "ftyp")
+	f.Close()
+	if err != nil {
+		return err
+	}
+	moovLen := int64(len(moovBuf))
 
-	if _, ok := locateAC4Entry(dst); !ok {
+	if _, ok := locateAC4Entry(moovBuf); !ok {
 		return nil // not an AC-4 file; nothing to do
 	}
 
-	dst = normalizeQuickTimeAudioToMP4(dst)
+	ftypChanged := ftypFound && normalizeQuickTimeBrandsInBuf(ftypBuf)
+	dst := normalizeQuickTimeAudioEntry(moovBuf, moovOffset)
 
 	loc, ok := locateAC4Entry(dst)
 	if !ok {
@@ -287,27 +344,40 @@ func EnsureAC4ConfigBox(decryptedPath, sourcePath string) error {
 	childStart := loc.entry.body() + hdrLen
 	if _, has := findChildMP4(dst, childStart, loc.entry.end(), "dac4"); has {
 		// Already has dac4; still persist any normalization changes.
-		return os.WriteFile(decryptedPath, dst, 0o644)
+		return writeAC4Sections(decryptedPath, ftypChanged, ftypBuf, ftypOffset, dst, moovOffset, moovLen)
 	}
 
-	src, err := os.ReadFile(sourcePath)
+	srcF, err := os.Open(sourcePath)
 	if err != nil {
 		return err
 	}
-	srcMoov, ok := findChildMP4(src, 0, int64(len(src)), "moov")
+	srcInfo, err := srcF.Stat()
+	if err != nil {
+		srcF.Close()
+		return err
+	}
+	srcMoovBuf, _, srcFound, err := loadTopLevelMP4Box(srcF, srcInfo.Size(), "moov")
+	srcF.Close()
+	if err != nil {
+		return err
+	}
+	if !srcFound {
+		return fmt.Errorf("source has no moov")
+	}
+	srcMoov, ok := readMP4Box(srcMoovBuf, 0)
 	if !ok {
 		return fmt.Errorf("source has no moov")
 	}
-	dac4Box, ok := findBoxBySignature(src, srcMoov.body(), srcMoov.end(), "dac4")
+	dac4Box, ok := findBoxBySignature(srcMoovBuf, srcMoov.body(), srcMoov.end(), "dac4")
 	if !ok {
 		return fmt.Errorf("dac4 not found in source")
 	}
-	dac4 := append([]byte{}, src[dac4Box.offset:dac4Box.end()]...)
+	dac4 := append([]byte{}, srcMoovBuf[dac4Box.offset:dac4Box.end()]...)
 
 	insertPos := childStart
 	delta := int64(len(dac4))
 
-	shiftChunkOffsets(dst, loc.chain[0], insertPos, delta)
+	shiftChunkOffsets(dst, loc.chain[0], moovOffset+insertPos, delta)
 	for _, b := range loc.chain {
 		growBoxSize(dst, b, delta)
 	}
@@ -318,5 +388,21 @@ func EnsureAC4ConfigBox(decryptedPath, sourcePath string) error {
 	out = append(out, dac4...)
 	out = append(out, dst[insertPos:]...)
 
-	return os.WriteFile(decryptedPath, out, 0o644)
+	return writeAC4Sections(decryptedPath, ftypChanged, ftypBuf, ftypOffset, out, moovOffset, moovLen)
+}
+
+// writeAC4Sections streams the edited moov (and, when changed, ftyp) back into
+// the file.
+func writeAC4Sections(path string, ftypChanged bool, ftypBuf []byte, ftypOffset int64, moovBuf []byte, moovOffset, origMoovLen int64) error {
+	sections := []fileSection{
+		{start: moovOffset, end: moovOffset + origMoovLen, data: moovBuf},
+	}
+	if ftypChanged {
+		sections = append(sections, fileSection{
+			start: ftypOffset,
+			end:   ftypOffset + int64(len(ftypBuf)),
+			data:  ftypBuf,
+		})
+	}
+	return replaceFileSectionsStreaming(path, sections)
 }

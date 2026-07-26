@@ -61,15 +61,26 @@ func TestOutputFDFilePathBranches(t *testing.T) {
 	if _, err := file.Write([]byte("data")); err != nil {
 		t.Fatalf("write output: %v", err)
 	}
-	file.Close()
+	if err := file.Close(); err != nil {
+		t.Fatalf("close output: %v", err)
+	}
 	if !isFDOutput(1) || isFDOutput(0) {
 		t.Fatal("isFDOutput mismatch")
 	}
 	closeOwnedOutputFD(0)
-	if err := prepareDupFDForWrite(11, 10); err != nil {
+	fdSource, err := os.OpenFile(outputPath, os.O_RDWR, 0600)
+	if err != nil {
+		t.Fatalf("open fd source: %v", err)
+	}
+	defer fdSource.Close()
+	dupFD, err := dupOutputFD(int(fdSource.Fd()))
+	if err != nil {
+		t.Fatalf("duplicate output fd: %v", err)
+	}
+	if err := prepareDupFDForWrite(dupFD, int(fdSource.Fd())); err != nil {
 		t.Fatalf("prepareDupFDForWrite: %v", err)
 	}
-	closeOwnedOutputFD(11)
+	closeOwnedOutputFD(dupFD)
 	cleanupOutputOnError(outputPath, 0)
 	if _, err := os.Stat(outputPath); !os.IsNotExist(err) {
 		t.Fatalf("cleanup should remove output path, stat err=%v", err)
@@ -89,17 +100,16 @@ func TestMoreSmallConstructorsRuntimeAndMetadataHelpers(t *testing.T) {
 	if NewIDHSClient().client == nil {
 		t.Fatal("expected IDHS HTTP client")
 	}
-	ClearTrackCache()
 
 	vm := goja.New()
-	runtime := &extensionRuntime{extensionID: "misc-runtime", vm: vm, settings: map[string]interface{}{}}
+	runtime := &extensionRuntime{extensionID: "misc-runtime", vm: vm, settings: map[string]any{}}
 	if parseExtensionTimeoutSeconds(" 42 ") != 42 || parseExtensionTimeoutSeconds("bad") != 0 || parseExtensionTimeoutSeconds(float64(7)) != 7 {
 		t.Fatal("parseExtensionTimeoutSeconds mismatch")
 	}
 	if (&RedirectBlockedError{Domain: "blocked.example"}).Error() == "" || (&RedirectBlockedError{IsPrivate: true}).Error() == "" {
 		t.Fatal("RedirectBlockedError Error mismatch")
 	}
-	runtime.SetSettings(map[string]interface{}{"quality": "lossless"})
+	runtime.SetSettings(map[string]any{"quality": "lossless"})
 	if runtime.settings["quality"] != "lossless" {
 		t.Fatal("SetSettings mismatch")
 	}
@@ -110,16 +120,16 @@ func TestMoreSmallConstructorsRuntimeAndMetadataHelpers(t *testing.T) {
 		t.Fatalf("cookies = %#v", cookies)
 	}
 
-	if result := runtime.ffmpegExecute(goja.FunctionCall{}).Export().(map[string]interface{}); result["success"] != false {
+	if result := runtime.ffmpegExecute(goja.FunctionCall{}).Export().(map[string]any); result["success"] != false {
 		t.Fatalf("ffmpegExecute missing args = %#v", result)
 	}
-	if result := runtime.ffmpegGetInfo(goja.FunctionCall{}).Export().(map[string]interface{}); result["success"] != false {
+	if result := runtime.ffmpegGetInfo(goja.FunctionCall{}).Export().(map[string]any); result["success"] != false {
 		t.Fatalf("ffmpegGetInfo missing args = %#v", result)
 	}
-	if result := runtime.ffmpegGetInfo(goja.FunctionCall{Arguments: []goja.Value{vm.ToValue("missing.flac")}}).Export().(map[string]interface{}); result["success"] != false {
+	if result := runtime.ffmpegGetInfo(goja.FunctionCall{Arguments: []goja.Value{vm.ToValue("missing.flac")}}).Export().(map[string]any); result["success"] != false {
 		t.Fatalf("ffmpegGetInfo missing file = %#v", result)
 	}
-	if result := runtime.ffmpegConvert(goja.FunctionCall{}).Export().(map[string]interface{}); result["success"] != false {
+	if result := runtime.ffmpegConvert(goja.FunctionCall{}).Export().(map[string]any); result["success"] != false {
 		t.Fatalf("ffmpegConvert missing args = %#v", result)
 	}
 
@@ -158,15 +168,6 @@ func TestMoreSmallConstructorsRuntimeAndMetadataHelpers(t *testing.T) {
 	}
 	if string(mustReadFile(t, coverPath)) != "cover" {
 		t.Fatal("downloaded cover mismatch")
-	}
-
-	parallel := FetchCoverAndLyricsParallel(server.URL+"/cover.jpg", false, "spotify-1", "Song Instrumental", "Artist", true, 180000)
-	if string(parallel.CoverData) != "cover" || parallel.CoverErr != nil || parallel.LyricsErr == nil {
-		t.Fatalf("FetchCoverAndLyricsParallel = %#v", parallel)
-	}
-	emptyParallel := FetchCoverAndLyricsParallel("", false, "", "", "", false, 0)
-	if emptyParallel.CoverData != nil || emptyParallel.LyricsData != nil {
-		t.Fatalf("empty FetchCoverAndLyricsParallel = %#v", emptyParallel)
 	}
 }
 
@@ -221,14 +222,14 @@ func TestExtensionHealthInitializeVMAndCustomSearchWrappers(t *testing.T) {
 		t.Fatal("expected initialized VM")
 	}
 	provider := &extensionProviderWrapper{extension: ext}
-	if tracks, err := provider.CustomSearch("needle", map[string]interface{}{"type": "track"}); err != nil || len(tracks) == 0 {
+	if tracks, err := provider.CustomSearch("needle", map[string]any{"type": "track"}); err != nil || len(tracks) == 0 {
 		t.Fatalf("CustomSearch = %#v/%v", tracks, err)
 	}
 	cancelMu.Lock()
 	delete(cancelMap, "custom-item-unique")
 	cancelMu.Unlock()
-	if tracks, err := provider.CustomSearchForItemID("needle", nil, "custom-item-unique"); err != nil || len(tracks) == 0 {
-		t.Fatalf("CustomSearchForItemID = %#v/%v", tracks, err)
+	if tracks, err := provider.customSearch("needle", nil, "custom-item-unique", ""); err != nil || len(tracks) == 0 {
+		t.Fatalf("customSearch (item ID) = %#v/%v", tracks, err)
 	}
 	if healthJSON, err := CheckExtensionHealthJSON(ext.ID); err != nil || !strings.Contains(healthJSON, `"status":"offline"`) {
 		t.Fatalf("CheckExtensionHealthJSON = %q/%v", healthJSON, err)
@@ -263,7 +264,7 @@ func TestManifestPerfMatchingAndTitleHelpers(t *testing.T) {
 		t.Fatal("extensionDurationMs mismatch")
 	}
 	vm := goja.New()
-	value := vm.ToValue(map[string]interface{}{"tracks": []interface{}{1, 2, 3}})
+	value := vm.ToValue(map[string]any{"tracks": []any{1, 2, 3}})
 	if countExtensionTopLevelItems(vm, value) != 3 {
 		t.Fatal("countExtensionTopLevelItems mismatch")
 	}
@@ -298,7 +299,7 @@ func TestManifestPerfMatchingAndTitleHelpers(t *testing.T) {
 		t.Fatal("expected mismatching track")
 	}
 
-	var decoded map[string]interface{}
+	var decoded map[string]any
 	if err := json.Unmarshal(data, &decoded); err != nil || decoded["name"] != "misc-ext" {
 		t.Fatalf("manifest JSON decode = %#v/%v", decoded, err)
 	}

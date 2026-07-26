@@ -51,14 +51,17 @@ func ClearFFmpegCommand(commandID string) {
 }
 
 func (r *extensionRuntime) ffmpegExecute(call goja.FunctionCall) goja.Value {
+	if r.manifest == nil || !r.manifest.Permissions.File || !r.manifest.HasCapability("rawFfmpeg") {
+		return r.jsError("raw FFmpeg execution permission denied")
+	}
 	if len(call.Arguments) < 1 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "command is required",
-		})
+		return r.jsError("command is required")
 	}
 
-	command := call.Arguments[0].String()
+	return r.executeFFmpegCommand(call.Arguments[0].String(), "", "")
+}
+
+func (r *extensionRuntime) executeFFmpegCommand(command, inputPath, outputPath string) goja.Value {
 
 	ffmpegCommandsMu.Lock()
 	ffmpegCommandID++
@@ -66,6 +69,8 @@ func (r *extensionRuntime) ffmpegExecute(call goja.FunctionCall) goja.Value {
 	ffmpegCommands[cmdID] = &FFmpegCommand{
 		ExtensionID: r.extensionID,
 		Command:     command,
+		InputPath:   inputPath,
+		OutputPath:  outputPath,
 		Completed:   false,
 	}
 	ffmpegCommandsMu.Unlock()
@@ -82,7 +87,7 @@ func (r *extensionRuntime) ffmpegExecute(call goja.FunctionCall) goja.Value {
 
 		if completed {
 			ffmpegCommandsMu.RLock()
-			result := map[string]interface{}{
+			result := map[string]any{
 				"success": cmd.Success,
 				"output":  cmd.Output,
 			}
@@ -97,10 +102,7 @@ func (r *extensionRuntime) ffmpegExecute(call goja.FunctionCall) goja.Value {
 
 		if time.Since(start) > timeout {
 			ClearFFmpegCommand(cmdID)
-			return r.vm.ToValue(map[string]interface{}{
-				"success": false,
-				"error":   "FFmpeg command timed out",
-			})
+			return r.jsError("FFmpeg command timed out")
 		}
 
 		time.Sleep(100 * time.Millisecond)
@@ -108,25 +110,24 @@ func (r *extensionRuntime) ffmpegExecute(call goja.FunctionCall) goja.Value {
 }
 
 func (r *extensionRuntime) ffmpegGetInfo(call goja.FunctionCall) goja.Value {
+	if r.manifest == nil || !r.manifest.Permissions.File {
+		return r.jsError("file permission denied")
+	}
 	if len(call.Arguments) < 1 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "file path is required",
-		})
+		return r.jsError("file path is required")
 	}
 
-	filePath := call.Arguments[0].String()
+	filePath, err := r.validatePath(call.Arguments[0].String())
+	if err != nil {
+		return r.jsError("%s", err.Error())
+	}
 
 	quality, err := GetAudioQuality(filePath)
 	if err != nil {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   err.Error(),
-		})
+		return r.jsError("%s", err.Error())
 	}
 
-	return r.vm.ToValue(map[string]interface{}{
-		"success":       true,
+	return r.jsSuccess(map[string]any{
 		"bit_depth":     quality.BitDepth,
 		"sample_rate":   quality.SampleRate,
 		"total_samples": quality.TotalSamples,
@@ -136,19 +137,25 @@ func (r *extensionRuntime) ffmpegGetInfo(call goja.FunctionCall) goja.Value {
 }
 
 func (r *extensionRuntime) ffmpegConvert(call goja.FunctionCall) goja.Value {
+	if r.manifest == nil || !r.manifest.Permissions.File {
+		return r.jsError("file permission denied")
+	}
 	if len(call.Arguments) < 2 {
-		return r.vm.ToValue(map[string]interface{}{
-			"success": false,
-			"error":   "input and output paths are required",
-		})
+		return r.jsError("input and output paths are required")
 	}
 
-	inputPath := call.Arguments[0].String()
-	outputPath := call.Arguments[1].String()
+	inputPath, err := r.validatePath(call.Arguments[0].String())
+	if err != nil {
+		return r.jsError("invalid input path: %v", err)
+	}
+	outputPath, err := r.validatePath(call.Arguments[1].String())
+	if err != nil {
+		return r.jsError("invalid output path: %v", err)
+	}
 
-	options := map[string]interface{}{}
+	options := map[string]any{}
 	if len(call.Arguments) > 2 && !goja.IsUndefined(call.Arguments[2]) && !goja.IsNull(call.Arguments[2]) {
-		if opts, ok := call.Arguments[2].Export().(map[string]interface{}); ok {
+		if opts, ok := call.Arguments[2].Export().(map[string]any); ok {
 			options = opts
 		}
 	}
@@ -176,8 +183,5 @@ func (r *extensionRuntime) ffmpegConvert(call goja.FunctionCall) goja.Value {
 
 	command := strings.Join(cmdParts, " ")
 
-	execCall := goja.FunctionCall{
-		Arguments: []goja.Value{r.vm.ToValue(command)},
-	}
-	return r.ffmpegExecute(execCall)
+	return r.executeFFmpegCommand(command, inputPath, outputPath)
 }

@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 )
+
+var extensionIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
 
 type ExtensionType string
 
@@ -39,7 +42,7 @@ type ExtensionSetting struct {
 	Description string      `json:"description,omitempty"`
 	Required    bool        `json:"required,omitempty"`
 	Secret      bool        `json:"secret,omitempty"`
-	Default     interface{} `json:"default,omitempty"`
+	Default     any         `json:"default,omitempty"`
 	Options     []string    `json:"options,omitempty"`
 	Action      string      `json:"action,omitempty"`
 }
@@ -58,7 +61,7 @@ type QualitySpecificSetting struct {
 	Description string      `json:"description,omitempty"`
 	Required    bool        `json:"required,omitempty"`
 	Secret      bool        `json:"secret,omitempty"`
-	Default     interface{} `json:"default,omitempty"`
+	Default     any         `json:"default,omitempty"`
 	Options     []string    `json:"options,omitempty"`
 }
 
@@ -156,7 +159,7 @@ type ExtensionManifest struct {
 	ServiceHealth           []ExtensionHealthCheck `json:"serviceHealth,omitempty"`
 	SignedSession           *SignedSessionConfig   `json:"signedSession,omitempty"`
 	RequiredRuntimeFeatures []string               `json:"requiredRuntimeFeatures,omitempty"`
-	Capabilities            map[string]interface{} `json:"capabilities,omitempty"`
+	Capabilities            map[string]any         `json:"capabilities,omitempty"`
 }
 
 type ManifestValidationError struct {
@@ -184,6 +187,12 @@ func ParseManifest(data []byte) (*ExtensionManifest, error) {
 func (m *ExtensionManifest) Validate() error {
 	if strings.TrimSpace(m.Name) == "" {
 		return &ManifestValidationError{Field: "name", Message: "name is required"}
+	}
+	if !extensionIDPattern.MatchString(m.Name) {
+		return &ManifestValidationError{
+			Field:   "name",
+			Message: "name must be a lowercase extension ID containing only letters, numbers, '.', '_' or '-'",
+		}
 	}
 
 	if strings.TrimSpace(m.Version) == "" {
@@ -260,6 +269,9 @@ func (m *ExtensionManifest) Validate() error {
 	}
 
 	if m.SignedSession != nil {
+		if !m.Permissions.Storage {
+			return &ManifestValidationError{Field: "permissions.storage", Message: "signedSession requires storage permission"}
+		}
 		if strings.TrimSpace(m.SignedSession.Namespace) == "" {
 			return &ManifestValidationError{Field: "signedSession.namespace", Message: "namespace is required"}
 		}
@@ -278,8 +290,23 @@ func (m *ExtensionManifest) Validate() error {
 			return &ManifestValidationError{Field: "signedSession.baseUrl", Message: "baseUrl host must be listed in permissions.network"}
 		}
 	}
+	if m.HasCapability("rawFfmpeg") && !m.Permissions.File {
+		return &ManifestValidationError{Field: "permissions.file", Message: "rawFfmpeg capability requires file permission"}
+	}
 
 	return nil
+}
+
+func (m *ExtensionManifest) HasCapability(name string) bool {
+	if m == nil || m.Capabilities == nil {
+		return false
+	}
+	value, ok := m.Capabilities[name]
+	if !ok {
+		return false
+	}
+	enabled, ok := value.(bool)
+	return ok && enabled
 }
 
 func (m *ExtensionManifest) HasType(t ExtensionType) bool {

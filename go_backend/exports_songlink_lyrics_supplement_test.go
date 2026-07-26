@@ -1,7 +1,6 @@
 package gobackend
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"os"
@@ -55,13 +54,9 @@ func TestLyricsExportWrappersWithoutNetwork(t *testing.T) {
 func TestSongLinkExportWrappersWithFakeClient(t *testing.T) {
 	origClient := globalSongLinkClient
 	origRetryConfig := songLinkRetryConfig
-	origSearchByISRC := songLinkSearchByISRC
-	origCheckFromDeezer := songLinkCheckAvailabilityFromDeezer
 	defer func() {
 		globalSongLinkClient = origClient
 		songLinkRetryConfig = origRetryConfig
-		songLinkSearchByISRC = origSearchByISRC
-		songLinkCheckAvailabilityFromDeezer = origCheckFromDeezer
 		SetSongLinkNetworkOptions(false, false)
 	}()
 	songLinkRetryConfig = func() RetryConfig {
@@ -69,11 +64,12 @@ func TestSongLinkExportWrappersWithFakeClient(t *testing.T) {
 	}
 	globalSongLinkClient = &SongLinkClient{client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		var body string
-		if req.URL.Host == "api.zarz.moe" {
+		switch req.URL.Host {
+		case "api.zarz.moe":
 			body = `{"success":true,"songUrls":{"Spotify":"https://open.spotify.com/track/spotify-1","Deezer":"https://www.deezer.com/track/101","Tidal":"https://listen.tidal.com/track/202","YouTube":"https://youtu.be/yt1","AmazonMusic":"https://music.amazon.com/tracks/amz1","Qobuz":"https://open.qobuz.com/track/303"}}`
-		} else if req.URL.Host == "api.song.link" {
+		case "api.song.link":
 			body = `{"linksByPlatform":{"spotify":{"url":"https://open.spotify.com/track/spotify-1"},"deezer":{"url":"https://www.deezer.com/track/101"},"tidal":{"url":"https://listen.tidal.com/track/202"},"youtubeMusic":{"url":"https://music.youtube.com/watch?v=ytm1"},"amazonMusic":{"url":"https://music.amazon.com/tracks/amz1"},"qobuz":{"url":"https://open.qobuz.com/track/303"}}}`
-		} else {
+		default:
 			t.Fatalf("unexpected SongLink request: %s", req.URL.String())
 		}
 		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body)), Request: req}, nil
@@ -81,15 +77,6 @@ func TestSongLinkExportWrappersWithFakeClient(t *testing.T) {
 	songLinkClientOnce.Do(func() {})
 
 	SetSongLinkNetworkOptions(true, true)
-	if availabilityJSON, err := CheckAvailability("spotify-1", ""); err != nil || !strings.Contains(availabilityJSON, `"deezer_id":"101"`) {
-		t.Fatalf("CheckAvailability = %q/%v", availabilityJSON, err)
-	}
-	if availabilityJSON, err := CheckAvailabilityFromDeezerID("101"); err != nil || !strings.Contains(availabilityJSON, `"spotify_id":"spotify-1"`) {
-		t.Fatalf("CheckAvailabilityFromDeezerID = %q/%v", availabilityJSON, err)
-	}
-	if availabilityJSON, err := CheckAvailabilityByPlatformID("deezer", "song", "101"); err != nil || !strings.Contains(availabilityJSON, `"tidal_url"`) {
-		t.Fatalf("CheckAvailabilityByPlatformID = %q/%v", availabilityJSON, err)
-	}
 	if spotifyID, err := GetSpotifyIDFromDeezerTrack("101"); err != nil || spotifyID != "spotify-1" {
 		t.Fatalf("GetSpotifyIDFromDeezerTrack = %q/%v", spotifyID, err)
 	}
@@ -121,15 +108,6 @@ func TestSongLinkExportWrappersWithFakeClient(t *testing.T) {
 		t.Fatalf("CheckAvailabilityFromURL = %#v/%v", availability, err)
 	}
 
-	songLinkSearchByISRC = func(ctx context.Context, isrc string) (*TrackMetadata, error) {
-		return &TrackMetadata{SpotifyID: "deezer:101", ExternalURL: "https://www.deezer.com/track/101"}, nil
-	}
-	songLinkCheckAvailabilityFromDeezer = func(s *SongLinkClient, deezerTrackID string) (*TrackAvailability, error) {
-		return &TrackAvailability{SpotifyID: "spotify-1", Deezer: true, DeezerID: deezerTrackID}, nil
-	}
-	if availabilityJSON, err := CheckAvailability("", "USRC17607839"); err != nil || !strings.Contains(availabilityJSON, `"deezer_id":"101"`) {
-		t.Fatalf("CheckAvailability by ISRC = %q/%v", availabilityJSON, err)
-	}
 	if songLinkExtractDeezerTrackID(nil) != "" || songLinkExtractDeezerTrackID(&TrackMetadata{ExternalURL: "https://www.deezer.com/track/202"}) != "202" {
 		t.Fatal("songLinkExtractDeezerTrackID mismatch")
 	}
