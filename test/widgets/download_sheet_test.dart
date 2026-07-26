@@ -327,6 +327,104 @@ void main() {
       expect(result!.quality, 'hires');
     });
 
+    testWidgets('short viewport: content scrolls instead of overflowing',
+        (tester) async {
+      // Old / low-resolution Android phones and DAPs, and any phone in
+      // landscape, give the sheet far less height than the content needs.
+      tester.view.physicalSize = const Size(320, 480);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final sources = [
+        _fakeSource(id: 'tidal', displayName: 'Tidal', qualityOptions: const [
+          ExtensionQualityOption(
+              id: 'HI_RES_LOSSLESS',
+              label: 'Hi-Res FLAC',
+              description: '24-bit / 192 kHz'),
+          ExtensionQualityOption(
+              id: 'LOSSLESS',
+              label: 'FLAC Lossless',
+              description: '16-bit / 44.1 kHz'),
+          ExtensionQualityOption(
+              id: 'HIGH', label: 'AAC High', description: '320 kbps'),
+          ExtensionQualityOption(
+              id: 'LOW', label: 'AAC Low', description: '96 kbps'),
+        ]),
+        _fakeSource(id: 'deezer', displayName: 'Deezer'),
+        _fakeSource(id: 'qobuz', displayName: 'Qobuz'),
+        _fakeSource(id: 'amazon', displayName: 'Amazon Music'),
+      ];
+
+      await _pumpAndShowSheet(tester, sources);
+
+      // No RenderFlex overflow was reported while laying the sheet out.
+      expect(tester.takeException(), isNull);
+
+      // The last quality option is off-screen but reachable by scrolling.
+      await tester.scrollUntilVisible(find.text('AAC Low'), 80,
+          scrollable: find.byType(Scrollable).first);
+      expect(find.text('AAC Low'), findsOneWidget);
+    });
+
+    testWidgets('short viewport: CTA stays reachable and returns the choice',
+        (tester) async {
+      tester.view.physicalSize = const Size(320, 480);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final sources = [
+        _fakeSource(id: 'tidal', displayName: 'Tidal', qualityOptions: const [
+          ExtensionQualityOption(
+              id: 'HI_RES_LOSSLESS',
+              label: 'Hi-Res FLAC',
+              description: '24-bit / 192 kHz'),
+          ExtensionQualityOption(
+              id: 'LOSSLESS',
+              label: 'FLAC Lossless',
+              description: '16-bit / 44.1 kHz'),
+          ExtensionQualityOption(
+              id: 'HIGH', label: 'AAC High', description: '320 kbps'),
+          ExtensionQualityOption(
+              id: 'LOW', label: 'AAC Low', description: '96 kbps'),
+        ]),
+        _fakeSource(id: 'deezer', displayName: 'Deezer'),
+        _fakeSource(id: 'qobuz', displayName: 'Qobuz'),
+        _fakeSource(id: 'amazon', displayName: 'Amazon Music'),
+      ];
+      DownloadChoice? result;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: appTheme(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: ElevatedButton(
+                  onPressed: () async {
+                    result = await showDownloadSheet(context,
+                        track: _track, sources: sources);
+                  },
+                  child: const Text('Open sheet'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open sheet'));
+      await tester.pumpAndSettle();
+
+      // Without scrolling anything, the CTA is on screen and tappable.
+      await tester.tap(find.text('Download'));
+      await tester.pumpAndSettle();
+
+      expect(result, isNotNull);
+      expect(result!.sourceId, 'tidal');
+    });
+
     testWidgets('cancelling sheet returns null', (tester) async {
       final sources = [_fakeSource(id: 'deezer', displayName: 'Deezer')];
       DownloadChoice? result;

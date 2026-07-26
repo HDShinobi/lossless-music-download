@@ -42,6 +42,9 @@ Future<DownloadChoice?> showDownloadSheet(
   return showModalBottomSheet<DownloadChoice>(
     context: context,
     isScrollControlled: true,
+    // Short viewports (old/low-res phones, DAPs, landscape) must not push the
+    // sheet under the status bar.
+    useSafeArea: true,
     builder: (_) => _DownloadSheet(track: track, sources: sources),
   );
 }
@@ -132,123 +135,142 @@ class _DownloadSheetState extends State<_DownloadSheet> {
             ),
             const SizedBox(height: 16),
 
-            // Track header
-            Row(
-              children: [
-                // Small cover / initial-letter fallback (42px)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(7),
-                  child: SizedBox(
-                    width: 42,
-                    height: 42,
-                    child: widget.track.coverUrl != null
-                        ? Image.network(
-                            widget.track.coverUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                _coverFallback(widget.track.name, tokens, cs),
-                          )
-                        : _coverFallback(widget.track.name, tokens, cs),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.track.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style:
-                            tt.bodyMedium?.copyWith(color: cs.onSurface),
-                      ),
-                      Text(
-                        widget.track.artists,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tt.bodySmall
-                            ?.copyWith(color: cs.onSurfaceVariant),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // "Nguon" section
-            Text(
-              t.downloadSheetSource,
-              style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
-            ),
-            const SizedBox(height: 8),
-            if (widget.sources.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: tokens.warnSoft,
-                  border: Border.all(color: tokens.warnLine),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  t.downloadSheetNoSources,
-                  style: tt.bodySmall?.copyWith(color: tokens.warn),
-                ),
-              )
-            else
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: widget.sources.map((src) {
-                  final isSelected = _selectedSourceId == src.id;
-                  return _SourceChip(
-                    source: src,
-                    isSelected: isSelected,
-                    onTap: () => _selectSource(src.id),
-                  );
-                }).toList(),
-              ),
-            const SizedBox(height: 20),
-
-            // "Chat luong" section
-            Text(
-              t.downloadSheetQuality,
-              style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
-            ),
-            const SizedBox(height: 4),
-            RadioGroup<String>(
-              groupValue: _selectedQuality,
-              onChanged: (v) {
-                if (v != null) setState(() => _selectedQuality = v);
-              },
-              child: Column(
-                children: _qualityOptionsFor(_selectedSourceId).map((opt) {
-                  return RadioListTile<String>(
-                    value: opt.value,
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: Text(
-                      opt.label,
-                      style: tt.bodyMedium?.copyWith(color: cs.onSurface),
-                    ),
-                    subtitle: opt.desc.isEmpty
-                        ? null
-                        : Text(
-                            opt.desc,
-                            style: tokens.mono.copyWith(
-                              fontSize: 11,
-                              color: cs.onSurfaceVariant,
-                            ),
+            // Everything between the handle and the CTA scrolls, so the sheet
+            // still works when the viewport is shorter than its content.
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Track header
+                    Row(
+                      children: [
+                        // Small cover / initial-letter fallback (42px)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(7),
+                          child: SizedBox(
+                            width: 42,
+                            height: 42,
+                            child: widget.track.coverUrl != null
+                                ? Image.network(
+                                    widget.track.coverUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            _coverFallback(
+                                                widget.track.name, tokens, cs),
+                                  )
+                                : _coverFallback(
+                                    widget.track.name, tokens, cs),
                           ),
-                  );
-                }).toList(),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                widget.track.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: tt.bodyMedium
+                                    ?.copyWith(color: cs.onSurface),
+                              ),
+                              Text(
+                                widget.track.artists,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: tt.bodySmall
+                                    ?.copyWith(color: cs.onSurfaceVariant),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // "Nguon" section
+                    Text(
+                      t.downloadSheetSource,
+                      style:
+                          tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 8),
+                    if (widget.sources.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: tokens.warnSoft,
+                          border: Border.all(color: tokens.warnLine),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          t.downloadSheetNoSources,
+                          style: tt.bodySmall?.copyWith(color: tokens.warn),
+                        ),
+                      )
+                    else
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: widget.sources.map((src) {
+                          final isSelected = _selectedSourceId == src.id;
+                          return _SourceChip(
+                            source: src,
+                            isSelected: isSelected,
+                            onTap: () => _selectSource(src.id),
+                          );
+                        }).toList(),
+                      ),
+                    const SizedBox(height: 20),
+
+                    // "Chat luong" section
+                    Text(
+                      t.downloadSheetQuality,
+                      style:
+                          tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 4),
+                    RadioGroup<String>(
+                      groupValue: _selectedQuality,
+                      onChanged: (v) {
+                        if (v != null) setState(() => _selectedQuality = v);
+                      },
+                      child: Column(
+                        children:
+                            _qualityOptionsFor(_selectedSourceId).map((opt) {
+                          return RadioListTile<String>(
+                            value: opt.value,
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            title: Text(
+                              opt.label,
+                              style:
+                                  tt.bodyMedium?.copyWith(color: cs.onSurface),
+                            ),
+                            subtitle: opt.desc.isEmpty
+                                ? null
+                                : Text(
+                                    opt.desc,
+                                    style: tokens.mono.copyWith(
+                                      fontSize: 11,
+                                      color: cs.onSurfaceVariant,
+                                    ),
+                                  ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
 
-            // CTA
+            // CTA — pinned below the scroll area so it is always reachable.
             SizedBox(
               width: double.infinity,
               child: FilledButton(
