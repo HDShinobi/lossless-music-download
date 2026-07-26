@@ -49,6 +49,13 @@ class InstalledExtension {
 
   bool get hasHomeFeed => capabilities['homeFeed'] == true;
 
+  /// The source hands lossless audio back inside a container the app has to
+  /// unwrap (Amazon's FLAC tier ships FLAC inside MP4). Both spellings are
+  /// accepted because extensions in the wild use either.
+  bool get requiresContainerConversion =>
+      capabilities['requiresContainerConversion'] == true ||
+      capabilities['requiresNativeContainerConversion'] == true;
+
   factory InstalledExtension.fromJson(Map<String, dynamic> j) => InstalledExtension(
         id: (j['id'] ?? '').toString(),
         name: (j['name'] ?? '').toString(),

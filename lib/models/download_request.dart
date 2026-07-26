@@ -7,6 +7,11 @@ class DownloadRequest {
   final bool useExtensions, useFallback, embedMetadata, embedMaxQualityCover,
       embedLyrics, writeLrcSidecar;
 
+  /// Tells the engine/extension we want a container we can read as lossless.
+  /// Set when the picked quality is FLAC and the source is known to deliver it
+  /// wrapped in MP4 (see InstalledExtension.requiresContainerConversion).
+  final bool requiresContainerConversion;
+
   // SpotiFLAC metadata fields for embedding into audio file tags.
   final String? genre;
   final String? label;
@@ -24,13 +29,16 @@ class DownloadRequest {
     this.tidalId, this.coverUrl, this.releaseDate, this.composer,
     this.durationMs, this.trackNumber, this.discNumber, this.totalTracks,
     this.totalDiscs, this.quality, this.source, this.service,
-    this.filenameFormat = '{artist}/{album} ({year})/{track}. {title}',
+    // Basename only. The engine flattens any `/` here into a space, so folder
+    // layout is resolved separately (see services/download_paths.dart).
+    this.filenameFormat = '{artist} - {title}',
     this.useExtensions = true,
     this.useFallback = true,
     this.embedMetadata = true,
     this.embedMaxQualityCover = true,
     this.embedLyrics = true,
     this.writeLrcSidecar = false,
+    this.requiresContainerConversion = false,
     this.genre,
     this.label,
     this.copyright,
@@ -66,6 +74,7 @@ class DownloadRequest {
         if (label != null && label!.isNotEmpty) 'label': label,
         if (copyright != null && copyright!.isNotEmpty) 'copyright': copyright,
         'filename_format': filenameFormat,
+        'requires_container_conversion': requiresContainerConversion,
         'use_extensions': useExtensions,
         'use_fallback': useFallback,
         'embed_metadata': embedMetadata,

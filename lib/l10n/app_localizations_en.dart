@@ -566,6 +566,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingDownloadFolder => 'Download folder';
 
   @override
+  String get settingFolderLayout => 'Folder layout';
+
+  @override
+  String get settingFolderLayoutDesc =>
+      'How downloads are grouped into folders';
+
+  @override
+  String get folderLayoutNone => 'Single folder';
+
+  @override
+  String get folderLayoutArtist => 'By artist';
+
+  @override
+  String get folderLayoutAlbum => 'By album';
+
+  @override
+  String get folderLayoutArtistAlbum => 'By artist, then album';
+
+  @override
   String get settingEmbedMetadata => 'Embed metadata';
 
   @override

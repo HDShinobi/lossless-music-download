@@ -6,12 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/models/download_progress.dart';
 import 'package:lossless_music_download/models/download_request.dart';
+import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/models/track.dart';
 import 'package:lossless_music_download/providers/download_dir_provider.dart';
 import 'package:lossless_music_download/providers/download_options_provider.dart';
 import 'package:lossless_music_download/providers/download_queue_provider.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
+import 'package:lossless_music_download/services/download_paths.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // ---------------------------------------------------------------------------
@@ -85,6 +87,13 @@ class _FakeBridge extends BackendBridge {
 
   @override
   Stream<List<DownloadProgress>> progressStream() => Stream.value(const []);
+}
+
+class _FakeExtensions extends ExtensionsController {
+  _FakeExtensions(this._list);
+  final List<InstalledExtension> _list;
+  @override
+  Future<List<InstalledExtension>> build() async => _list;
 }
 
 // ---------------------------------------------------------------------------
@@ -239,11 +248,105 @@ void main() {
       final json = req.toJson();
       expect(json['track_name'], 'Test Song');
       expect(json['artist_name'], 'Test Artist');
-      expect(json['output_dir'], '/fake/downloads');
       expect(json['use_extensions'], isTrue);
       expect(json['use_fallback'], isTrue);
       expect(json['service'], 'mysource');
       expect(json['quality'], 'lossless');
+    });
+
+    // Folder layout is resolved by the app, not the engine: the engine flattens
+    // any '/' in the filename template, so the artist/album levels have to
+    // arrive as part of output_dir with a flat basename template alongside.
+    test('enqueue groups the download into artist/album folders', () async {
+      final bridge = _FakeBridge()..downloadResult = {};
+      final container = _makeContainer(bridge);
+      addTearDown(container.dispose);
+
+      await container.read(downloadQueueProvider.notifier).enqueue(_track);
+      await _pump();
+
+      final json = bridge.downloadCalls.first.toJson();
+      expect(json['output_dir'], '/fake/downloads/Test Artist/Test Album');
+      expect(json['filename_format'], isNot(contains('/')));
+    });
+
+    // Only sources that wrap lossless audio in MP4 need the flag, and only when
+    // the user actually asked for a lossless tier.
+    group('requires_container_conversion', () {
+      ProviderContainer containerWith(_FakeBridge bridge, {required bool cap}) =>
+          ProviderContainer(
+            overrides: [
+              backendBridgeProvider.overrideWithValue(bridge),
+              downloadDirPathProvider
+                  .overrideWithValue(Future.value('/fake/downloads')),
+              extensionsProvider.overrideWith(
+                () => _FakeExtensions([
+                  InstalledExtension(
+                    id: 'amazon',
+                    name: 'amazon',
+                    displayName: 'Amazon Music',
+                    version: '1.0.0',
+                    description: '',
+                    status: 'active',
+                    enabled: true,
+                    types: const ['download'],
+                    permissions: const [],
+                    hasMetadataProvider: false,
+                    hasDownloadProvider: true,
+                    hasLyricsProvider: false,
+                    capabilities:
+                        cap ? const {'requiresContainerConversion': true} : const {},
+                  ),
+                ]),
+              ),
+            ],
+          );
+
+      Future<bool> flagFor({
+        required bool cap,
+        required String quality,
+      }) async {
+        final bridge = _FakeBridge()..downloadResult = {};
+        final container = containerWith(bridge, cap: cap);
+        addTearDown(container.dispose);
+        await container.read(extensionsProvider.future);
+        await container
+            .read(downloadQueueProvider.notifier)
+            .enqueue(_track, service: 'amazon', quality: quality);
+        await _pump();
+        return bridge.downloadCalls.first.toJson()['requires_container_conversion']
+            as bool;
+      }
+
+      test('set for a FLAC tier on a source that wraps it in MP4', () async {
+        expect(await flagFor(cap: true, quality: 'FLAC_BEST'), isTrue);
+        expect(await flagFor(cap: true, quality: 'lossless'), isTrue);
+      });
+
+      test('not set for a lossy tier, even on such a source', () async {
+        expect(await flagFor(cap: true, quality: 'OPUS_320'), isFalse);
+      });
+
+      test('not set for a source that delivers FLAC directly', () async {
+        expect(await flagFor(cap: false, quality: 'FLAC_BEST'), isFalse);
+      });
+    });
+
+    test('enqueue keeps the download flat when folders are turned off',
+        () async {
+      final bridge = _FakeBridge()..downloadResult = {};
+      final container = _makeContainer(bridge);
+      addTearDown(container.dispose);
+
+      await container
+          .read(folderOrganizationProvider.notifier)
+          .set(FolderOrganization.none);
+      await container.read(downloadQueueProvider.notifier).enqueue(_track);
+      await _pump();
+
+      final json = bridge.downloadCalls.first.toJson();
+      expect(json['output_dir'], '/fake/downloads');
+      expect(json['filename_format'], isNot(contains('/')));
     });
 
     // Task 2: autoFallbackProvider must drive DownloadRequest.useFallback.

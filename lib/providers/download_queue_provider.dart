@@ -12,6 +12,8 @@ import '../models/download_request.dart';
 import '../models/installed_extension.dart';
 import '../models/track.dart';
 import '../services/backend_bridge.dart';
+import '../services/container_remux_service.dart';
+import '../services/download_paths.dart';
 import '../services/ffmpeg_metadata_service.dart';
 import '../services/native_download_worker.dart';
 import '../util/queue_view.dart';
@@ -175,6 +177,64 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     }
   }
 
+  /// Resolves where a track is written and under what basename.
+  ///
+  /// Folders are the app's concern, not the engine's: the engine treats the
+  /// filename template as a single basename and flattens any `/` in it (see
+  /// [buildRelativeFolder]), so we resolve the directory here and hand it a flat
+  /// template. Pure by design — the engine `MkdirAll`s whatever `outputDir` it
+  /// receives, so creating it here would only add filesystem I/O to the enqueue
+  /// path.
+  ({String dir, String template}) _resolveOutputTarget(
+    String baseDir,
+    Track track,
+  ) {
+    final mode = ref.read(folderOrganizationProvider);
+    final template = pruneEmptyPlaceholders(basenameTemplateFor(mode), {
+      'artist': track.artists,
+      'title': track.name,
+      'album': track.albumName ?? '',
+      'track': track.trackNumber?.toString() ?? '',
+      'year': _yearOf(track.releaseDate),
+    });
+
+    final relative = buildRelativeFolder(
+      mode,
+      FolderMetadata(
+        artist: track.artists,
+        albumArtist: track.albumArtist,
+        album: track.albumName,
+      ),
+    );
+    if (relative.isEmpty) return (dir: baseDir, template: template);
+
+    return (
+      dir: '${baseDir.replaceAll(RegExp(r'/+$'), '')}/$relative',
+      template: template,
+    );
+  }
+
+  static String _yearOf(String? releaseDate) {
+    final d = releaseDate?.trim() ?? '';
+    return d.length >= 4 ? d.substring(0, 4) : '';
+  }
+
+  /// Whether to ask for a container we can read as lossless: only meaningful
+  /// when the user picked a FLAC tier *and* the chosen source is known to wrap
+  /// FLAC in MP4. Mirrors SpotiFLAC's _shouldRequestContainerConversion.
+  bool _wantsContainerConversion(String? service, String? quality) {
+    final q = (quality ?? '').toLowerCase();
+    if (!q.contains('flac') && !q.contains('lossless')) return false;
+    final id = (service ?? '').trim().toLowerCase();
+    if (id.isEmpty) return false;
+    final exts = ref.read(extensionsProvider).value ?? const <InstalledExtension>[];
+    return exts.any((e) =>
+        e.enabled &&
+        e.hasDownloadProvider &&
+        e.id.toLowerCase() == id &&
+        e.requiresContainerConversion);
+  }
+
   Future<Map<String, dynamic>?> _buildRequestJson(DownloadEntry entry) async {
     final dir = await ref.read(downloadDirProvider.future);
     final dlProviders = (ref.read(extensionsProvider).value ??
@@ -208,10 +268,13 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       spotifyId = null;
     }
 
+    final target = _resolveOutputTarget(dir, entry.track);
+
     final req = DownloadRequest(
       trackName: entry.track.name,
       artistName: entry.track.artists,
-      outputDir: dir,
+      outputDir: target.dir,
+      filenameFormat: target.template,
       albumName: entry.track.albumName,
       albumArtist: entry.track.albumArtist,
       isrc: entry.track.isrc,
@@ -233,6 +296,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       service: resolvedService,
       quality: entry.quality,
       itemId: entry.itemId,
+      requiresContainerConversion:
+          _wantsContainerConversion(resolvedService, entry.quality),
       embedMetadata: ref.read(embedMetadataProvider),
       embedMaxQualityCover: ref.read(embedCoverProvider),
       embedLyrics: ref.read(embedLyricsProvider),
@@ -419,10 +484,13 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       final embedCover = ref.read(embedCoverProvider);
       final embedLyrics = ref.read(embedLyricsProvider);
 
+      final target = _resolveOutputTarget(dir, next.track);
+
       final req = DownloadRequest(
         trackName: next.track.name,
         artistName: next.track.artists,
-        outputDir: dir,
+        outputDir: target.dir,
+        filenameFormat: target.template,
         albumName: next.track.albumName,
         albumArtist: next.track.albumArtist,
         isrc: next.track.isrc,
@@ -444,6 +512,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         service: resolvedService,
         quality: next.quality,
         itemId: next.itemId,
+        requiresContainerConversion:
+            _wantsContainerConversion(resolvedService, next.quality),
         embedMetadata: embedMetadata,
         embedMaxQualityCover: embedCover,
         embedLyrics: embedLyrics,
@@ -477,6 +547,10 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
             !failed && (resultService?.isNotEmpty ?? false) ? resultService : null,
       );
       if (!failed) {
+        // Some sources (Amazon's FLAC tier) deliver a FLAC stream wrapped in
+        // MP4. Unwrap it before tagging so it gets the FLAC path, not the lossy
+        // one, and so the library reports it as lossless.
+        await _unwrapMp4Flac(bridge: bridge, res: res, track: next.track);
         // FLAC is tagged natively in the Go backend. Non-FLAC downloads
         // (Opus/M4A/MP3) are tagged here via FFmpeg.
         await _embedNonFlacMetadata(
@@ -496,6 +570,42 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       // Item skipped — status already set to done above.
     } catch (e) {
       _setStatus(next.itemId, 'failed', error: e.toString());
+    }
+  }
+
+  /// Decrypts an MP4-delivered download and unwraps its FLAC, rewriting
+  /// `res['file_path']` in place so the tagging, sidecar and library steps that
+  /// follow all see the finished file.
+  ///
+  /// The Go backend already skipped its native FLAC tagger for this download
+  /// (the file was still MP4 at the time), so the result is tagged here.
+  Future<void> _unwrapMp4Flac({
+    required BackendBridge bridge,
+    required Map<String, dynamic> res,
+    required Track track,
+  }) async {
+    final flacPath = await ContainerRemuxService.finalizeDownload(res);
+    if (flacPath == null) return; // nothing to decrypt/unwrap
+
+    res['file_path'] = flacPath;
+    debugPrint('[DownloadQueue] finalized MP4 download to: $flacPath');
+
+    if (!flacPath.toLowerCase().endsWith('.flac')) return;
+    if (!ref.read(embedMetadataProvider)) return;
+    try {
+      await bridge.editFileMetadata(flacPath, {
+        'title': track.name,
+        'artist': track.artists,
+        if (track.albumName != null) 'album': track.albumName!,
+        if (track.albumArtist != null) 'albumArtist': track.albumArtist!,
+        if (track.trackNumber != null) 'trackNumber': '${track.trackNumber}',
+        if (track.releaseDate != null) 'year': _yearOf(track.releaseDate),
+        if (track.isrc != null) 'isrc': track.isrc!,
+      });
+    } catch (e) {
+      // Tagging is a bonus; an untagged lossless file still beats ciphertext
+      // labelled as hi-res, so never fail the download over it.
+      debugPrint('[DownloadQueue] tagging finalized FLAC failed: $e');
     }
   }
 

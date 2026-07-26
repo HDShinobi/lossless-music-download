@@ -1154,6 +1154,42 @@ abstract class AppLocalizations {
   /// **'Download folder'**
   String get settingDownloadFolder;
 
+  /// No description provided for @settingFolderLayout.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder layout'**
+  String get settingFolderLayout;
+
+  /// No description provided for @settingFolderLayoutDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'How downloads are grouped into folders'**
+  String get settingFolderLayoutDesc;
+
+  /// No description provided for @folderLayoutNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Single folder'**
+  String get folderLayoutNone;
+
+  /// No description provided for @folderLayoutArtist.
+  ///
+  /// In en, this message translates to:
+  /// **'By artist'**
+  String get folderLayoutArtist;
+
+  /// No description provided for @folderLayoutAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'By album'**
+  String get folderLayoutAlbum;
+
+  /// No description provided for @folderLayoutArtistAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'By artist, then album'**
+  String get folderLayoutArtistAlbum;
+
   /// No description provided for @settingEmbedMetadata.
   ///
   /// In en, this message translates to:

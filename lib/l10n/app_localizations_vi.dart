@@ -564,6 +564,24 @@ class AppLocalizationsVi extends AppLocalizations {
   String get settingDownloadFolder => 'Thư mục tải về';
 
   @override
+  String get settingFolderLayout => 'Cách xếp thư mục';
+
+  @override
+  String get settingFolderLayoutDesc => 'Cách nhóm file tải về vào thư mục';
+
+  @override
+  String get folderLayoutNone => 'Một thư mục duy nhất';
+
+  @override
+  String get folderLayoutArtist => 'Theo ca sĩ';
+
+  @override
+  String get folderLayoutAlbum => 'Theo album';
+
+  @override
+  String get folderLayoutArtistAlbum => 'Theo ca sĩ, rồi album';
+
+  @override
   String get settingEmbedMetadata => 'Ghi thẻ metadata';
 
   @override

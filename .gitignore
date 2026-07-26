@@ -35,3 +35,4 @@ docs/superpowers/
 .superpowers/
 .maestro/
 .remember/
+test/golden/failures/

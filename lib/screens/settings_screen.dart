@@ -12,6 +12,7 @@ import '../providers/download_dir_provider.dart';
 import '../providers/download_options_provider.dart';
 import '../providers/extensions_provider.dart';
 import '../providers/home_feed_provider.dart';
+import '../services/download_paths.dart';
 import '../services/update_checker.dart';
 import '../widgets/update_dialog.dart';
 
@@ -153,6 +154,7 @@ class SettingsScreen extends ConsumerWidget {
     final t = AppLocalizations.of(context);
     final askBefore = ref.watch(askBeforeDownloadProvider);
     final embedMeta = ref.watch(embedMetadataProvider);
+    final folderLayout = ref.watch(folderOrganizationProvider);
     final embedCover = ref.watch(embedCoverProvider);
     final embedLyrics = ref.watch(embedLyricsProvider);
     final writeLrcSidecar = ref.watch(writeLrcSidecarProvider);
@@ -246,6 +248,17 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
 
+          // Folder layout
+          ListTile(
+            leading: const Icon(Icons.folder_copy_outlined),
+            title: Text(t.settingFolderLayout),
+            subtitle: Text(_folderLayoutLabel(t, folderLayout)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _pickFolderLayout(context, ref, folderLayout),
+          ),
+
+          const Divider(height: 1),
+
           // Ask before download
           SwitchListTile(
             secondary: const Icon(Icons.tune_outlined),
@@ -300,5 +313,45 @@ class SettingsScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+String _folderLayoutLabel(AppLocalizations t, FolderOrganization mode) =>
+    switch (mode) {
+      FolderOrganization.none => t.folderLayoutNone,
+      FolderOrganization.artist => t.folderLayoutArtist,
+      FolderOrganization.album => t.folderLayoutAlbum,
+      FolderOrganization.artistAlbum => t.folderLayoutArtistAlbum,
+    };
+
+Future<void> _pickFolderLayout(
+  BuildContext context,
+  WidgetRef ref,
+  FolderOrganization current,
+) async {
+  final t = AppLocalizations.of(context);
+  final picked = await showDialog<FolderOrganization>(
+    context: context,
+    builder: (ctx) => SimpleDialog(
+      title: Text(t.settingFolderLayout),
+      children: [
+        RadioGroup<FolderOrganization>(
+          groupValue: current,
+          onChanged: (v) => Navigator.of(ctx).pop(v),
+          child: Column(
+            children: [
+              for (final mode in FolderOrganization.values)
+                RadioListTile<FolderOrganization>(
+                  value: mode,
+                  title: Text(_folderLayoutLabel(t, mode)),
+                ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+  if (picked != null) {
+    await ref.read(folderOrganizationProvider.notifier).set(picked);
   }
 }

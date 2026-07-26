@@ -337,7 +337,17 @@ class DownloadForegroundService : Service() {
             val winning = result.optString("service", "").ifEmpty { null }
             updateItem(request.itemId) { it.resolvedService = winning }
             writeSnapshot(isRunning = true)
-            val filePath = result.optString("file_path", "")
+            // Amazon's lossless tier delivers an *encrypted* MP4 plus the key in
+            // the result; go_backend only forwards it, so decrypt (and unwrap the
+            // FLAC out of the MP4) here, before the sidecar and tagging steps see
+            // the path. Without this the file is ciphertext that merely labels
+            // itself as hi-res FLAC.
+            val filePath = try {
+                Mp4FlacUnwrapper.finalize(result.toString(), request.requestJson)
+            } catch (e: Exception) {
+                android.util.Log.w("DownloadForegroundService", "MP4 finalize failed: ${e.message}")
+                result.optString("file_path", "")
+            }
             LrcSidecarWriter.maybeWrite(filePath, request.requestJson)
             if (filePath.isNotEmpty() && NonFlacMetadataEmbedder.isEmbeddable(filePath)) {
                 try {

@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/download_paths.dart';
+
 class AskBeforeDownloadNotifier extends Notifier<bool> {
   static const _key = 'ask_before_download';
 
@@ -87,4 +89,41 @@ final autoFallbackProvider = NotifierProvider<_BoolPrefNotifier, bool>(
 
 final writeLrcSidecarProvider = NotifierProvider<_BoolPrefNotifier, bool>(
   () => _BoolPrefNotifier('write_lrc_sidecar', false),
+);
+
+// ---------------------------------------------------------------------------
+// Folder organization — how downloads are grouped under the download directory.
+// ---------------------------------------------------------------------------
+
+class FolderOrganizationNotifier extends Notifier<FolderOrganization> {
+  static const _key = 'folder_organization';
+
+  bool _explicitlySet = false;
+
+  @override
+  FolderOrganization build() {
+    _explicitlySet = false;
+    Future.microtask(() async {
+      final p = await SharedPreferences.getInstance();
+      if (ref.mounted && !_explicitlySet) {
+        state = FolderOrganization.fromStorage(p.getString(_key));
+      }
+    });
+    // Default to artist/album: it is the layout library_provider's tag-less
+    // fallback parses paths for, so grouping keeps the library usable even when
+    // a download arrives without embedded tags.
+    return FolderOrganization.artistAlbum;
+  }
+
+  Future<void> set(FolderOrganization value) async {
+    _explicitlySet = true;
+    state = value;
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_key, value.storageValue);
+  }
+}
+
+final folderOrganizationProvider =
+    NotifierProvider<FolderOrganizationNotifier, FolderOrganization>(
+  FolderOrganizationNotifier.new,
 );
