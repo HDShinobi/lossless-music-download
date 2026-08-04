@@ -16,9 +16,9 @@ source of truth for *what we inherit, what we changed, and how to sync*.
 | | |
 | --- | --- |
 | Baseline tag | `vendor/spotiflac-base` |
-| Synced to | **v4.8.0** (commit `eabafeca`) |
+| Synced to | **v4.8.5** (commit `d3f9388b`) |
 | Upstream remote | `upstream` → `https://github.com/spotiflacapp/SpotiFLAC-Mobile.git` |
-| Last sync | 2026-07-26 (v4.7.1 → v4.8.0, 113 files. One conflict, in `extension_providers.go`: upstream split ~3400 lines out of it into `extension_fallback.go` / `extension_provider_wrapper.go` / `extension_provider_types.go`, which git presents as a single whole-file modify/delete. Resolved by taking upstream's 391-line version verbatim and re-applying our hook at its new home. Also bumped `native/bridge/go.mod` to `go 1.26.5` and ran `go mod tidy` there.) |
+| Last sync | 2026-08-04 (v4.8.0 → v4.8.5, 77 files in `go_backend/`, ~9.3k+/6.3k−, mostly upstream's dedup/file-split refactor). **3-way patch applied with zero conflicts** — both LM-FORK touch-points survived automatically: the `embedMetadataAfterDownload` hook was re-homed by the merge into upstream's refactored `extension_fallback.go`, and `embed_after_download.go` still delegates to `embedExtensionDownloadMetadata` (relocated to `extension_fallback_output.go`). **Bridge contract: 3 upstream exports removed**, all absorbed in our own layers (no new `go_backend/` divergence): `GetDownloadProgress` was dead (Dart uses `getAllProgress`) → deleted; `GetSearchProvidersJSON` folded into `GetInstalledExtensions.search_behavior` → bridge export dropped and `getSearchProviders()` rederived client-side in `backend_bridge.dart` (mirrors upstream data flow); `CheckDuplicate` retired for batched `CheckDuplicatesBatch` → bridge adapts single→batch, preserving the `{exists,filepath}` shape. `native/bridge/go.mod` on `go 1.26.5`; `go mod tidy` refreshed x/mobile.) |
 
 > Record **commit** SHAs here, not tag-object SHAs. Upstream re-tags releases —
 > `v4.7.1` resolves to different tag objects in different clones (the old

@@ -153,7 +153,6 @@ class MainActivity : FlutterActivity() {
     // result on the main thread.
     private fun dispatch(call: MethodCall): Pair<Boolean, Any?> = when (call.method) {
         "ping" -> true to Bridge.ping()
-        "getDownloadProgress" -> true to Bridge.getDownloadProgress()
         "getAudioQuality" -> true to Bridge.getAudioQualityJSON(call.argument<String>("path")!!)
         "initExtensionSystem" -> {
             Bridge.initExtensionSystem(
@@ -267,7 +266,6 @@ class MainActivity : FlutterActivity() {
             call.argument<String>("query")!!,
             call.argument<String>("optionsJson") ?: "",
         )
-        "getSearchProviders" -> true to Bridge.getSearchProvidersJSON()
         "getExtensionPendingAuth" -> true to Bridge.getExtensionPendingAuthJSON(
             call.argument<String>("extensionId")!!
         )

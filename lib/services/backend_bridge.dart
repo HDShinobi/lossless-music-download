@@ -267,13 +267,33 @@ class BackendBridge {
   }
 
   /// Lists installed extensions that support custom (entity) search.
+  ///
+  /// Upstream v4.8.5 retired the dedicated `GetSearchProvidersJSON` export and
+  /// folded search capability into the installed-extensions payload's
+  /// `search_behavior` field. We derive the same {id,display_name,placeholder,
+  /// primary,icon} shape here so callers stay unchanged — mirroring upstream's
+  /// own data flow keeps future syncs cheap.
   Future<List<Map<String, dynamic>>> getSearchProviders() async {
-    final raw = await _c.invokeMethod<String>('getSearchProviders');
+    final raw = await _c.invokeMethod<String>('getInstalledExtensions');
     if (raw == null || raw.isEmpty) return [];
     final decoded = jsonDecode(raw);
-    return decoded is List
-        ? decoded.map((e) => Map<String, dynamic>.from(e as Map)).toList()
-        : <Map<String, dynamic>>[];
+    final list = decoded is List
+        ? decoded
+        : (decoded['extensions'] as List? ?? const []);
+    final providers = <Map<String, dynamic>>[];
+    for (final e in list) {
+      final m = Map<String, dynamic>.from(e as Map);
+      final sb = m['search_behavior'];
+      if (sb is! Map || sb['enabled'] != true) continue;
+      providers.add({
+        'id': (m['id'] ?? '').toString(),
+        'display_name': (m['display_name'] ?? m['name'] ?? '').toString(),
+        'placeholder': (sb['placeholder'] ?? '').toString(),
+        'primary': sb['primary'] == true,
+        'icon': (sb['icon'] ?? '').toString(),
+      });
+    }
+    return providers;
   }
 
   Future<void> setDownloadDirectory(String path) =>

@@ -5,14 +5,13 @@
 
 func AllowDownloadDir(path string) {
 func CancelDownload(itemID string) {
-func CheckDuplicate(outputDir, isrc string) (string, error) {
+func CheckDuplicatesBatch(outputDir, tracksJSON string) (string, error) {
 func CustomSearchWithExtensionJSON(extensionID, query string, optionsJSON string) (string, error) {
 func DownloadByStrategy(requestJSON string) (string, error) {
 func EditFileMetadata(filePath, metadataJSON string) (string, error) {
 func FindURLHandlerJSON(url string) string {
 func GetAllDownloadProgress() string {
 func GetAudioQuality(filePath string) (AudioQuality, error) {
-func GetDownloadProgress() string {
 func GetExtensionHomeFeedJSON(extensionID string) (string, error) {
 func GetExtensionPendingAuthJSON(extensionID string) (string, error) {
 func GetExtensionSettingsJSON(extensionID string) (string, error) {
@@ -21,7 +20,6 @@ func GetLyricsLRC(spotifyID, trackName, artistName string, filePath string, dura
 func GetMetadataProviderPriorityJSON() (string, error) {
 func GetProviderMetadataJSON(providerID, resourceType, resourceID string) (string, error) {
 func GetProviderPriorityJSON() (string, error) {
-func GetSearchProvidersJSON() (string, error) {
 func HandleURLWithExtensionJSON(url string) (string, error) {
 func InitExtensionSystem(extensionsDir, dataDir string) error {
 func InvokeExtensionActionJSON(extensionID, actionName string) (string, error) {

@@ -91,12 +91,6 @@ func GetAudioQualityJSON(filePath string) (string, error) {
 	return string(b), nil
 }
 
-// GetDownloadProgress delegates to the SpotiFLAC backend and returns
-// a JSON-encoded progress snapshot.
-func GetDownloadProgress() string {
-	return gobackend.GetDownloadProgress()
-}
-
 // --- Extension management ---
 
 // InitExtensionSystem initialises the extension subsystem with the given
@@ -275,12 +269,6 @@ func CustomSearchWithExtensionJSON(extensionID, query, optionsJSON string) (stri
 	return gobackend.CustomSearchWithExtensionJSON(extensionID, query, optionsJSON)
 }
 
-// GetSearchProvidersJSON returns the installed extensions that support custom
-// (entity) search, as a JSON array ({id,display_name,...}).
-func GetSearchProvidersJSON() (string, error) {
-	return gobackend.GetSearchProvidersJSON()
-}
-
 // --- Provider priority ---
 
 // GetProviderPriorityJSON returns the current download provider priority as a
@@ -313,9 +301,38 @@ func SetExtensionFallbackProviderIDsJSON(idsJSON string) error {
 // --- Duplicate detection ---
 
 // CheckDuplicate checks whether a track identified by isrc already exists
-// in outputDir and returns a JSON-encoded result.
+// in outputDir and returns a JSON-encoded {"exists":bool,"filepath":string}.
+//
+// Upstream v4.8.5 retired the single-track CheckDuplicate in favour of the
+// batched CheckDuplicatesBatch (backed by a prebuilt ISRC index). We adapt the
+// single call by querying the batch with a one-element track list and
+// unwrapping the first result, preserving our Dart-facing shape.
 func CheckDuplicate(outputDir, isrc string) (string, error) {
-	return gobackend.CheckDuplicate(outputDir, isrc)
+	tracksJSON, err := json.Marshal([]map[string]string{{"isrc": isrc}})
+	if err != nil {
+		return "", err
+	}
+	batchJSON, err := gobackend.CheckDuplicatesBatch(outputDir, string(tracksJSON))
+	if err != nil {
+		return "", err
+	}
+	var results []struct {
+		Exists   bool   `json:"exists"`
+		FilePath string `json:"file_path"`
+	}
+	if err := json.Unmarshal([]byte(batchJSON), &results); err != nil {
+		return "", err
+	}
+	out := map[string]any{"exists": false, "filepath": ""}
+	if len(results) > 0 {
+		out["exists"] = results[0].Exists
+		out["filepath"] = results[0].FilePath
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // --- App version ---
