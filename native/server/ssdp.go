@@ -3,8 +3,11 @@ package server
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -12,14 +15,25 @@ const (
 	ssdpMulticastAddr = "239.255.255.250:1900"
 	ssdpServerBanner  = "Linux/5.0 UPnP/1.0 LosslessMusic/1.0"
 
-	ntRootDevice        = "upnp:rootdevice"
-	ntMediaServer       = "urn:schemas-upnp-org:device:MediaServer:1"
-	ntContentDirectory  = "urn:schemas-upnp-org:service:ContentDirectory:1"
+	ntRootDevice       = "upnp:rootdevice"
+	ntMediaServer      = "urn:schemas-upnp-org:device:MediaServer:1"
+	ntContentDirectory = "urn:schemas-upnp-org:service:ContentDirectory:1"
+
+	// ssdpConfigID advertised via CONFIGID.UPNP.ORG. Bumped only if the device
+	// description or service set changes.
+	ssdpConfigID = 1
+
+	// httpDateFormat is RFC 1123 in GMT, as required for the SSDP DATE header.
+	httpDateFormat = "Mon, 02 Jan 2006 15:04:05 GMT"
+
+	// maxSearchResponseDelay caps the random M-SEARCH response delay regardless
+	// of the control point's MX, per UPnP Device Architecture guidance.
+	maxSearchResponseDelay = 2 * time.Second
 )
 
 // ssdpAliveMessage builds an SSDP NOTIFY ssdp:alive datagram for the given NT.
 // When NT equals the device UDN the USN is just the UDN; otherwise it is udn::nt.
-func ssdpAliveMessage(location, udn, nt string) []byte {
+func ssdpAliveMessage(location, udn, nt string, bootID, configID int) []byte {
 	usn := udn + "::" + nt
 	if nt == udn {
 		usn = udn
@@ -33,18 +47,22 @@ func ssdpAliveMessage(location, udn, nt string) []byte {
 			"NTS: ssdp:alive\r\n"+
 			"SERVER: %s\r\n"+
 			"USN: %s\r\n"+
+			"BOOTID.UPNP.ORG: %d\r\n"+
+			"CONFIGID.UPNP.ORG: %d\r\n"+
 			"\r\n",
 		ssdpMulticastAddr,
 		location,
 		nt,
 		ssdpServerBanner,
 		usn,
+		bootID,
+		configID,
 	)
 	return []byte(msg)
 }
 
 // ssdpByebyeMessage builds an SSDP NOTIFY ssdp:byebye datagram for the given NT.
-func ssdpByebyeMessage(udn, nt string) []byte {
+func ssdpByebyeMessage(udn, nt string, bootID, configID int) []byte {
 	usn := udn + "::" + nt
 	if nt == udn {
 		usn = udn
@@ -55,17 +73,21 @@ func ssdpByebyeMessage(udn, nt string) []byte {
 			"NT: %s\r\n"+
 			"NTS: ssdp:byebye\r\n"+
 			"USN: %s\r\n"+
+			"BOOTID.UPNP.ORG: %d\r\n"+
+			"CONFIGID.UPNP.ORG: %d\r\n"+
 			"\r\n",
 		ssdpMulticastAddr,
 		nt,
 		usn,
+		bootID,
+		configID,
 	)
 	return []byte(msg)
 }
 
 // ssdpSearchResponse builds an HTTP/1.1 200 OK unicast response to an M-SEARCH.
 // When ST equals the device UDN the USN is just the UDN; otherwise it is udn::st.
-func ssdpSearchResponse(location, udn, st string) []byte {
+func ssdpSearchResponse(location, udn, st string, bootID, configID int, date string) []byte {
 	usn := udn + "::" + st
 	if st == udn {
 		usn = udn
@@ -73,16 +95,22 @@ func ssdpSearchResponse(location, udn, st string) []byte {
 	msg := fmt.Sprintf(
 		"HTTP/1.1 200 OK\r\n"+
 			"CACHE-CONTROL: max-age=1800\r\n"+
+			"DATE: %s\r\n"+
 			"EXT:\r\n"+
 			"LOCATION: %s\r\n"+
 			"SERVER: %s\r\n"+
 			"ST: %s\r\n"+
 			"USN: %s\r\n"+
+			"BOOTID.UPNP.ORG: %d\r\n"+
+			"CONFIGID.UPNP.ORG: %d\r\n"+
 			"\r\n",
+		date,
 		location,
 		ssdpServerBanner,
 		st,
 		usn,
+		bootID,
+		configID,
 	)
 	return []byte(msg)
 }
@@ -99,25 +127,35 @@ func ssdpNTs(udn string) []string {
 
 // ssdpResponder handles SSDP multicast advertisement and M-SEARCH response.
 type ssdpResponder struct {
-	conn     *net.UDPConn
-	done     chan struct{}
-	stopped  chan struct{}
+	conn    *net.UDPConn
+	iface   *net.Interface // Wi-Fi/LAN interface to bind multicast to (may be nil)
+	srcIP   net.IP         // its IPv4, used to pin outbound egress (may be nil)
+	bootID  int            // BOOTID.UPNP.ORG for this run
+	done    chan struct{}
+	stopped chan struct{}
+	wg      sync.WaitGroup // tracks delayed M-SEARCH responders
 }
 
-// start opens the SSDP multicast socket, sends initial NOTIFY alive datagrams,
-// and starts goroutines for periodic advertisement and M-SEARCH handling.
-// It returns an error only if the socket cannot be opened; the caller should
-// treat SSDP as best-effort and continue even on error.
-func (r *ssdpResponder) start(location, udn string) error {
+// start opens the SSDP multicast socket bound to iface, sends initial NOTIFY
+// alive datagrams, and starts goroutines for periodic advertisement and
+// M-SEARCH handling. srcIP (iface's IPv4) is used to pin outbound multicast to
+// the right interface. It returns an error only if the socket cannot be opened;
+// the caller should treat SSDP as best-effort and continue even on error.
+func (r *ssdpResponder) start(location, udn string, iface *net.Interface, srcIP net.IP) error {
 	group := &net.UDPAddr{
 		IP:   net.IPv4(239, 255, 255, 250),
 		Port: 1900,
 	}
-	conn, err := net.ListenMulticastUDP("udp4", nil, group)
+	// Binding to iface (rather than nil) ensures we receive M-SEARCH arriving on
+	// the Wi-Fi LAN even when another interface owns the default route.
+	conn, err := net.ListenMulticastUDP("udp4", iface, group)
 	if err != nil {
 		return fmt.Errorf("ssdpResponder.start: ListenMulticastUDP: %w", err)
 	}
 	r.conn = conn
+	r.iface = iface
+	r.srcIP = srcIP
+	r.bootID = int(time.Now().Unix())
 	r.done = make(chan struct{})
 	r.stopped = make(chan struct{})
 
@@ -133,7 +171,7 @@ func (r *ssdpResponder) stop(udn string) {
 	if r.conn == nil {
 		return
 	}
-	// Signal run goroutine to exit.
+	// Signal run + delayed responders to exit.
 	close(r.done)
 
 	// Send byebye datagrams before closing.
@@ -141,6 +179,25 @@ func (r *ssdpResponder) stop(udn string) {
 
 	r.conn.Close()
 	<-r.stopped
+	r.wg.Wait()
+}
+
+// dialOut opens a UDP socket for sending to dst, pinned to the Wi-Fi interface
+// so multicast/unicast egress does not leak onto cellular/VPN links.
+func (r *ssdpResponder) dialOut(dst *net.UDPAddr) (*net.UDPConn, error) {
+	var laddr *net.UDPAddr
+	if r.srcIP != nil {
+		laddr = &net.UDPAddr{IP: r.srcIP}
+	}
+	c, err := net.DialUDP("udp4", laddr, dst)
+	if err != nil {
+		return nil, err
+	}
+	if r.srcIP != nil {
+		// Harmless for unicast dst; decisive for multicast egress on Android.
+		_ = setMulticastInterfaceIPv4(c, r.srcIP)
+	}
+	return c, nil
 }
 
 // run is the main SSDP goroutine: it reads datagrams and responds to M-SEARCH,
@@ -183,7 +240,8 @@ func (r *ssdpResponder) run(location, udn string) {
 }
 
 // handleDatagram inspects a received datagram. If it is an M-SEARCH with a
-// matching ST, a unicast search response is sent to the sender.
+// matching ST, a unicast search response is scheduled to the sender after a
+// random delay bounded by the request's MX (per UPnP Device Architecture).
 func (r *ssdpResponder) handleDatagram(data []byte, src *net.UDPAddr, location, udn string) {
 	lines := strings.Split(string(data), "\r\n")
 	if len(lines) == 0 {
@@ -193,12 +251,18 @@ func (r *ssdpResponder) handleDatagram(data []byte, src *net.UDPAddr, location, 
 		return
 	}
 
-	// Extract ST header value.
+	// Extract ST and MX header values.
 	var st string
+	mx := 1
 	for _, line := range lines[1:] {
-		if strings.HasPrefix(strings.ToUpper(line), "ST:") {
+		upper := strings.ToUpper(line)
+		switch {
+		case strings.HasPrefix(upper, "ST:"):
 			st = strings.TrimSpace(line[3:])
-			break
+		case strings.HasPrefix(upper, "MX:"):
+			if v, err := strconv.Atoi(strings.TrimSpace(line[3:])); err == nil && v >= 0 {
+				mx = v
+			}
 		}
 	}
 	if st == "" {
@@ -226,39 +290,75 @@ func (r *ssdpResponder) handleDatagram(data []byte, src *net.UDPAddr, location, 
 		return
 	}
 
-	// Unicast a response for each matching NT.
-	for _, nt := range matchingNTs {
-		resp := ssdpSearchResponse(location, udn, nt)
-		dstConn, err := net.DialUDP("udp4", nil, src)
+	// Schedule the response after a random delay in [0, min(MX, cap)] so bursts
+	// from many devices don't collide. Copy src since buf is reused.
+	dst := &net.UDPAddr{IP: append(net.IP(nil), src.IP...), Port: src.Port, Zone: src.Zone}
+	delay := searchResponseDelay(mx)
+
+	r.wg.Add(1)
+	go func() {
+		defer r.wg.Done()
+		if delay > 0 {
+			select {
+			case <-time.After(delay):
+			case <-r.done:
+				return
+			}
+		}
+		r.sendSearchResponses(dst, matchingNTs, location, udn)
+	}()
+}
+
+// searchResponseDelay returns a random delay in [0, min(mx seconds, cap)].
+func searchResponseDelay(mx int) time.Duration {
+	if mx <= 0 {
+		return 0
+	}
+	window := time.Duration(mx) * time.Second
+	if window > maxSearchResponseDelay {
+		window = maxSearchResponseDelay
+	}
+	return time.Duration(rand.Int63n(int64(window) + 1))
+}
+
+// sendSearchResponses unicasts a 200 OK for each matching NT to dst.
+func (r *ssdpResponder) sendSearchResponses(dst *net.UDPAddr, nts []string, location, udn string) {
+	date := time.Now().UTC().Format(httpDateFormat)
+	for _, nt := range nts {
+		resp := ssdpSearchResponse(location, udn, nt, r.bootID, ssdpConfigID, date)
+		c, err := r.dialOut(dst)
 		if err != nil {
-			log.Printf("ssdp: DialUDP to %s: %v", src, err)
+			log.Printf("ssdp: DialUDP to %s: %v", dst, err)
 			continue
 		}
-		_, werr := dstConn.Write(resp)
-		dstConn.Close()
+		_, werr := c.Write(resp)
+		c.Close()
 		if werr != nil {
-			log.Printf("ssdp: write to %s: %v", src, werr)
+			log.Printf("ssdp: write to %s: %v", dst, werr)
 		}
 	}
 }
 
-// sendAlive multicasts NOTIFY alive for all NTs.
+// sendAlive multicasts NOTIFY alive for all NTs. UDP is lossy, so the burst is
+// sent twice.
 func (r *ssdpResponder) sendAlive(location, udn string) {
 	dst, err := net.ResolveUDPAddr("udp4", ssdpMulticastAddr)
 	if err != nil {
 		return
 	}
-	c, err := net.DialUDP("udp4", nil, dst)
+	c, err := r.dialOut(dst)
 	if err != nil {
 		log.Printf("ssdp: sendAlive DialUDP: %v", err)
 		return
 	}
 	defer c.Close()
 
-	for _, nt := range ssdpNTs(udn) {
-		msg := ssdpAliveMessage(location, udn, nt)
-		if _, err := c.Write(msg); err != nil {
-			log.Printf("ssdp: sendAlive write NT=%s: %v", nt, err)
+	for burst := 0; burst < 2; burst++ {
+		for _, nt := range ssdpNTs(udn) {
+			msg := ssdpAliveMessage(location, udn, nt, r.bootID, ssdpConfigID)
+			if _, err := c.Write(msg); err != nil {
+				log.Printf("ssdp: sendAlive write NT=%s: %v", nt, err)
+			}
 		}
 	}
 }
@@ -269,7 +369,7 @@ func (r *ssdpResponder) sendByebye(udn string) {
 	if err != nil {
 		return
 	}
-	c, err := net.DialUDP("udp4", nil, dst)
+	c, err := r.dialOut(dst)
 	if err != nil {
 		log.Printf("ssdp: sendByebye DialUDP: %v", err)
 		return
@@ -277,7 +377,7 @@ func (r *ssdpResponder) sendByebye(udn string) {
 	defer c.Close()
 
 	for _, nt := range ssdpNTs(udn) {
-		msg := ssdpByebyeMessage(udn, nt)
+		msg := ssdpByebyeMessage(udn, nt, r.bootID, ssdpConfigID)
 		if _, err := c.Write(msg); err != nil {
 			log.Printf("ssdp: sendByebye write NT=%s: %v", nt, err)
 		}

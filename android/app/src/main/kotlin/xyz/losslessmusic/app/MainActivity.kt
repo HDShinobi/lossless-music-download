@@ -222,11 +222,13 @@ class MainActivity : FlutterActivity() {
             true to null
         }
         "startMediaServer" -> {
+            // Acquire the lock BEFORE the server opens its SSDP socket so the
+            // initial NOTIFY burst and M-SEARCH receive are covered from t=0.
+            acquireMulticastLock()
             val status = Bridge.startMediaServer(
                 call.argument<String>("rootDir")!!,
                 call.argument<String>("name")!!
             )
-            acquireMulticastLock()
             true to status
         }
         "stopMediaServer" -> {

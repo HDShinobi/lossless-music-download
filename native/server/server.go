@@ -67,9 +67,13 @@ func (s *MediaServer) Start() (string, error) {
 		return s.baseURL, nil
 	}
 
-	ip, err := lanIPv4()
-	if err != nil {
-		ip = "127.0.0.1"
+	iface, ipAddr, err := lanInterfaceIPv4()
+	ip := "127.0.0.1"
+	if err == nil {
+		ip = ipAddr.String()
+	} else {
+		iface = nil
+		ipAddr = nil
 	}
 
 	// Try port 8200 first, fall back to any free port.
@@ -98,7 +102,7 @@ func (s *MediaServer) Start() (string, error) {
 	// Start SSDP advertisement (best-effort: failure does not abort the server).
 	s.ssdp = &ssdpResponder{}
 	location := s.baseURL + "/description.xml"
-	if err := s.ssdp.start(location, s.udn); err != nil {
+	if err := s.ssdp.start(location, s.udn, iface, ipAddr); err != nil {
 		log.Printf("MediaServer: SSDP unavailable (best-effort): %v", err)
 		s.ssdp = nil
 	}
