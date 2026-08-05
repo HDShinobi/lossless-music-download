@@ -391,12 +391,25 @@ func CheckDuplicate(outputDir, isrc string) (string, error) {
 
 // --- App version ---
 
-// SetAppVersion sets the app version string used to build the User-Agent
-// header ("SpotiFLAC-Mobile/<version>") for api.zarz.moe resolve requests
-// and extension HTTP calls that don't supply their own UA. Must be called at
-// startup (before any network call) with the app's versionName.
+// spotiflacBaselineVersion is the SpotiFLAC-Mobile version our vendored
+// go_backend engine corresponds to (docs/UPSTREAM-SYNC.md "Current baseline").
+// BUMP THIS ON EVERY UPSTREAM SYNC.
+//
+// The extension ecosystem gates installs on the SpotiFLAC app version via each
+// manifest's minAppVersion (as of the v4.8.5 sync the engine enforces this),
+// and the resolve/extension User-Agent is "SpotiFLAC-Mobile/<version>". Our
+// fork's own 0.x version is meaningless there and, being below any 4.x
+// minAppVersion, makes the engine reject every upstream extension. So we report
+// the vendored SpotiFLAC baseline to the engine, not the fork version. The fork
+// version is still what users see and what in-app auto-update compares.
+const spotiflacBaselineVersion = "4.8.5"
+
+// SetAppVersion is called at startup with the fork's versionName, but reports
+// the vendored SpotiFLAC baseline (see spotiflacBaselineVersion) to the engine
+// so extension minAppVersion gates pass and the User-Agent matches upstream.
 func SetAppVersion(version string) {
-	gobackend.SetAppVersion(version)
+	_ = version // fork version intentionally not forwarded; see above
+	gobackend.SetAppVersion(spotiflacBaselineVersion)
 }
 
 // --- Library scan ---
