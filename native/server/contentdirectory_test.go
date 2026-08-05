@@ -67,7 +67,7 @@ func TestBrowseRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := NewMediaServer(dir, "Test Server")
+	srv := NewMediaServer(dir, "Test Server", "")
 	srv.baseURL = "http://127.0.0.1:8200"
 
 	didl, num, total, err := srv.browse("0")
@@ -103,7 +103,7 @@ func TestBrowseSubDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := NewMediaServer(dir, "Test Server")
+	srv := NewMediaServer(dir, "Test Server", "")
 	srv.baseURL = "http://127.0.0.1:8200"
 
 	// Browse into Artist/Album
@@ -130,7 +130,7 @@ func TestBrowseSubDir(t *testing.T) {
 func TestBrowseTraversalRejected(t *testing.T) {
 	dir := t.TempDir()
 
-	srv := NewMediaServer(dir, "Test Server")
+	srv := NewMediaServer(dir, "Test Server", "")
 	srv.baseURL = "http://127.0.0.1:8200"
 
 	// Attempt traversal via encoded "../secret"
@@ -168,7 +168,7 @@ func TestBrowseMetadataRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	srv := NewMediaServer(dir, "My Music Server")
+	srv := NewMediaServer(dir, "My Music Server", "")
 	srv.baseURL = "http://127.0.0.1:8200"
 
 	didl, num, total, err := srv.browseMetadata("0")
@@ -195,7 +195,7 @@ func TestBrowseMetadataRoot(t *testing.T) {
 
 func TestBrowseMetadataViaControl(t *testing.T) {
 	dir := t.TempDir()
-	srv := NewMediaServer(dir, "Test")
+	srv := NewMediaServer(dir, "Test", "")
 	srv.baseURL = "http://127.0.0.1:8200"
 
 	const metadataEnvelope = `<?xml version="1.0" encoding="utf-8"?>

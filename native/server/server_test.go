@@ -32,7 +32,7 @@ func seedDir(t *testing.T) string {
 
 func TestServerDescriptionXML(t *testing.T) {
 	dir := seedDir(t)
-	srv := NewMediaServer(dir, "LosslessMusic Test")
+	srv := NewMediaServer(dir, "LosslessMusic Test", "")
 
 	url, err := srv.Start()
 	if err != nil {
@@ -77,7 +77,7 @@ func TestServerDescriptionXML(t *testing.T) {
 
 func TestServerBrowseRoot(t *testing.T) {
 	dir := seedDir(t)
-	srv := NewMediaServer(dir, "LosslessMusic Test")
+	srv := NewMediaServer(dir, "LosslessMusic Test", "")
 
 	baseURL, err := srv.Start()
 	if err != nil {
@@ -124,7 +124,7 @@ func TestServerBrowseRoot(t *testing.T) {
 
 func TestServerBrowseAlbum(t *testing.T) {
 	dir := seedDir(t)
-	srv := NewMediaServer(dir, "LosslessMusic Test")
+	srv := NewMediaServer(dir, "LosslessMusic Test", "")
 
 	baseURL, err := srv.Start()
 	if err != nil {
@@ -173,7 +173,7 @@ func TestServerBrowseAlbum(t *testing.T) {
 
 func TestServerMediaFile(t *testing.T) {
 	dir := seedDir(t)
-	srv := NewMediaServer(dir, "LosslessMusic Test")
+	srv := NewMediaServer(dir, "LosslessMusic Test", "")
 
 	baseURL, err := srv.Start()
 	if err != nil {
@@ -202,7 +202,7 @@ func TestServerMediaFile(t *testing.T) {
 
 func TestServerMediaTraversalForbidden(t *testing.T) {
 	dir := seedDir(t)
-	srv := NewMediaServer(dir, "LosslessMusic Test")
+	srv := NewMediaServer(dir, "LosslessMusic Test", "")
 
 	baseURL, err := srv.Start()
 	if err != nil {
@@ -225,7 +225,7 @@ func TestServerMediaTraversalForbidden(t *testing.T) {
 
 func TestServerStatus(t *testing.T) {
 	dir := seedDir(t)
-	srv := NewMediaServer(dir, "StatusTest")
+	srv := NewMediaServer(dir, "StatusTest", "")
 
 	running, url, name := srv.Status()
 	if running {
@@ -255,7 +255,7 @@ func TestServerStatus(t *testing.T) {
 
 func TestServerStop(t *testing.T) {
 	dir := seedDir(t)
-	srv := NewMediaServer(dir, "StopTest")
+	srv := NewMediaServer(dir, "StopTest", "")
 
 	baseURL, err := srv.Start()
 	if err != nil {
@@ -297,7 +297,7 @@ func TestStableUDN(t *testing.T) {
 // without needing a real network.
 func TestHandlersViaHttptest(t *testing.T) {
 	dir := seedDir(t)
-	srv := NewMediaServer(dir, "HttptestServer")
+	srv := NewMediaServer(dir, "HttptestServer", "")
 	srv.baseURL = "http://127.0.0.1:0" // will be overridden by httptest
 
 	mux := http.NewServeMux()

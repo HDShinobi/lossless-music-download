@@ -128,33 +128,41 @@ func ssdpNTs(udn string) []string {
 // ssdpResponder handles SSDP multicast advertisement and M-SEARCH response.
 type ssdpResponder struct {
 	conn    *net.UDPConn
-	iface   *net.Interface // Wi-Fi/LAN interface to bind multicast to (may be nil)
-	srcIP   net.IP         // its IPv4, used to pin outbound egress (may be nil)
-	bootID  int            // BOOTID.UPNP.ORG for this run
+	srcIP   net.IP // Wi-Fi IPv4, used to pin egress and join the group on Wi-Fi
+	bootID  int    // BOOTID.UPNP.ORG for this run
 	done    chan struct{}
 	stopped chan struct{}
 	wg      sync.WaitGroup // tracks delayed M-SEARCH responders
 }
 
-// start opens the SSDP multicast socket bound to iface, sends initial NOTIFY
-// alive datagrams, and starts goroutines for periodic advertisement and
-// M-SEARCH handling. srcIP (iface's IPv4) is used to pin outbound multicast to
-// the right interface. It returns an error only if the socket cannot be opened;
-// the caller should treat SSDP as best-effort and continue even on error.
-func (r *ssdpResponder) start(location, udn string, iface *net.Interface, srcIP net.IP) error {
+// start opens the SSDP multicast socket, sends initial NOTIFY alive datagrams,
+// and starts goroutines for periodic advertisement and M-SEARCH handling.
+//
+// srcIP is the device's Wi-Fi IPv4. We cannot resolve a *net.Interface on
+// Android (net.Interfaces() is SELinux-blocked), so instead of binding the
+// socket to an interface we join the multicast group *by source IP* (Linux
+// IP_ADD_MEMBERSHIP with imr_interface), which needs only the address. This is
+// additive to the default membership, so RX still works if the join is a no-op.
+// It returns an error only if the socket cannot be opened; the caller should
+// treat SSDP as best-effort and continue even on error.
+func (r *ssdpResponder) start(location, udn string, srcIP net.IP) error {
 	group := &net.UDPAddr{
 		IP:   net.IPv4(239, 255, 255, 250),
 		Port: 1900,
 	}
-	// Binding to iface (rather than nil) ensures we receive M-SEARCH arriving on
-	// the Wi-Fi LAN even when another interface owns the default route.
-	conn, err := net.ListenMulticastUDP("udp4", iface, group)
+	conn, err := net.ListenMulticastUDP("udp4", nil, group)
 	if err != nil {
 		return fmt.Errorf("ssdpResponder.start: ListenMulticastUDP: %w", err)
 	}
 	r.conn = conn
-	r.iface = iface
 	r.srcIP = srcIP
+	if srcIP != nil {
+		// Also receive M-SEARCH arriving on the Wi-Fi interface even when
+		// another link owns the default multicast route. Best-effort.
+		if jerr := joinMulticastGroupOnIP(conn, group.IP, srcIP); jerr != nil {
+			log.Printf("ssdp: group join on %s failed (using default membership): %v", srcIP, jerr)
+		}
+	}
 	r.bootID = int(time.Now().Unix())
 	r.done = make(chan struct{})
 	r.stopped = make(chan struct{})

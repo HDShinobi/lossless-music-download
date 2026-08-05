@@ -2,8 +2,11 @@ package xyz.losslessmusic.app
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.Bundle
+import java.net.Inet4Address
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
@@ -225,9 +228,13 @@ class MainActivity : FlutterActivity() {
             // Acquire the lock BEFORE the server opens its SSDP socket so the
             // initial NOTIFY burst and M-SEARCH receive are covered from t=0.
             acquireMulticastLock()
+            // Resolve the Wi-Fi IPv4 here: Go's net.Interfaces() is SELinux-
+            // blocked on Android 11+, so the server would otherwise fall back to
+            // 127.0.0.1 and be invisible on the LAN.
             val status = Bridge.startMediaServer(
                 call.argument<String>("rootDir")!!,
-                call.argument<String>("name")!!
+                call.argument<String>("name")!!,
+                wifiLanIpv4() ?: ""
             )
             true to status
         }
@@ -285,6 +292,38 @@ class MainActivity : FlutterActivity() {
             true to null
         }
         else -> false to null
+    }
+
+    // Resolves the device's Wi-Fi IPv4 via the framework (ConnectivityManager),
+    // which — unlike Go's net.Interfaces() — is not blocked by SELinux on modern
+    // Android. Prefers a network with the Wi-Fi transport; returns null if none
+    // has a usable private IPv4.
+    private fun wifiLanIpv4(): String? {
+        val cm = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE)
+            as? ConnectivityManager ?: return null
+
+        val networks = cm.allNetworks.toMutableList()
+        cm.activeNetwork?.let { active ->
+            if (!networks.contains(active)) networks.add(active)
+        }
+        // Wi-Fi transport first, then everything else.
+        val ranked = networks.sortedByDescending { n ->
+            val caps = cm.getNetworkCapabilities(n)
+            if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) 1 else 0
+        }
+        for (n in ranked) {
+            val lp = cm.getLinkProperties(n) ?: continue
+            for (la in lp.linkAddresses) {
+                val addr = la.address
+                if (addr is Inet4Address &&
+                    !addr.isLoopbackAddress &&
+                    addr.isSiteLocalAddress
+                ) {
+                    return addr.hostAddress
+                }
+            }
+        }
+        return null
     }
 
     private fun acquireMulticastLock() {

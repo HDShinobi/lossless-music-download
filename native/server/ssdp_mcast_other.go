@@ -10,3 +10,9 @@ import "net"
 func setMulticastInterfaceIPv4(conn *net.UDPConn, ip net.IP) error {
 	return nil
 }
+
+// joinMulticastGroupOnIP is a no-op off Linux. The base ListenMulticastUDP
+// membership already covers RX on the dev host.
+func joinMulticastGroupOnIP(conn *net.UDPConn, group, ifaceIP net.IP) error {
+	return nil
+}

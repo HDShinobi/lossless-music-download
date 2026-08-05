@@ -30,7 +30,12 @@ func mediaServerStatusJSON(running bool, url, name string) string {
 
 // StartMediaServer starts the DLNA MediaServer exposing rootDir on the LAN.
 // Idempotent: returns the current status JSON if already running.
-func StartMediaServer(rootDir, friendlyName string) (string, error) {
+//
+// lanIP is the device's Wi-Fi IPv4 as resolved by the Android framework
+// (ConnectivityManager). Go's net.Interfaces() is blocked by SELinux on
+// Android 11+, so the platform layer must supply the LAN IP; pass "" on hosts
+// where the Go-side fallback (net.Interfaces) works.
+func StartMediaServer(rootDir, friendlyName, lanIP string) (string, error) {
 	mediaServerMu.Lock()
 	defer mediaServerMu.Unlock()
 	if mediaServer != nil {
@@ -38,7 +43,7 @@ func StartMediaServer(rootDir, friendlyName string) (string, error) {
 			return mediaServerStatusJSON(true, url, name), nil
 		}
 	}
-	ms := server.NewMediaServer(rootDir, friendlyName)
+	ms := server.NewMediaServer(rootDir, friendlyName, lanIP)
 	if _, err := ms.Start(); err != nil {
 		return "", err
 	}

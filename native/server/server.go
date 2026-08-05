@@ -21,6 +21,7 @@ type MediaServer struct {
 	rootDir      string
 	friendlyName string
 	udn          string
+	lanIP        string // Wi-Fi IPv4 supplied by the platform ("" = derive in Go)
 	httpSrv      *http.Server
 	baseURL      string
 	ssdp         *ssdpResponder
@@ -31,12 +32,17 @@ type MediaServer struct {
 // NewMediaServer creates a new MediaServer. The UDN is derived deterministically
 // from a SHA-1 hash of friendlyName+rootDir so the device identity is stable
 // across restarts with no external randomness.
-func NewMediaServer(rootDir, friendlyName string) *MediaServer {
+//
+// lanIP is the device's Wi-Fi IPv4. On Android 11+ Go's net.Interfaces() is
+// blocked by SELinux, so the platform must pass the address; "" falls back to
+// Go-side discovery (works on desktop/tests).
+func NewMediaServer(rootDir, friendlyName, lanIP string) *MediaServer {
 	udn := stableUDN(friendlyName, rootDir)
 	return &MediaServer{
 		rootDir:      rootDir,
 		friendlyName: friendlyName,
 		udn:          udn,
+		lanIP:        lanIP,
 	}
 }
 
@@ -67,14 +73,19 @@ func (s *MediaServer) Start() (string, error) {
 		return s.baseURL, nil
 	}
 
-	iface, ipAddr, err := lanInterfaceIPv4()
-	ip := "127.0.0.1"
-	if err == nil {
-		ip = ipAddr.String()
-	} else {
-		iface = nil
-		ipAddr = nil
+	// Prefer the platform-supplied Wi-Fi IP; on Android that is the only
+	// reliable source (net.Interfaces() is SELinux-blocked). Fall back to
+	// Go-side discovery on desktop, then to loopback as a last resort.
+	ip := s.lanIP
+	if ip == "" {
+		if got, err := lanIPv4(); err == nil {
+			ip = got
+		}
 	}
+	if ip == "" {
+		ip = "127.0.0.1"
+	}
+	srcIP := net.ParseIP(ip).To4()
 
 	// Try port 8200 first, fall back to any free port.
 	ln, err := net.Listen("tcp", fmt.Sprintf("%s:8200", ip))
@@ -102,7 +113,7 @@ func (s *MediaServer) Start() (string, error) {
 	// Start SSDP advertisement (best-effort: failure does not abort the server).
 	s.ssdp = &ssdpResponder{}
 	location := s.baseURL + "/description.xml"
-	if err := s.ssdp.start(location, s.udn, iface, ipAddr); err != nil {
+	if err := s.ssdp.start(location, s.udn, srcIP); err != nil {
 		log.Printf("MediaServer: SSDP unavailable (best-effort): %v", err)
 		s.ssdp = nil
 	}
