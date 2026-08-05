@@ -725,4 +725,13 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get extensionUpdateFailed => 'Cập nhật thất bại';
+
+  @override
+  String get previewPlay => 'Nghe thử';
+
+  @override
+  String get previewStop => 'Dừng nghe thử';
+
+  @override
+  String get previewUnavailable => 'Không nghe thử được';
 }

@@ -330,5 +330,11 @@
   "extensionUpdated": "Đã cập nhật extension",
   "@extensionUpdated": { "description": "Snackbar after extension updates complete" },
   "extensionUpdateFailed": "Cập nhật thất bại",
-  "@extensionUpdateFailed": { "description": "Snackbar when an extension update fails" }
+  "@extensionUpdateFailed": { "description": "Snackbar when an extension update fails" },
+  "previewPlay": "Nghe thử",
+  "@previewPlay": { "description": "Tooltip for the in-list preview button when idle or paused" },
+  "previewStop": "Dừng nghe thử",
+  "@previewStop": { "description": "Tooltip for the in-list preview button while playing or loading" },
+  "previewUnavailable": "Không nghe thử được",
+  "@previewUnavailable": { "description": "Snackbar shown when a track's preview fails to play" }
 }

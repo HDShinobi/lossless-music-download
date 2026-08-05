@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import '../models/track.dart';
 import '../theme/app_tokens.dart';
+import 'preview_button.dart';
 
 enum TrackDownloadState { idle, queued, active, done, failed }
 
@@ -30,6 +31,7 @@ class TrackTile extends StatelessWidget {
     this.downloadState = TrackDownloadState.idle,
     this.onArtistTap,
     this.onAlbumTap,
+    this.showPreview = true,
   });
 
   final Track track;
@@ -49,6 +51,11 @@ class TrackTile extends StatelessWidget {
   /// Called when the album name is tapped. Same gating as [onArtistTap] but on
   /// `albumId`.
   final VoidCallback? onAlbumTap;
+
+  /// When true (default) and the track carries a `preview_url`, a play/pause
+  /// preview button is shown before the download button. Hidden in selection
+  /// mode. Set false to opt a list out of preview (e.g. offline library rows).
+  final bool showPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +106,9 @@ class TrackTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
+          // Preview button — only when not selecting and a preview exists.
+          if (!selectionMode && showPreview && track.hasPreview)
+            PreviewButton(track: track),
           // Download button — hidden in selection mode
           if (!selectionMode)
             _DownloadStateIcon(

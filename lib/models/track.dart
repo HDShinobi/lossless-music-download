@@ -8,6 +8,10 @@ class Track {
   final String? albumName, albumArtist, coverUrl, isrc;
   final int? durationMs;
 
+  /// Short (~30s) streaming preview URL, when the source provides one. Used by
+  /// the in-list preview player; null/empty means no preview is available.
+  final String? previewUrl;
+
   // Rich metadata from the metadata-provider search JSON.
   final String? source; // provider/extension id that returned this result
   final int? trackNumber, discNumber, totalTracks, totalDiscs;
@@ -33,6 +37,7 @@ class Track {
     this.coverUrl,
     this.isrc,
     this.durationMs,
+    this.previewUrl,
     this.source,
     this.trackNumber,
     this.discNumber,
@@ -65,6 +70,10 @@ class Track {
       coverUrl: (j['cover_url'] ?? j['images'] ?? j['cover'])?.toString(),
       isrc: j['isrc']?.toString(),
       durationMs: durMs,
+      previewUrl: () {
+        final p = (j['preview_url'] ?? j['previewUrl'])?.toString();
+        return (p != null && p.isNotEmpty) ? p : null;
+      }(),
       source: (j['source'] ?? j['extension_id'] ?? j['provider_id'])?.toString(),
       trackNumber: (j['track_number'] as num?)?.toInt(),
       discNumber: (j['disc_number'] as num?)?.toInt(),
@@ -89,4 +98,7 @@ class Track {
   }
 
   bool get isAtmos => (audioModes ?? '').toUpperCase().contains('DOLBY_ATMOS');
+
+  /// True when a non-empty streaming preview URL is available.
+  bool get hasPreview => previewUrl != null && previewUrl!.isNotEmpty;
 }

@@ -1435,6 +1435,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Update failed'**
   String get extensionUpdateFailed;
+
+  /// Tooltip for the in-list preview button when idle or paused
+  ///
+  /// In en, this message translates to:
+  /// **'Play preview'**
+  String get previewPlay;
+
+  /// Tooltip for the in-list preview button while playing or loading
+  ///
+  /// In en, this message translates to:
+  /// **'Stop preview'**
+  String get previewStop;
+
+  /// Snackbar shown when a track's preview fails to play
+  ///
+  /// In en, this message translates to:
+  /// **'Preview unavailable'**
+  String get previewUnavailable;
 }
 
 class _AppLocalizationsDelegate

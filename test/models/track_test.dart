@@ -52,4 +52,38 @@ void main() {
       expect(t.isAtmos, isFalse);
     });
   });
+
+  group('Track preview', () {
+    test('parses preview_url and reports hasPreview', () {
+      final t = Track.fromJson(const {
+        'id': 'x',
+        'name': 'S',
+        'artists': 'A',
+        'preview_url': 'https://cdn/preview.mp3',
+      });
+      expect(t.previewUrl, 'https://cdn/preview.mp3');
+      expect(t.hasPreview, isTrue);
+    });
+
+    test('accepts previewUrl camelCase alias', () {
+      final t = Track.fromJson(const {
+        'id': 'x',
+        'name': 'S',
+        'artists': 'A',
+        'previewUrl': 'https://cdn/p.mp3',
+      });
+      expect(t.previewUrl, 'https://cdn/p.mp3');
+      expect(t.hasPreview, isTrue);
+    });
+
+    test('hasPreview is false when preview_url absent or empty', () {
+      final none = Track.fromJson(const {'id': 'x', 'name': 'S', 'artists': 'A'});
+      final empty = Track.fromJson(
+        const {'id': 'x', 'name': 'S', 'artists': 'A', 'preview_url': ''},
+      );
+      expect(none.previewUrl, isNull);
+      expect(none.hasPreview, isFalse);
+      expect(empty.hasPreview, isFalse);
+    });
+  });
 }

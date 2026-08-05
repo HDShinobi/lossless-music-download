@@ -330,5 +330,11 @@
   "extensionUpdated": "Extensions updated",
   "@extensionUpdated": { "description": "Snackbar after extension updates complete" },
   "extensionUpdateFailed": "Update failed",
-  "@extensionUpdateFailed": { "description": "Snackbar when an extension update fails" }
+  "@extensionUpdateFailed": { "description": "Snackbar when an extension update fails" },
+  "previewPlay": "Play preview",
+  "@previewPlay": { "description": "Tooltip for the in-list preview button when idle or paused" },
+  "previewStop": "Stop preview",
+  "@previewStop": { "description": "Tooltip for the in-list preview button while playing or loading" },
+  "previewUnavailable": "Preview unavailable",
+  "@previewUnavailable": { "description": "Snackbar shown when a track's preview fails to play" }
 }

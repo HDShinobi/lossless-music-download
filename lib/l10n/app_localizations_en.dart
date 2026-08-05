@@ -730,4 +730,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get extensionUpdateFailed => 'Update failed';
+
+  @override
+  String get previewPlay => 'Play preview';
+
+  @override
+  String get previewStop => 'Stop preview';
+
+  @override
+  String get previewUnavailable => 'Preview unavailable';
 }

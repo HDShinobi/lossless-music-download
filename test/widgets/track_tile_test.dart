@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'package:lossless_music_download/models/track.dart';
@@ -274,6 +275,65 @@ void main() {
 
       expect(find.byKey(const Key('trackArtist')), findsNothing);
       expect(find.byKey(const Key('trackAlbum')), findsNothing);
+    });
+  });
+
+  group('TrackTile preview button', () {
+    const previewTrack = Track(
+      id: 'p1',
+      name: 'Preview Song',
+      artists: 'Artist',
+      albumName: 'Album',
+      previewUrl: 'https://cdn/preview.mp3',
+    );
+
+    testWidgets('shows preview button when the track has a preview_url',
+        (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: appTheme(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            home: Scaffold(
+              body: TrackTile(track: previewTrack, onDownload: () {}),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('previewButton')), findsOneWidget);
+      expect(find.byIcon(Icons.download_outlined), findsOneWidget);
+    });
+
+    testWidgets('no preview button when track has no preview_url',
+        (tester) async {
+      await pumpTrackTile(tester, track: track, onDownload: () {});
+      expect(find.byKey(const Key('previewButton')), findsNothing);
+    });
+
+    testWidgets('no preview button in selection mode', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: appTheme(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: const Locale('en'),
+            home: Scaffold(
+              body: TrackTile(
+                track: previewTrack,
+                onDownload: () {},
+                selectionMode: true,
+                onSelectToggle: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('previewButton')), findsNothing);
     });
   });
 
