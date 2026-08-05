@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -25,8 +26,22 @@ type MediaServer struct {
 	httpSrv      *http.Server
 	baseURL      string
 	ssdp         *ssdpResponder
+	meta         MetadataProvider // optional; nil => filename-only titles
+	tags         *tagCache
 	mu           sync.Mutex
 	running      bool
+}
+
+// SetMetadataProvider wires an embedded-tag/cover reader so browse results and
+// the /art endpoint expose real metadata. Safe to call before Start; a nil
+// provider keeps the filename-only fallback.
+func (s *MediaServer) SetMetadataProvider(p MetadataProvider) {
+	s.mu.Lock()
+	s.meta = p
+	if p != nil && s.tags == nil {
+		s.tags = newTagCache()
+	}
+	s.mu.Unlock()
 }
 
 // NewMediaServer creates a new MediaServer. The UDN is derived deterministically
@@ -103,6 +118,7 @@ func (s *MediaServer) Start() (string, error) {
 	mux.HandleFunc("/cd/scpd", s.handleSCPD)
 	mux.HandleFunc("/cd/control", s.handleControl)
 	mux.HandleFunc("/media/", s.handleMedia)
+	mux.HandleFunc("/art/", s.handleArt)
 
 	s.httpSrv = &http.Server{Handler: mux}
 
@@ -227,49 +243,106 @@ func buildBrowseResponse(didl []byte, numReturned, totalMatches int) []byte {
 </s:Envelope>`, escapedDidl.String(), numReturned, totalMatches))
 }
 
-// handleMedia serves audio files under /media/<encodedRelPath>.
-// It validates the decoded path stays within rootDir, then delegates to http.ServeFile
-// which handles Range requests automatically.
-func (s *MediaServer) handleMedia(w http.ResponseWriter, r *http.Request) {
+// resolveUnderRoot decodes the base64 objectID after prefix and returns the
+// absolute file path, guaranteed to be a regular file within rootDir. On any
+// problem it writes the appropriate HTTP error and returns ok=false.
+func (s *MediaServer) resolveUnderRoot(w http.ResponseWriter, r *http.Request, prefix string) (string, bool) {
 	s.mu.Lock()
 	rootDir := s.rootDir
 	s.mu.Unlock()
 
-	// Strip the "/media/" prefix.
-	encodedRel := strings.TrimPrefix(r.URL.Path, "/media/")
+	encodedRel := strings.TrimPrefix(r.URL.Path, prefix)
 	if encodedRel == "" {
 		http.Error(w, "Not Found", http.StatusNotFound)
-		return
+		return "", false
 	}
-
 	relPath, err := decodeObjectID(encodedRel)
 	if err != nil {
 		http.Error(w, "Bad Request", http.StatusBadRequest)
-		return
+		return "", false
 	}
-
 	// Traversal guard 1: reject ".." components in the decoded path.
 	if err := validateRelPath(relPath); err != nil {
 		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
+		return "", false
 	}
-
 	absPath := filepath.Join(rootDir, relPath)
-
 	// Traversal guard 2: clean resolved path must be under rootDir.
 	rootClean := filepath.Clean(rootDir)
 	absClean := filepath.Clean(absPath)
 	if !strings.HasPrefix(absClean+string(filepath.Separator), rootClean+string(filepath.Separator)) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
+		return "", false
+	}
+	info, err := os.Stat(absPath)
+	if err != nil || info.IsDir() {
+		http.Error(w, "Not Found", http.StatusNotFound)
+		return "", false
+	}
+	return absPath, true
+}
+
+// handleMedia serves audio files under /media/<encodedRelPath>. It sets the
+// correct audio Content-Type and the DLNA streaming headers some renderers
+// require, then delegates to http.ServeFile (which handles Range requests).
+func (s *MediaServer) handleMedia(w http.ResponseWriter, r *http.Request) {
+	absPath, ok := s.resolveUnderRoot(w, r, "/media/")
+	if !ok {
 		return
 	}
 
-	// Reject directories.
-	info, err := os.Stat(absPath)
-	if err != nil || info.IsDir() {
+	mime := mimeForExt(filepath.Ext(absPath))
+	w.Header().Set("Content-Type", mime)
+	// DLNA: advertise the same feature flags as the item's protocolInfo, and
+	// answer streaming-mode negotiation so strict renderers accept the stream.
+	if r.Header.Get("getcontentFeatures.dlna.org") == "1" {
+		w.Header().Set("contentFeatures.dlna.org", dlnaContentFeatures(mime))
+	}
+	if tm := r.Header.Get("transferMode.dlna.org"); tm != "" {
+		w.Header().Set("transferMode.dlna.org", tm)
+	} else {
+		w.Header().Set("transferMode.dlna.org", "Streaming")
+	}
+
+	http.ServeFile(w, r, absPath)
+}
+
+// handleArt serves embedded cover art under /art/<encodedRelPath>, extracted on
+// demand via the metadata provider. 404 when there is no provider or no cover.
+func (s *MediaServer) handleArt(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	meta := s.meta
+	s.mu.Unlock()
+	if meta == nil {
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
 	}
 
-	http.ServeFile(w, r, absPath)
+	absPath, ok := s.resolveUnderRoot(w, r, "/art/")
+	if !ok {
+		return
+	}
+
+	data, mime, ok := meta.ReadCover(absPath)
+	if !ok || len(data) == 0 {
+		http.Error(w, "Not Found", http.StatusNotFound)
+		return
+	}
+	if mime == "" {
+		mime = "image/jpeg"
+	}
+	w.Header().Set("Content-Type", mime)
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
+}
+
+// dlnaContentFeatures returns the DLNA.ORG_* 4th field of the protocolInfo for
+// a MIME type (the value of the contentFeatures.dlna.org header).
+func dlnaContentFeatures(mime string) string {
+	parts := strings.SplitN(protocolInfoFor(mime), ":", 4)
+	if len(parts) == 4 {
+		return parts[3]
+	}
+	return ""
 }

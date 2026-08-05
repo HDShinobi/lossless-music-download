@@ -6,11 +6,59 @@ package bridge
 
 import (
 	"encoding/json"
+	"net/http"
 	"sync"
 
 	"github.com/zarz/spotiflac_android/go_backend"
 	"xyz.losslessmusic/server"
 )
+
+// goBackendMetadata adapts go_backend's tag/cover readers to the DLNA server's
+// MetadataProvider, so the MediaServer can expose real artist/album/cover/etc.
+// without the server package depending on go_backend.
+type goBackendMetadata struct{}
+
+func (goBackendMetadata) ReadTags(absPath string) (server.TrackTags, bool) {
+	js, err := gobackend.ReadAudioMetadataJSON(absPath)
+	if err != nil || js == "" {
+		return server.TrackTags{}, false
+	}
+	var r struct {
+		TrackName   string `json:"trackName"`
+		ArtistName  string `json:"artistName"`
+		AlbumName   string `json:"albumName"`
+		AlbumArtist string `json:"albumArtist"`
+		Genre       string `json:"genre"`
+		TrackNumber int    `json:"trackNumber"`
+		Duration    int    `json:"duration"`
+		SampleRate  int    `json:"sampleRate"`
+		BitDepth    int    `json:"bitDepth"`
+		Bitrate     int    `json:"bitrate"`
+	}
+	if err := json.Unmarshal([]byte(js), &r); err != nil {
+		return server.TrackTags{}, false
+	}
+	return server.TrackTags{
+		Title:       r.TrackName,
+		Artist:      r.ArtistName,
+		Album:       r.AlbumName,
+		AlbumArtist: r.AlbumArtist,
+		Genre:       r.Genre,
+		TrackNumber: r.TrackNumber,
+		DurationSec: r.Duration,
+		SampleRate:  r.SampleRate,
+		BitDepth:    r.BitDepth,
+		BitrateKbps: r.Bitrate,
+	}, true
+}
+
+func (goBackendMetadata) ReadCover(absPath string) ([]byte, string, bool) {
+	data, err := gobackend.ExtractCoverArt(absPath)
+	if err != nil || len(data) == 0 {
+		return nil, "", false
+	}
+	return data, http.DetectContentType(data), true
+}
 
 // --- DLNA MediaServer (Serve) ---------------------------------------------
 
@@ -44,6 +92,7 @@ func StartMediaServer(rootDir, friendlyName, lanIP string) (string, error) {
 		}
 	}
 	ms := server.NewMediaServer(rootDir, friendlyName, lanIP)
+	ms.SetMetadataProvider(goBackendMetadata{})
 	if _, err := ms.Start(); err != nil {
 		return "", err
 	}

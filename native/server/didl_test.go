@@ -60,8 +60,8 @@ func TestDidlLite(t *testing.T) {
 	if !strings.Contains(s, "The Artist") {
 		t.Error("missing upnp:artist")
 	}
-	if !strings.Contains(s, "http-get:*:audio/flac:*") {
-		t.Error("missing protocolInfo in res element")
+	if !strings.Contains(s, "http-get:*:audio/flac:DLNA.ORG_OP=01") {
+		t.Error("missing DLNA protocolInfo in res element")
 	}
 	if !strings.Contains(s, "http://192.168.1.10:8200/media/def456") {
 		t.Error("missing res URL")

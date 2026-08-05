@@ -65,6 +65,8 @@ func (s *MediaServer) browse(objectID string) (didl []byte, numReturned, totalMa
 	s.mu.Lock()
 	rootDir := s.rootDir
 	baseURL := s.baseURL
+	meta := s.meta
+	tags := s.tags
 	s.mu.Unlock()
 
 	// Resolve the target directory.
@@ -148,16 +150,42 @@ func (s *MediaServer) browse(objectID string) (didl []byte, numReturned, totalMa
 			if err == nil {
 				size = info.Size()
 			}
-			// Derive title from filename (strip extension).
+			// Derive title from filename (strip extension) as the fallback.
 			title := strings.TrimSuffix(name, ext)
-			items = append(items, cdItem{
+
+			item := cdItem{
 				id:       encoded,
 				parentID: objectID,
 				title:    title,
 				size:     size,
 				mime:     mime,
 				url:      baseURL + "/media/" + encoded,
-			})
+			}
+
+			// Enrich from embedded tags when a metadata provider is wired.
+			if meta != nil {
+				if t, ok := tags.get(filepath.Join(targetDir, name), meta); ok {
+					if t.Title != "" {
+						item.title = t.Title
+					}
+					item.artist = t.Artist
+					if item.artist == "" {
+						item.artist = t.AlbumArtist
+					}
+					item.album = t.Album
+					item.genre = t.Genre
+					item.trackNumber = t.TrackNumber
+					item.durationSec = t.DurationSec
+					item.sampleRate = t.SampleRate
+					item.bitDepth = t.BitDepth
+					item.bitrateKbps = t.BitrateKbps
+				}
+				// Advertise cover art unconditionally; /art returns 404 when the
+				// file has none, which control points handle gracefully.
+				item.albumArtURI = baseURL + "/art/" + encoded
+			}
+
+			items = append(items, item)
 		}
 	}
 
