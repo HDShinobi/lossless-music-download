@@ -28,6 +28,28 @@ class PreviewButton extends ConsumerWidget {
     }
   }
 
+  /// Wraps the play/pause glyph in a determinate ring showing how far into the
+  /// 30s snippet playback is (0..1 from [PreviewPlayerState.progress]).
+  Widget _withProgressRing(Widget glyph, double progress, ColorScheme cs) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CircularProgressIndicator(
+            key: const Key('previewProgress'),
+            value: progress,
+            strokeWidth: 2,
+            color: cs.primary,
+            backgroundColor: cs.primary.withValues(alpha: 0.2),
+          ),
+          glyph,
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!track.hasPreview) return const SizedBox.shrink();
@@ -51,11 +73,21 @@ class PreviewButton extends ConsumerWidget {
         tooltip = t.previewStop;
         break;
       case PreviewStatus.playing:
-        icon = Icon(Icons.pause_circle_filled_rounded, color: cs.primary);
+        icon = _withProgressRing(
+          Icon(Icons.pause_circle_filled_rounded,
+              size: size * 0.72, color: cs.primary),
+          previewState.progress,
+          cs,
+        );
         tooltip = t.previewStop;
         break;
       case PreviewStatus.paused:
-        icon = Icon(Icons.play_circle_fill_rounded, color: cs.primary);
+        icon = _withProgressRing(
+          Icon(Icons.play_circle_fill_rounded,
+              size: size * 0.72, color: cs.primary),
+          previewState.progress,
+          cs,
+        );
         tooltip = t.previewPlay;
         break;
       case PreviewStatus.idle:

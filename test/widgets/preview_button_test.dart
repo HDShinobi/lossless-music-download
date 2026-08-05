@@ -109,6 +109,31 @@ void main() {
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
     });
 
+    testWidgets('playing shows a determinate progress ring at position/duration',
+        (tester) async {
+      await pumpButton(
+        tester,
+        track: withPreview,
+        state: const PreviewPlayerState(
+          activeUrl: 'https://cdn/preview.mp3',
+          status: PreviewStatus.playing,
+          position: Duration(seconds: 15),
+          duration: Duration(seconds: 30),
+        ),
+      );
+      final ring = tester.widget<CircularProgressIndicator>(
+        find.byKey(const Key('previewProgress')),
+      );
+      expect(ring.value, closeTo(0.5, 0.001));
+      // The pause glyph stays visible inside the ring.
+      expect(find.byIcon(Icons.pause_circle_filled_rounded), findsOneWidget);
+    });
+
+    testWidgets('idle shows no progress ring', (tester) async {
+      await pumpButton(tester, track: withPreview);
+      expect(find.byKey(const Key('previewProgress')), findsNothing);
+    });
+
     testWidgets('another url playing leaves this button idle', (tester) async {
       await pumpButton(
         tester,
