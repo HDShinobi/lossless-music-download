@@ -1453,6 +1453,198 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Preview unavailable'**
   String get previewUnavailable;
+
+  /// Onboarding: advance to the next page
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get onbNext;
+
+  /// Onboarding: skip the optional feature tour
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get onbSkip;
+
+  /// Onboarding: postpone installing a download source
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get onbLater;
+
+  /// Onboarding: finish the flow and enter the app
+  ///
+  /// In en, this message translates to:
+  /// **'Get started'**
+  String get onbGetStarted;
+
+  /// Onboarding welcome page subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Download genuine lossless FLAC, right on your phone.'**
+  String get onbWelcomeSubtitle;
+
+  /// Onboarding: title of the combined permissions + folder step
+  ///
+  /// In en, this message translates to:
+  /// **'Get ready to download'**
+  String get onbPrepTitle;
+
+  /// Onboarding: description of the prepare step
+  ///
+  /// In en, this message translates to:
+  /// **'Grant access and pick where to save — just once.'**
+  String get onbPrepDesc;
+
+  /// Onboarding: storage permission row title
+  ///
+  /// In en, this message translates to:
+  /// **'Storage access'**
+  String get onbPermStorage;
+
+  /// Onboarding: storage permission row subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'All files access'**
+  String get onbPermStorageDesc;
+
+  /// Onboarding: notification permission row title
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get onbPermNotif;
+
+  /// Onboarding: notification permission row subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Background download progress'**
+  String get onbPermNotifDesc;
+
+  /// Onboarding: download folder row title
+  ///
+  /// In en, this message translates to:
+  /// **'Download folder'**
+  String get onbFolder;
+
+  /// Onboarding: button to grant a permission
+  ///
+  /// In en, this message translates to:
+  /// **'Grant'**
+  String get onbGrant;
+
+  /// Onboarding: button to enable notifications
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get onbEnable;
+
+  /// Onboarding: button to change the download folder
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get onbChange;
+
+  /// Onboarding: button to choose the download folder when none is set
+  ///
+  /// In en, this message translates to:
+  /// **'Choose'**
+  String get onbChoose;
+
+  /// Onboarding: title of the sources step
+  ///
+  /// In en, this message translates to:
+  /// **'Install a download source'**
+  String get onbSourcesTitle;
+
+  /// Onboarding: description of the sources step
+  ///
+  /// In en, this message translates to:
+  /// **'Music comes from extensions — there are no built-in sources. Install at least one \'download\' source to get started.'**
+  String get onbSourcesDesc;
+
+  /// Onboarding: sources guide step 1
+  ///
+  /// In en, this message translates to:
+  /// **'Open Settings → Sources & Extensions → Discover'**
+  String get onbSourcesStep1;
+
+  /// Onboarding: sources guide step 2
+  ///
+  /// In en, this message translates to:
+  /// **'Filter by \'download\' and tap Install on a source'**
+  String get onbSourcesStep2;
+
+  /// Onboarding: sources guide step 3
+  ///
+  /// In en, this message translates to:
+  /// **'Enable it; if its dot is amber, verify in the browser'**
+  String get onbSourcesStep3;
+
+  /// Onboarding: button that deep-links to the Sources screen
+  ///
+  /// In en, this message translates to:
+  /// **'Open Sources & Extensions'**
+  String get onbSourcesOpen;
+
+  /// Onboarding: warning that no download source is installed
+  ///
+  /// In en, this message translates to:
+  /// **'No download source yet — you can\'t download music until you add one.'**
+  String get onbSourcesWarn;
+
+  /// Onboarding: title of the spectral verify feature page
+  ///
+  /// In en, this message translates to:
+  /// **'Verify lossless'**
+  String get onbVerifyTitle;
+
+  /// Onboarding: description of the verify feature
+  ///
+  /// In en, this message translates to:
+  /// **'Analyze the frequency spectrum to catch fake lossless transcoded from MP3.'**
+  String get onbVerifyDesc;
+
+  /// Onboarding: subtitle under the sample lossless verdict
+  ///
+  /// In en, this message translates to:
+  /// **'Spectrum reaches 22 kHz with no cutoff wall'**
+  String get onbVerifyVerdictSub;
+
+  /// Onboarding: title of the DLNA cast feature page
+  ///
+  /// In en, this message translates to:
+  /// **'Play on your devices'**
+  String get onbCastTitle;
+
+  /// Onboarding: description of the cast feature
+  ///
+  /// In en, this message translates to:
+  /// **'Cast lossless music to a DLNA TV, speaker or amp on the same Wi-Fi.'**
+  String get onbCastDesc;
+
+  /// Onboarding: sample cast target — a TV
+  ///
+  /// In en, this message translates to:
+  /// **'Living room TV'**
+  String get onbCastExampleTv;
+
+  /// Onboarding: sample cast target — a speaker
+  ///
+  /// In en, this message translates to:
+  /// **'Bedroom speaker'**
+  String get onbCastExampleSpeaker;
+
+  /// Onboarding: badge on the active cast target
+  ///
+  /// In en, this message translates to:
+  /// **'PLAYING'**
+  String get onbCastPlaying;
+
+  /// Onboarding: closing message on the final page
+  ///
+  /// In en, this message translates to:
+  /// **'All set — enjoy the music!'**
+  String get onbReady;
 }
 
 class _AppLocalizationsDelegate

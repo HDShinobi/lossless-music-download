@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/main.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
+import 'package:lossless_music_download/providers/onboarding_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Empty-query search (the default tab) now renders homeFeedControllerProvider,
@@ -16,6 +17,13 @@ class _FakeExtensionsController extends ExtensionsController {
   Future<List<InstalledExtension>> build() async => const [];
 }
 
+// A fresh install would route to onboarding; this sanity check targets the
+// main shell, so start already past it.
+class _SeenOnboarding extends OnboardingSeenNotifier {
+  @override
+  bool build() => true;
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -23,6 +31,7 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         extensionsProvider.overrideWith(() => _FakeExtensionsController()),
+        onboardingSeenProvider.overrideWith(() => _SeenOnboarding()),
       ],
       child: const MyApp(),
     ));

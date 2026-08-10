@@ -7,12 +7,16 @@ import 'providers/discover_provider.dart';
 import 'providers/download_dir_provider.dart';
 import 'providers/download_options_provider.dart';
 import 'providers/fallback_pool_provider.dart';
+import 'providers/onboarding_provider.dart';
 import 'router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final container = ProviderContainer();
   await container.read(localeProvider.notifier).load();
+  // Load the first-launch flag before the router is built so its initial
+  // location resolves to onboarding vs. the app on the very first frame.
+  await container.read(onboardingSeenProvider.notifier).load();
   await container.read(aggregatorUrlProvider.notifier).load();
   await container.read(askBeforeDownloadProvider.notifier).load();
   // Best-effort: push the persisted fallback pool to native so the download
@@ -31,13 +35,14 @@ class MyApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final locale = ref.watch(localeProvider);
+    final router = ref.watch(routerProvider);
     return MaterialApp.router(
       onGenerateTitle: (ctx) => AppLocalizations.of(ctx).appTitle,
       theme: appTheme(),
       locale: locale,
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
-      routerConfig: appRouter,
+      routerConfig: router,
     );
   }
 }

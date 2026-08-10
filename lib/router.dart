@@ -1,7 +1,10 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers/library_provider.dart';
+import 'providers/onboarding_provider.dart';
 import 'widgets/main_shell.dart';
+import 'screens/onboarding_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/artist_screen.dart';
 import 'screens/album_screen.dart';
@@ -19,10 +22,20 @@ import 'screens/lyrics_screen.dart';
 GoRoute _r(String path, Widget child) =>
     GoRoute(path: path, builder: (c, s) => child);
 
-final appRouter = GoRouter(
-  initialLocation: '/search',
-  routes: [
-    StatefulShellRoute.indexedStack(
+final routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation:
+        ref.read(onboardingSeenProvider) ? kPostOnboardingPath : kOnboardingPath,
+    redirect: (context, state) => onboardingRedirect(
+      seen: ref.read(onboardingSeenProvider),
+      location: state.matchedLocation,
+    ),
+    routes: [
+      GoRoute(
+        path: kOnboardingPath,
+        builder: (c, s) => const OnboardingScreen(),
+      ),
+      StatefulShellRoute.indexedStack(
       builder: (c, s, shell) => MainShell(shell: shell),
       branches: [
         // 0 — Search
@@ -109,7 +122,8 @@ final appRouter = GoRouter(
             ],
           ),
         ]),
-      ],
-    ),
-  ],
-);
+        ],
+      ),
+    ],
+  );
+});

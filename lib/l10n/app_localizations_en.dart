@@ -739,4 +739,109 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get previewUnavailable => 'Preview unavailable';
+
+  @override
+  String get onbNext => 'Next';
+
+  @override
+  String get onbSkip => 'Skip';
+
+  @override
+  String get onbLater => 'Later';
+
+  @override
+  String get onbGetStarted => 'Get started';
+
+  @override
+  String get onbWelcomeSubtitle =>
+      'Download genuine lossless FLAC, right on your phone.';
+
+  @override
+  String get onbPrepTitle => 'Get ready to download';
+
+  @override
+  String get onbPrepDesc => 'Grant access and pick where to save — just once.';
+
+  @override
+  String get onbPermStorage => 'Storage access';
+
+  @override
+  String get onbPermStorageDesc => 'All files access';
+
+  @override
+  String get onbPermNotif => 'Notifications';
+
+  @override
+  String get onbPermNotifDesc => 'Background download progress';
+
+  @override
+  String get onbFolder => 'Download folder';
+
+  @override
+  String get onbGrant => 'Grant';
+
+  @override
+  String get onbEnable => 'Enable';
+
+  @override
+  String get onbChange => 'Change';
+
+  @override
+  String get onbChoose => 'Choose';
+
+  @override
+  String get onbSourcesTitle => 'Install a download source';
+
+  @override
+  String get onbSourcesDesc =>
+      'Music comes from extensions — there are no built-in sources. Install at least one \'download\' source to get started.';
+
+  @override
+  String get onbSourcesStep1 =>
+      'Open Settings → Sources & Extensions → Discover';
+
+  @override
+  String get onbSourcesStep2 =>
+      'Filter by \'download\' and tap Install on a source';
+
+  @override
+  String get onbSourcesStep3 =>
+      'Enable it; if its dot is amber, verify in the browser';
+
+  @override
+  String get onbSourcesOpen => 'Open Sources & Extensions';
+
+  @override
+  String get onbSourcesWarn =>
+      'No download source yet — you can\'t download music until you add one.';
+
+  @override
+  String get onbVerifyTitle => 'Verify lossless';
+
+  @override
+  String get onbVerifyDesc =>
+      'Analyze the frequency spectrum to catch fake lossless transcoded from MP3.';
+
+  @override
+  String get onbVerifyVerdictSub =>
+      'Spectrum reaches 22 kHz with no cutoff wall';
+
+  @override
+  String get onbCastTitle => 'Play on your devices';
+
+  @override
+  String get onbCastDesc =>
+      'Cast lossless music to a DLNA TV, speaker or amp on the same Wi-Fi.';
+
+  @override
+  String get onbCastExampleTv => 'Living room TV';
+
+  @override
+  String get onbCastExampleSpeaker => 'Bedroom speaker';
+
+  @override
+  String get onbCastPlaying => 'PLAYING';
+
+  @override
+  String get onbReady => 'All set — enjoy the music!';
 }

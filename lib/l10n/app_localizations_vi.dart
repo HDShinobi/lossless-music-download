@@ -734,4 +734,106 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get previewUnavailable => 'Không nghe thử được';
+
+  @override
+  String get onbNext => 'Tiếp';
+
+  @override
+  String get onbSkip => 'Bỏ qua';
+
+  @override
+  String get onbLater => 'Để sau';
+
+  @override
+  String get onbGetStarted => 'Bắt đầu';
+
+  @override
+  String get onbWelcomeSubtitle =>
+      'Tải nhạc lossless FLAC chuẩn gốc, ngay trên điện thoại.';
+
+  @override
+  String get onbPrepTitle => 'Chuẩn bị tải nhạc';
+
+  @override
+  String get onbPrepDesc => 'Cấp quyền và chọn nơi lưu — chỉ một lần.';
+
+  @override
+  String get onbPermStorage => 'Quyền lưu trữ';
+
+  @override
+  String get onbPermStorageDesc => 'Truy cập tất cả tệp';
+
+  @override
+  String get onbPermNotif => 'Thông báo';
+
+  @override
+  String get onbPermNotifDesc => 'Tiến trình tải chạy nền';
+
+  @override
+  String get onbFolder => 'Thư mục tải';
+
+  @override
+  String get onbGrant => 'Cấp';
+
+  @override
+  String get onbEnable => 'Bật';
+
+  @override
+  String get onbChange => 'Đổi';
+
+  @override
+  String get onbChoose => 'Chọn';
+
+  @override
+  String get onbSourcesTitle => 'Cài nguồn tải';
+
+  @override
+  String get onbSourcesDesc =>
+      'Nhạc đến từ extension — app không có nguồn sẵn. Cài ít nhất một nguồn loại \'download\' để bắt đầu.';
+
+  @override
+  String get onbSourcesStep1 => 'Mở Cài đặt → Nguồn & Extension → Khám phá';
+
+  @override
+  String get onbSourcesStep2 => 'Lọc \'download\' rồi bấm Cài trên một nguồn';
+
+  @override
+  String get onbSourcesStep3 =>
+      'Bật nguồn; nếu chấm vàng, xác thực qua trình duyệt';
+
+  @override
+  String get onbSourcesOpen => 'Mở Nguồn & Extension';
+
+  @override
+  String get onbSourcesWarn =>
+      'Chưa có nguồn download — chưa tải được nhạc cho tới khi bạn thêm một nguồn.';
+
+  @override
+  String get onbVerifyTitle => 'Xác thực Lossless';
+
+  @override
+  String get onbVerifyDesc =>
+      'Phân tích phổ tần để phát hiện bản giả lossless chuyển mã từ MP3.';
+
+  @override
+  String get onbVerifyVerdictSub => 'Phổ trải đến 22 kHz, không thấy vách cắt';
+
+  @override
+  String get onbCastTitle => 'Phát qua thiết bị';
+
+  @override
+  String get onbCastDesc =>
+      'Cast nhạc lossless sang TV, loa hay ampli DLNA trong cùng Wi-Fi.';
+
+  @override
+  String get onbCastExampleTv => 'TV phòng khách';
+
+  @override
+  String get onbCastExampleSpeaker => 'Loa phòng ngủ';
+
+  @override
+  String get onbCastPlaying => 'ĐANG PHÁT';
+
+  @override
+  String get onbReady => 'Sẵn sàng rồi — chúc bạn nghe vui!';
 }

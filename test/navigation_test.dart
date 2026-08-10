@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lossless_music_download/main.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
+import 'package:lossless_music_download/providers/onboarding_provider.dart';
 import 'package:lossless_music_download/screens/fallback_sources_screen.dart';
 import 'package:lossless_music_download/screens/library_screen.dart';
 import 'package:lossless_music_download/screens/settings_screen.dart';
@@ -16,6 +17,13 @@ class _FakeExtensionsController extends ExtensionsController {
   Future<List<InstalledExtension>> build() async => const [];
 }
 
+// A fresh install would route to onboarding; these navigation tests target the
+// main shell, so start already past it.
+class _SeenOnboarding extends OnboardingSeenNotifier {
+  @override
+  bool build() => true;
+}
+
 void main() {
   // The Library screen awaits downloadDirProvider, which reads SharedPreferences
   // to resolve the (possibly user-chosen) download folder. Seed the in-memory
@@ -26,6 +34,7 @@ void main() {
     await t.pumpWidget(ProviderScope(
       overrides: [
         extensionsProvider.overrideWith(() => _FakeExtensionsController()),
+        onboardingSeenProvider.overrideWith(() => _SeenOnboarding()),
       ],
       child: const MyApp(),
     ));
@@ -45,6 +54,7 @@ void main() {
     await t.pumpWidget(ProviderScope(
       overrides: [
         extensionsProvider.overrideWith(() => _FakeExtensionsController()),
+        onboardingSeenProvider.overrideWith(() => _SeenOnboarding()),
       ],
       child: const MyApp(),
     ));
