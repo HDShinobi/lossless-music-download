@@ -1,19 +1,31 @@
 package gobackend
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 const (
 	lyricsCacheTTL       = 24 * time.Hour
 	durationToleranceSec = 10.0
+	lyricsNegativeTTL    = 5 * time.Minute
+	lyricsNegativeMax    = 500
+)
+
+var (
+	lyricsFetchFlight singleflight.Group
+	lyricsNegativeMu  sync.Mutex
+	lyricsNegative    = map[string]time.Time{}
 )
 
 type LRCLibResponse struct {
@@ -55,6 +67,31 @@ type LyricsResponse struct {
 
 type LyricsClient struct {
 	httpClient *http.Client
+}
+
+type lyricsContextTransport struct {
+	ctx  context.Context
+	base http.RoundTripper
+}
+
+func (t lyricsContextTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	return t.base.RoundTrip(request.Clone(t.ctx))
+}
+
+func bindLyricsHTTPClientContext(
+	client *http.Client,
+	ctx context.Context,
+) *http.Client {
+	if client == nil || ctx == nil {
+		return client
+	}
+	copy := *client
+	transport := client.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	copy.Transport = lyricsContextTransport{ctx: ctx, base: transport}
+	return &copy
 }
 
 func NewLyricsClient() *LyricsClient {
@@ -189,9 +226,108 @@ func (c *LyricsClient) durationMatches(lrcDuration, targetDuration float64) bool
 	return diff <= durationToleranceSec
 }
 
+func lyricsFetchCacheKey(spotifyID, trackName, artistName string, durationSec float64) string {
+	providers := GetLyricsProviderOrder()
+	extensions := make([]string, 0)
+	if manager := getExtensionManager(); manager != nil {
+		for _, provider := range manager.GetLyricsProviders() {
+			extensions = append(extensions, strings.ToLower(strings.TrimSpace(provider.extension.ID)))
+		}
+	}
+	sort.Strings(extensions)
+	opts := GetLyricsFetchOptions()
+	return fmt.Sprintf(
+		"%s|%s|%s|%.0f|%s|%s|%t|%t|%t|%t|%s",
+		strings.TrimSpace(spotifyID),
+		strings.ToLower(strings.TrimSpace(artistName)),
+		strings.ToLower(strings.TrimSpace(trackName)),
+		math.Round(durationSec/10)*10,
+		strings.Join(providers, ","),
+		strings.Join(extensions, ","),
+		opts.IncludeTranslationNetease,
+		opts.IncludeRomanizationNetease,
+		opts.MultiPersonWordByWord,
+		opts.AppleElrcWordSync,
+		opts.MusixmatchLanguage,
+	)
+}
+
+func isNegativeLyricsCached(key string) bool {
+	now := time.Now()
+	lyricsNegativeMu.Lock()
+	defer lyricsNegativeMu.Unlock()
+	expiresAt, ok := lyricsNegative[key]
+	if !ok {
+		return false
+	}
+	if !now.Before(expiresAt) {
+		delete(lyricsNegative, key)
+		return false
+	}
+	return true
+}
+
+func cacheNegativeLyrics(key string) {
+	now := time.Now()
+	lyricsNegativeMu.Lock()
+	defer lyricsNegativeMu.Unlock()
+	if len(lyricsNegative) >= lyricsNegativeMax {
+		for existingKey, expiresAt := range lyricsNegative {
+			if !now.Before(expiresAt) {
+				delete(lyricsNegative, existingKey)
+			}
+		}
+		for len(lyricsNegative) >= lyricsNegativeMax {
+			for existingKey := range lyricsNegative {
+				delete(lyricsNegative, existingKey)
+				break
+			}
+		}
+	}
+	lyricsNegative[key] = now.Add(lyricsNegativeTTL)
+}
+
+func clearNegativeLyrics(key string) {
+	lyricsNegativeMu.Lock()
+	delete(lyricsNegative, key)
+	lyricsNegativeMu.Unlock()
+}
+
 func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName string, durationSec float64) (*LyricsResponse, error) {
+	key := lyricsFetchCacheKey(spotifyID, trackName, artistName, durationSec)
+	if isNegativeLyricsCached(key) {
+		return nil, lyricsNotFoundErrorf("lyrics not found (cached)")
+	}
+
+	value, err, _ := lyricsFetchFlight.Do(key, func() (any, error) {
+		lyrics, fetchErr := c.fetchLyricsAllSourcesUncoalesced(
+			spotifyID,
+			trackName,
+			artistName,
+			durationSec,
+		)
+		if fetchErr != nil {
+			cacheNegativeLyrics(key)
+			return nil, fetchErr
+		}
+		clearNegativeLyrics(key)
+		return lyrics, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	lyrics, _ := value.(*LyricsResponse)
+	if lyrics == nil {
+		return nil, lyricsNotFoundErrorf("lyrics not found from any source")
+	}
+	copy := *lyrics
+	return &copy, nil
+}
+
+func (c *LyricsClient) fetchLyricsAllSourcesUncoalesced(spotifyID, trackName, artistName string, durationSec float64) (*LyricsResponse, error) {
 	primaryArtist := normalizeArtistName(artistName)
 	fetchOptions := GetLyricsFetchOptions()
+	configuredProviderOrder := GetLyricsProviderOrder()
 
 	if isLikelyInstrumentalTrack(trackName) {
 		GoLog("[Lyrics] Track marked instrumental by title heuristic, skipping lyrics search: %s - %s\n", artistName, trackName)
@@ -203,62 +339,56 @@ func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName st
 		return instrumental, nil
 	}
 
+	extensionProviders := make(map[string]*extensionProviderWrapper)
 	extManager := getExtensionManager()
-	var extensionProviders []*extensionProviderWrapper
 	if extManager != nil {
-		extensionProviders = extManager.GetLyricsProviders()
+		for _, provider := range extManager.GetLyricsProviders() {
+			providerName := "extension:" + strings.ToLower(strings.TrimSpace(provider.extension.ID))
+			extensionProviders[providerName] = provider
+		}
+	}
+
+	providerOrder := resolveLyricsProviderOrder(configuredProviderOrder, extensionProviders)
+	selectedExtensionCount := 0
+	for _, providerName := range providerOrder {
+		if strings.HasPrefix(providerName, "extension:") {
+			selectedExtensionCount++
+		}
 	}
 
 	var cachedNonExtension *LyricsResponse
 	if cached, found := globalLyricsCache.Get(artistName, trackName, durationSec); found {
 		isExtensionCache := strings.HasPrefix(cached.Source, "Extension:")
-		if len(extensionProviders) == 0 || isExtensionCache {
-			fmt.Printf("[Lyrics] Cache hit for: %s - %s\n", artistName, trackName)
+		cachedProviderSelected := false
+		if isExtensionCache {
+			cachedProviderName := "extension:" + strings.ToLower(strings.TrimSpace(strings.TrimPrefix(cached.Source, "Extension:")))
+			for _, providerName := range providerOrder {
+				if providerName == cachedProviderName {
+					cachedProviderSelected = true
+					break
+				}
+			}
+		}
+		if (!isExtensionCache && selectedExtensionCount == 0) || cachedProviderSelected {
 			cachedCopy := *cached
 			cachedCopy.Source = cached.Source + " (cached)"
 			return &cachedCopy, nil
 		}
 
-		// If extension providers are currently enabled, don't let stale built-in cache
-		// mask newly installed/activated extensions.
-		cachedNonExtension = cached
-		GoLog("[Lyrics] Ignoring cached non-extension lyrics because extension providers are available\n")
+		if !isExtensionCache {
+			// If extension providers are currently selected, don't let stale built-in
+			// cache mask them. It remains available as a fallback if they fail.
+			cachedNonExtension = cached
+			GoLog("[Lyrics] Ignoring cached non-extension lyrics because selected extension providers are available\n")
+		} else {
+			GoLog("[Lyrics] Ignoring cached lyrics from an unselected extension provider\n")
+		}
 	}
 
 	isValidResult := func(l *LyricsResponse) bool {
 		return lyricsHasUsableText(l)
 	}
 
-	if len(extensionProviders) > 0 {
-		for _, provider := range extensionProviders {
-			providerName := "extension:" + provider.extension.ID
-			if skip, remaining, reason := shouldSkipLyricsProvider(providerName); skip {
-				GoLog("[Lyrics] Skipping unavailable extension lyrics provider %s for %s: %s\n", provider.extension.ID, remaining.Round(time.Second), reason)
-				continue
-			}
-			GoLog("[Lyrics] Trying extension lyrics provider: %s\n", provider.extension.ID)
-			lyrics, err := provider.FetchLyrics(trackName, artistName, "", durationSec)
-			if err == nil && isValidResult(lyrics) {
-				GoLog("[Lyrics] Got lyrics from extension: %s\n", provider.extension.ID)
-				markLyricsProviderAvailable(providerName)
-				globalLyricsCache.Set(artistName, trackName, durationSec, lyrics)
-				return lyrics, nil
-			}
-			if err != nil {
-				GoLog("[Lyrics] Extension %s failed: %v\n", provider.extension.ID, err)
-				markLyricsProviderUnavailable(providerName, err)
-			}
-		}
-	}
-
-	if cachedNonExtension != nil {
-		cachedCopy := *cachedNonExtension
-		cachedCopy.Source = cachedNonExtension.Source + " (cached fallback)"
-		GoLog("[Lyrics] Extension providers unavailable for this track, using cached built-in lyrics\n")
-		return &cachedCopy, nil
-	}
-
-	providerOrder := GetLyricsProviderOrder()
 	simplifiedTrack := simplifyTrackName(trackName)
 	request := lyricsProviderSearchRequest{
 		spotifyID:       spotifyID,
@@ -272,20 +402,65 @@ func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName st
 
 	GoLog("[Lyrics] Searching for: %s - %s (providers: %v)\n", artistName, trackName, providerOrder)
 
-	lyrics, err := fetchBuiltInLyricsProviders(providerOrder, request, c.fetchBuiltInLyricsProvider)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fetchProvider := func(providerName string, request lyricsProviderSearchRequest) (*LyricsResponse, error, bool) {
+		if provider, ok := extensionProviders[providerName]; ok {
+			lyrics, err := provider.FetchLyricsContext(ctx, request.trackName, request.artistName, "", request.durationSec)
+			return lyrics, err, true
+		}
+		return c.fetchBuiltInLyricsProviderContext(ctx, providerName, request)
+	}
+
+	lyrics, err := fetchLyricsProvidersContext(ctx, providerOrder, request, fetchProvider)
 	if err == nil && isValidResult(lyrics) {
 		globalLyricsCache.Set(artistName, trackName, durationSec, lyrics)
 		return lyrics, nil
 	}
 
+	if cachedNonExtension != nil {
+		cachedCopy := *cachedNonExtension
+		cachedCopy.Source = cachedNonExtension.Source + " (cached fallback)"
+		GoLog("[Lyrics] Selected extension providers unavailable for this track, using cached built-in lyrics\n")
+		return &cachedCopy, nil
+	}
+
 	return nil, fmt.Errorf("lyrics not found from any source")
 }
 
-func fetchBuiltInLyricsProviders(
+func resolveLyricsProviderOrder(
+	configuredOrder []string,
+	extensionProviders map[string]*extensionProviderWrapper,
+) []string {
+	providerOrder := make([]string, 0, len(configuredOrder))
+	for _, providerName := range configuredOrder {
+		if isKnownBuiltInLyricsProvider(providerName) {
+			providerOrder = append(providerOrder, providerName)
+			continue
+		}
+		if _, available := extensionProviders[providerName]; available {
+			providerOrder = append(providerOrder, providerName)
+		}
+	}
+	return providerOrder
+}
+
+func fetchLyricsProviders(
 	providerOrder []string,
 	request lyricsProviderSearchRequest,
 	fetchProvider func(string, lyricsProviderSearchRequest) (*LyricsResponse, error, bool),
 ) (*LyricsResponse, error) {
+	return fetchLyricsProvidersContext(context.Background(), providerOrder, request, fetchProvider)
+}
+
+func fetchLyricsProvidersContext(
+	ctx context.Context,
+	providerOrder []string,
+	request lyricsProviderSearchRequest,
+	fetchProvider func(string, lyricsProviderSearchRequest) (*LyricsResponse, error, bool),
+) (*LyricsResponse, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	type providerCandidate struct {
 		index int
 		name  string
@@ -302,7 +477,8 @@ func fetchBuiltInLyricsProviders(
 			continue
 		}
 
-		knownProvider := isKnownBuiltInLyricsProvider(providerName)
+		knownProvider := isKnownBuiltInLyricsProvider(providerName) ||
+			(strings.HasPrefix(providerName, "extension:") && len(providerName) > len("extension:"))
 		if !knownProvider {
 			GoLog("[Lyrics] Unknown provider: %s, skipping\n", providerName)
 			continue
@@ -313,8 +489,15 @@ func fetchBuiltInLyricsProviders(
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sem <- struct{}{}
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 			defer func() { <-sem }()
+			if ctx.Err() != nil {
+				return
+			}
 
 			GoLog("[Lyrics] Trying provider: %s\n", candidate.name)
 			lyrics, err, ok := fetchProvider(candidate.name, request)
@@ -329,7 +512,10 @@ func fetchBuiltInLyricsProviders(
 				GoLog("[Lyrics] Provider %s failed: %v\n", candidate.name, err)
 				markLyricsProviderUnavailable(candidate.name, err)
 			}
-			results <- lyricsProviderSearchResult{index: candidate.index, providerName: candidate.name, lyrics: lyrics, err: err}
+			select {
+			case results <- lyricsProviderSearchResult{index: candidate.index, providerName: candidate.name, lyrics: lyrics, err: err}:
+			case <-ctx.Done():
+			}
 		}()
 	}
 
@@ -384,6 +570,8 @@ func fetchBuiltInLyricsProviders(
 		}
 
 		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		case result, ok := <-results:
 			if !ok {
 				remaining = 0
@@ -436,6 +624,13 @@ func isKnownBuiltInLyricsProvider(providerName string) bool {
 }
 
 func (c *LyricsClient) fetchBuiltInLyricsProvider(providerName string, request lyricsProviderSearchRequest) (*LyricsResponse, error, bool) {
+	return c.fetchBuiltInLyricsProviderContext(context.Background(), providerName, request)
+}
+
+func (c *LyricsClient) fetchBuiltInLyricsProviderContext(ctx context.Context, providerName string, request lyricsProviderSearchRequest) (*LyricsResponse, error, bool) {
+	clientCopy := *c
+	clientCopy.httpClient = bindLyricsHTTPClientContext(c.httpClient, ctx)
+	c = &clientCopy
 	switch providerName {
 	case LyricsProviderLRCLIB:
 		lyrics, err := c.tryLRCLIB(request.primaryArtist, request.artistName, request.trackName, request.simplifiedTrack, request.durationSec)
@@ -443,6 +638,7 @@ func (c *LyricsClient) fetchBuiltInLyricsProvider(providerName string, request l
 
 	case LyricsProviderNetease:
 		neteaseClient := NewNeteaseClient()
+		neteaseClient.httpClient = bindLyricsHTTPClientContext(neteaseClient.httpClient, ctx)
 		lyrics, err := neteaseClient.FetchLyrics(
 			request.trackName,
 			request.primaryArtist,
@@ -472,6 +668,7 @@ func (c *LyricsClient) fetchBuiltInLyricsProvider(providerName string, request l
 
 	case LyricsProviderMusixmatch:
 		musixmatchClient := NewMusixmatchClient()
+		musixmatchClient.httpClient = bindLyricsHTTPClientContext(musixmatchClient.httpClient, ctx)
 		lyrics, err := musixmatchClient.FetchLyrics(
 			request.trackName,
 			request.primaryArtist,
@@ -490,6 +687,7 @@ func (c *LyricsClient) fetchBuiltInLyricsProvider(providerName string, request l
 
 	case LyricsProviderAppleMusic:
 		appleClient := NewAppleMusicClient()
+		appleClient.httpClient = bindLyricsHTTPClientContext(appleClient.httpClient, ctx)
 		lyrics, err := appleClient.FetchLyrics(request.trackName, request.primaryArtist, request.durationSec, request.fetchOptions.MultiPersonWordByWord, request.fetchOptions.AppleElrcWordSync)
 		if err != nil && !isLyricsProviderUnavailableError(err) && request.primaryArtist != request.artistName {
 			lyrics, err = appleClient.FetchLyrics(request.trackName, request.artistName, request.durationSec, request.fetchOptions.MultiPersonWordByWord, request.fetchOptions.AppleElrcWordSync)
@@ -498,6 +696,7 @@ func (c *LyricsClient) fetchBuiltInLyricsProvider(providerName string, request l
 
 	case LyricsProviderQQMusic:
 		qqClient := NewQQMusicClient()
+		qqClient.httpClient = bindLyricsHTTPClientContext(qqClient.httpClient, ctx)
 		lyrics, err := qqClient.FetchLyrics(request.trackName, request.primaryArtist, request.durationSec, request.fetchOptions.MultiPersonWordByWord)
 		if err != nil && !isLyricsProviderUnavailableError(err) && request.primaryArtist != request.artistName {
 			lyrics, err = qqClient.FetchLyrics(request.trackName, request.artistName, request.durationSec, request.fetchOptions.MultiPersonWordByWord)
@@ -506,6 +705,7 @@ func (c *LyricsClient) fetchBuiltInLyricsProvider(providerName string, request l
 
 	case LyricsProviderSpotify:
 		spotifyClient := NewSpotifyLyricsClient()
+		spotifyClient.httpClient = bindLyricsHTTPClientContext(spotifyClient.httpClient, ctx)
 		lyrics, err := spotifyClient.FetchLyrics(request.spotifyID, request.trackName, request.primaryArtist, request.durationSec)
 		if err != nil && !isLyricsProviderUnavailableError(err) && request.primaryArtist != request.artistName {
 			lyrics, err = spotifyClient.FetchLyrics(request.spotifyID, request.trackName, request.artistName, request.durationSec)
@@ -517,6 +717,7 @@ func (c *LyricsClient) fetchBuiltInLyricsProvider(providerName string, request l
 
 	case LyricsProviderDeezer:
 		deezerClient := NewDeezerLyricsClient()
+		deezerClient.httpClient = bindLyricsHTTPClientContext(deezerClient.httpClient, ctx)
 		lyrics, err := deezerClient.FetchLyrics(request.spotifyID, request.trackName, request.primaryArtist, request.durationSec)
 		if err != nil && !isLyricsProviderUnavailableError(err) && request.primaryArtist != request.artistName {
 			lyrics, err = deezerClient.FetchLyrics(request.spotifyID, request.trackName, request.artistName, request.durationSec)
@@ -525,6 +726,7 @@ func (c *LyricsClient) fetchBuiltInLyricsProvider(providerName string, request l
 
 	case LyricsProviderYouTube:
 		youtubeClient := NewYouTubeLyricsClient()
+		youtubeClient.httpClient = bindLyricsHTTPClientContext(youtubeClient.httpClient, ctx)
 		lyrics, err := youtubeClient.FetchLyrics(request.trackName, request.primaryArtist, request.durationSec)
 		if err != nil && !isLyricsProviderUnavailableError(err) && request.primaryArtist != request.artistName {
 			lyrics, err = youtubeClient.FetchLyrics(request.trackName, request.artistName, request.durationSec)
@@ -536,6 +738,7 @@ func (c *LyricsClient) fetchBuiltInLyricsProvider(providerName string, request l
 
 	case LyricsProviderKugou:
 		kugouClient := NewKugouLyricsClient()
+		kugouClient.httpClient = bindLyricsHTTPClientContext(kugouClient.httpClient, ctx)
 		lyrics, err := kugouClient.FetchLyrics(request.trackName, request.primaryArtist, request.durationSec)
 		if err != nil && !isLyricsProviderUnavailableError(err) && request.primaryArtist != request.artistName {
 			lyrics, err = kugouClient.FetchLyrics(request.trackName, request.artistName, request.durationSec)
@@ -547,6 +750,7 @@ func (c *LyricsClient) fetchBuiltInLyricsProvider(providerName string, request l
 
 	case LyricsProviderGenius:
 		geniusClient := NewGeniusLyricsClient()
+		geniusClient.httpClient = bindLyricsHTTPClientContext(geniusClient.httpClient, ctx)
 		lyrics, err := geniusClient.FetchLyrics(request.trackName, request.primaryArtist, request.durationSec)
 		if err != nil && !isLyricsProviderUnavailableError(err) && request.primaryArtist != request.artistName {
 			lyrics, err = geniusClient.FetchLyrics(request.trackName, request.artistName, request.durationSec)
@@ -558,6 +762,7 @@ func (c *LyricsClient) fetchBuiltInLyricsProvider(providerName string, request l
 
 	case LyricsProviderLyricsPlus:
 		lyricsPlusClient := NewLyricsPlusClient()
+		lyricsPlusClient.httpClient = bindLyricsHTTPClientContext(lyricsPlusClient.httpClient, ctx)
 		lyrics, err := lyricsPlusClient.FetchLyrics(
 			request.trackName,
 			request.primaryArtist,

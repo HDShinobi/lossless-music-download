@@ -4,160 +4,161 @@ import (
 	"bytes"
 	"fmt"
 	"image"
-	_ "image/jpeg"
-	_ "image/png"
+	_ "image/gif"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"net/http"
-	"regexp"
-	"strings"
 	"sync"
 	"time"
+
+	xdraw "golang.org/x/image/draw"
+	_ "golang.org/x/image/webp"
 )
 
-const (
-	spotifySize300 = "ab67616d00001e02"
-	spotifySize640 = "ab67616d0000b273"
-	spotifySizeMax = "ab67616d000082c1"
-)
-
-// Square CDN covers using this path shape may return an image whose decoded
-// dimensions differ from the dimensions advertised in the URL. Max-quality
-// selection therefore probes both useful high-resolution variants and checks
-// the image headers instead of trusting the filename.
-var squareCoverSizeRegex = regexp.MustCompile(`/(\d+)x(\d+)-\d+-\d+-\d+-\d+\.jpg$`)
-
-var tidalSizeRegex = regexp.MustCompile(`/\d+x\d+\.jpg$`)
-
-var qobuzSizeRegex = regexp.MustCompile(`_\d+\.jpg$`)
-
-func convertSmallToMedium(imageURL string) string {
-	if strings.Contains(imageURL, spotifySize300) {
-		return strings.Replace(imageURL, spotifySize300, spotifySize640, 1)
-	}
-	return imageURL
-}
-
-func downloadCoverToMemory(coverURL string, maxQuality bool) ([]byte, error) {
+// downloadCoverToMemory downloads exactly the URL supplied by the metadata
+// provider. Cover-resolution selection belongs to the provider extension;
+// the app must not infer a provider from its CDN URL or rewrite that URL.
+func downloadCoverToMemory(coverURL string) ([]byte, error) {
 	if coverURL == "" {
 		return nil, fmt.Errorf("no cover URL provided")
 	}
 
-	GoLog("[Cover] Original URL: %s", coverURL)
-
-	downloadURL := convertSmallToMedium(coverURL)
-	if downloadURL != coverURL {
-		GoLog("[Cover] Upgraded 300x300 → 640x640")
-	}
-
-	if !maxQuality {
-		GoLog("[Cover] Final URL: %s", downloadURL)
-		data, err := fetchCoverCached(downloadURL)
-		if err != nil {
-			return nil, err
-		}
-		return append([]byte(nil), data...), nil
-	}
-
-	candidates := maxQualityCoverCandidateURLs(downloadURL)
-	data, selectedURL, width, height, err := fetchBestCoverCandidate(candidates)
+	data, err := fetchCoverCached(coverURL)
 	if err != nil {
-		// A CDN can reject an upgraded size while the provider-supplied URL is
-		// still valid. Preserve that URL as the final fallback.
-		if len(candidates) == 1 && candidates[0] == downloadURL {
-			return nil, err
-		}
-		data, err = fetchCoverCached(downloadURL)
-		if err != nil {
-			return nil, err
-		}
-		selectedURL = downloadURL
-		width, height = coverDimensions(data)
+		return nil, err
 	}
-	GoLog("[Cover] Selected URL: %s (%dx%d, %d KB)", selectedURL, width, height, len(data)/1024)
 	// Cached bytes are shared across goroutines and must never be mutated;
 	// hand callers their own copy.
 	return append([]byte(nil), data...), nil
 }
 
-type fetchedCoverCandidate struct {
-	url           string
-	data          []byte
-	width, height int
-	err           error
-}
+const (
+	embeddedCoverJPEGQuality = 88
+    // Bound Library cover cache dimensions.
+	libraryCoverMaxDimension = 800
+	maxCoverDownloadBytes    = 24 * 1024 * 1024
+	// Decoding arbitrary provider artwork allocates roughly four bytes per
+	// pixel. Refuse pathological images before Decode so a malicious extension
+	// cannot force an unbounded mobile allocation. Normal artwork through
+	// 4000x4000 is still accepted and downscaled.
+	maxCoverDecodePixels int64 = 16_000_000
+)
 
-func maxQualityCoverCandidateURLs(coverURL string) []string {
-	upgraded := upgradeToMaxQuality(coverURL)
-	candidates := []string{upgraded}
-	// This is deliberately based on the URL capability rather than a provider
-	// or extension ID. Any metadata source returning the same square-cover URL
-	// shape receives the same verified candidate selection.
-	if squareCoverSizeRegex.MatchString(coverURL) {
-		candidate1500 := squareCoverSizeRegex.ReplaceAllString(
-			coverURL,
-			"/1500x1500-000000-80-0-0.jpg",
+// downloadCoverToMemorySized returns provider artwork with its aspect ratio
+// preserved and its longest side capped at maxDimension. A non-positive limit
+// keeps the original bytes. Images already within the limit are also returned
+// byte-for-byte so this option never introduces needless generation loss.
+func downloadCoverToMemorySized(coverURL string, maxDimension int) ([]byte, error) {
+	if maxDimension <= 0 {
+		return downloadCoverToMemory(coverURL)
+	}
+
+	variantKey := fmt.Sprintf("%s\x00max-dimension=%d", coverURL, maxDimension)
+	data, err := fetchCoverCachedWithKey(variantKey, func() ([]byte, error) {
+		original, fetchErr := fetchCoverCached(coverURL)
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+		resized, changed, resizeErr := resizeCoverForEmbedding(
+			original,
+			maxDimension,
 		)
-		if candidate1500 != upgraded {
-			candidates = append(candidates, candidate1500)
+		if resizeErr != nil {
+			// A requested limit is a hard ceiling. Omitting an unsupported cover is
+			// preferable to silently embedding the oversized original. The default
+			// (maxDimension == 0) never enters this path and remains compatible.
+			return nil, fmt.Errorf("resize artwork: %w", resizeErr)
 		}
+		if changed {
+			width, height := coverDimensions(resized)
+			GoLog(
+				"[Cover] Downscaled artwork to %dx%d (%d KB -> %d KB)",
+				width,
+				height,
+				len(original)/1024,
+				len(resized)/1024,
+			)
+		}
+		return resized, nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	return uniqueNonEmptyStrings(candidates)
+	return append([]byte(nil), data...), nil
 }
 
-func uniqueNonEmptyStrings(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		if _, exists := seen[value]; exists {
-			continue
-		}
-		seen[value] = struct{}{}
-		result = append(result, value)
+func resizeCoverForEmbedding(data []byte, maxDimension int) ([]byte, bool, error) {
+	if len(data) == 0 || maxDimension <= 0 {
+		return data, false, nil
 	}
-	return result
+
+	config, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, false, fmt.Errorf("decode artwork dimensions: %w", err)
+	}
+	if config.Width <= 0 || config.Height <= 0 {
+		return nil, false, fmt.Errorf("invalid artwork dimensions %dx%d", config.Width, config.Height)
+	}
+	if config.Width <= maxDimension && config.Height <= maxDimension {
+		return data, false, nil
+	}
+	if int64(config.Width)*int64(config.Height) > maxCoverDecodePixels {
+		return nil, false, fmt.Errorf(
+			"artwork dimensions %dx%d exceed safe decode limit",
+			config.Width,
+			config.Height,
+		)
+	}
+
+	source, decodedFormat, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, false, fmt.Errorf("decode artwork: %w", err)
+	}
+	if decodedFormat != "" {
+		format = decodedFormat
+	}
+
+	destinationWidth, destinationHeight := scaledCoverDimensions(
+		config.Width,
+		config.Height,
+		maxDimension,
+	)
+	destination := image.NewRGBA(
+		image.Rect(0, 0, destinationWidth, destinationHeight),
+	)
+	xdraw.ApproxBiLinear.Scale(
+		destination,
+		destination.Bounds(),
+		source,
+		source.Bounds(),
+		xdraw.Over,
+		nil,
+	)
+
+	var encoded bytes.Buffer
+	if format == "png" {
+		if err := png.Encode(&encoded, destination); err != nil {
+			return nil, false, fmt.Errorf("encode resized PNG artwork: %w", err)
+		}
+	} else if err := jpeg.Encode(
+		&encoded,
+		destination,
+		&jpeg.Options{Quality: embeddedCoverJPEGQuality},
+	); err != nil {
+		return nil, false, fmt.Errorf("encode resized JPEG artwork: %w", err)
+	}
+
+	return encoded.Bytes(), true, nil
 }
 
-func fetchBestCoverCandidate(urls []string) ([]byte, string, int, int, error) {
-	if len(urls) == 0 {
-		return nil, "", 0, 0, fmt.Errorf("no cover candidates available")
+func scaledCoverDimensions(width, height, maxDimension int) (int, int) {
+	if width >= height {
+		scaledHeight := max(1, (height*maxDimension+width/2)/width)
+		return maxDimension, scaledHeight
 	}
-	results := make(chan fetchedCoverCandidate, len(urls))
-	for _, candidateURL := range urls {
-		go func(url string) {
-			data, err := fetchCoverCached(url)
-			width, height := coverDimensions(data)
-			results <- fetchedCoverCandidate{
-				url: url, data: data, width: width, height: height, err: err,
-			}
-		}(candidateURL)
-	}
-
-	var best *fetchedCoverCandidate
-	var firstErr error
-	for range urls {
-		candidate := <-results
-		if candidate.err != nil || len(candidate.data) == 0 {
-			if firstErr == nil {
-				firstErr = candidate.err
-			}
-			continue
-		}
-		if best == nil || coverCandidateBetter(candidate, *best) {
-			copy := candidate
-			best = &copy
-		}
-	}
-	if best == nil {
-		if firstErr == nil {
-			firstErr = fmt.Errorf("cover candidates returned no image data")
-		}
-		return nil, "", 0, 0, firstErr
-	}
-	return best.data, best.url, best.width, best.height, nil
+	scaledWidth := max(1, (width*maxDimension+height/2)/height)
+	return scaledWidth, maxDimension
 }
 
 func coverDimensions(data []byte) (int, int) {
@@ -169,15 +170,6 @@ func coverDimensions(data []byte) (int, int) {
 		return 0, 0
 	}
 	return config.Width, config.Height
-}
-
-func coverCandidateBetter(candidate, current fetchedCoverCandidate) bool {
-	candidatePixels := int64(candidate.width) * int64(candidate.height)
-	currentPixels := int64(current.width) * int64(current.height)
-	if candidatePixels != currentPixels {
-		return candidatePixels > currentPixels
-	}
-	return len(candidate.data) > len(current.data)
 }
 
 const (
@@ -216,17 +208,29 @@ func clearCoverMemoryCache() {
 // results in memory for the duration of an album batch. The returned slice is
 // shared; callers must copy before mutating.
 func fetchCoverCached(downloadURL string) ([]byte, error) {
+	return fetchCoverCachedWithKey(downloadURL, func() ([]byte, error) {
+		return coverFetch(downloadURL)
+	})
+}
+
+// fetchCoverCachedWithKey collapses both original cover downloads and derived
+// size variants. This keeps native-worker album batches from decoding and
+// resizing the same artwork once per track.
+func fetchCoverCachedWithKey(
+	cacheKey string,
+	fetch func() ([]byte, error),
+) ([]byte, error) {
 	coverMu.Lock()
-	if e, ok := coverCache[downloadURL]; ok {
+	if e, ok := coverCache[cacheKey]; ok {
 		if time.Now().Before(e.expiresAt) {
 			data := e.data
 			coverMu.Unlock()
 			return data, nil
 		}
-		delete(coverCache, downloadURL)
+		delete(coverCache, cacheKey)
 		coverCacheBytes -= len(e.data)
 	}
-	if call, ok := coverInflight[downloadURL]; ok {
+	if call, ok := coverInflight[cacheKey]; ok {
 		coverMu.Unlock()
 		call.wg.Wait()
 		return call.data, call.err
@@ -236,20 +240,20 @@ func fetchCoverCached(downloadURL string) ([]byte, error) {
 	// (nil, nil) "success"; overwritten on normal completion.
 	call.err = fmt.Errorf("cover fetch aborted")
 	call.wg.Add(1)
-	coverInflight[downloadURL] = call
+	coverInflight[cacheKey] = call
 	coverMu.Unlock()
 
 	defer func() {
 		call.wg.Done()
 		coverMu.Lock()
-		delete(coverInflight, downloadURL)
+		delete(coverInflight, cacheKey)
 		coverMu.Unlock()
 	}()
 
-	data, err := coverFetch(downloadURL)
+	data, err := fetch()
 	call.data, call.err = data, err
 	if err == nil {
-		coverCachePut(downloadURL, data)
+		coverCachePut(cacheKey, data)
 	}
 	return data, err
 }
@@ -296,70 +300,20 @@ func fetchCoverBytes(downloadURL string) ([]byte, error) {
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("cover download failed: HTTP %d", resp.StatusCode)
 	}
+	if resp.ContentLength > maxCoverDownloadBytes {
+		return nil, fmt.Errorf("cover download exceeds %d MiB limit", maxCoverDownloadBytes/(1024*1024))
+	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxCoverDownloadBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read cover data: %w", err)
+	}
+	if len(data) > maxCoverDownloadBytes {
+		return nil, fmt.Errorf("cover download exceeds %d MiB limit", maxCoverDownloadBytes/(1024*1024))
 	}
 
 	width, height := coverDimensions(data)
 	GoLog("[Cover] Downloaded %d KB (%dx%d)", len(data)/1024, width, height)
 
 	return data, nil
-}
-
-func upgradeToMaxQuality(coverURL string) string {
-	if strings.Contains(coverURL, spotifySize640) {
-		return strings.Replace(coverURL, spotifySize640, spotifySizeMax, 1)
-	}
-
-	if squareCoverSizeRegex.MatchString(coverURL) {
-		return upgradeSquareCover(coverURL)
-	}
-
-	if strings.Contains(coverURL, "resources.tidal.com") {
-		return upgradeTidalCover(coverURL)
-	}
-
-	if strings.Contains(coverURL, "static.qobuz.com") {
-		return upgradeQobuzCover(coverURL)
-	}
-
-	return coverURL
-}
-
-func upgradeSquareCover(coverURL string) string {
-	if !squareCoverSizeRegex.MatchString(coverURL) {
-		return coverURL
-	}
-
-	upgraded := squareCoverSizeRegex.ReplaceAllString(coverURL, "/1900x1900-000000-80-0-0.jpg")
-	if upgraded != coverURL {
-		GoLog("[Cover] Square CDN: probing 1900x1900 and 1500x1500")
-	}
-	return upgraded
-}
-
-func upgradeTidalCover(coverURL string) string {
-	if !strings.Contains(coverURL, "resources.tidal.com") {
-		return coverURL
-	}
-
-	upgraded := tidalSizeRegex.ReplaceAllString(coverURL, "/origin.jpg")
-	if upgraded != coverURL {
-		GoLog("[Cover] Tidal: upgraded to origin resolution")
-	}
-	return upgraded
-}
-
-func upgradeQobuzCover(coverURL string) string {
-	if !strings.Contains(coverURL, "static.qobuz.com") {
-		return coverURL
-	}
-
-	upgraded := qobuzSizeRegex.ReplaceAllString(coverURL, "_max.jpg")
-	if upgraded != coverURL {
-		GoLog("[Cover] Qobuz: upgraded to max resolution")
-	}
-	return upgraded
 }

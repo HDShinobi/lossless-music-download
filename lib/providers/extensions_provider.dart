@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/installed_extension.dart';
 import '../services/backend_bridge.dart';
 import '../services/app_dirs.dart';
+import '../services/extension_master_key.dart';
 
 /// Provides the [BackendBridge] instance. Override in tests to inject a fake.
 final backendBridgeProvider = Provider<BackendBridge>((ref) => BackendBridge());
@@ -18,6 +19,11 @@ class ExtensionsController extends AsyncNotifier<List<InstalledExtension>> {
   @override
   Future<List<InstalledExtension>> build() async {
     final (ext, data) = await ref.read(appDirsProvider);
+    // v4.9.5 encrypts extension storage at rest and gates InitExtensionSystem on
+    // the master key. Hand it over FIRST, otherwise the engine leaves the
+    // extension directories unconfigured and every install/upgrade fails with
+    // "extension directory is not configured" while no extensions load.
+    await _b.setExtensionStorageMasterKey(await ExtensionMasterKey.loadOrCreate());
     await _b.initExtensionSystem(ext, data);
     // initExtensionSystem only sets the directories; it does NOT load anything.
     // Without this, extensions installed in a previous session stay on disk but

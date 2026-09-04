@@ -27,6 +27,7 @@ type ExtTrackMetadata struct {
 	ItemType    string `json:"item_type,omitempty"`
 	AlbumType   string `json:"album_type,omitempty"`
 	Explicit    bool   `json:"explicit,omitempty"`
+	UPC         string `json:"upc,omitempty"`
 
 	TidalID       string            `json:"tidal_id,omitempty"`
 	QobuzID       string            `json:"qobuz_id,omitempty"`
@@ -38,6 +39,7 @@ type ExtTrackMetadata struct {
 	Copyright string `json:"copyright,omitempty"`
 	Genre     string `json:"genre,omitempty"`
 	Composer  string `json:"composer,omitempty"`
+	Comment   string `json:"comment,omitempty"`
 
 	AudioQuality string `json:"audio_quality,omitempty"`
 	AudioModes   string `json:"audio_modes,omitempty"`
@@ -85,10 +87,11 @@ type ExtSearchResult struct {
 }
 
 type ExtAvailabilityResult struct {
-	Available    bool   `json:"available"`
-	Reason       string `json:"reason,omitempty"`
-	TrackID      string `json:"track_id,omitempty"`
-	SkipFallback bool   `json:"skip_fallback,omitempty"`
+	Available       bool           `json:"available"`
+	Reason          string         `json:"reason,omitempty"`
+	TrackID         string         `json:"track_id,omitempty"`
+	SkipFallback    bool           `json:"skip_fallback,omitempty"`
+	PreparedContext map[string]any `json:"prepared_context,omitempty"`
 }
 
 type DownloadDecryptionInfo struct {
@@ -127,6 +130,10 @@ type ExtDownloadResult struct {
 	Label                       string                  `json:"label,omitempty"`
 	Copyright                   string                  `json:"copyright,omitempty"`
 	Composer                    string                  `json:"composer,omitempty"`
+	Comment                     string                  `json:"comment,omitempty"`
+	Explicit                    bool                    `json:"explicit,omitempty"`
+	AlbumType                   string                  `json:"album_type,omitempty"`
+	UPC                         string                  `json:"upc,omitempty"`
 	LyricsLRC                   string                  `json:"lyrics_lrc,omitempty"`
 	DecryptionKey               string                  `json:"decryption_key,omitempty"`
 	Decryption                  *DownloadDecryptionInfo `json:"decryption,omitempty"`

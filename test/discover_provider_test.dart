@@ -53,6 +53,9 @@ class _FakeBackendBridge extends BackendBridge {
   _FakeBackendBridge({this.installResult}) : _extensions = const [];
 
   @override
+  Future<void> setExtensionStorageMasterKey(String masterKey) async {}
+
+  @override
   Future<void> initExtensionSystem(String extDir, String dataDir) async {}
 
   @override
@@ -365,6 +368,9 @@ class _FakeBackendBridgeWithCounter extends BackendBridge {
   final List<String> installCalls = [];
 
   _FakeBackendBridgeWithCounter({required this.onGetInstalled});
+
+  @override
+  Future<void> setExtensionStorageMasterKey(String masterKey) async {}
 
   @override
   Future<void> initExtensionSystem(String extDir, String dataDir) async {}

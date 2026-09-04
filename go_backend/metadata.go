@@ -188,6 +188,9 @@ type Metadata struct {
 	Copyright     string
 	Composer      string
 	Comment       string
+	Explicit      bool
+	AlbumType     string
+	UPC           string
 
 	// ReplayGain fields (stored as Vorbis Comments in FLAC)
 	ReplayGainTrackGain string // e.g. "-6.50 dB"
@@ -284,14 +287,12 @@ func EmbedMetadata(filePath string, metadata Metadata, coverPath string) error {
 			if fileExists(coverPath) {
 				coverData, err := os.ReadFile(coverPath)
 				if err != nil {
-					fmt.Printf("[Metadata] Warning: Failed to read cover file %s: %v\n", coverPath, err)
+					LogWarn("Metadata", "Failed to read cover file: %v", err)
 				} else if err := replaceFlacPictures(f, coverPath, coverData); err != nil {
-					fmt.Printf("[Metadata] Warning: skipping cover art: %v\n", err)
-				} else {
-					fmt.Printf("[Metadata] Cover art embedded successfully (%d bytes)\n", len(coverData))
+					LogWarn("Metadata", "Skipping cover art: %v", err)
 				}
 			} else {
-				fmt.Printf("[Metadata] Warning: Cover file does not exist: %s\n", coverPath)
+				LogWarn("Metadata", "Cover file does not exist")
 			}
 		}
 		return nil
@@ -304,9 +305,7 @@ func EmbedMetadataWithCoverData(filePath string, metadata Metadata, coverData []
 
 		if len(coverData) > 0 {
 			if err := replaceFlacPictures(f, "", coverData); err != nil {
-				fmt.Printf("[Metadata] Warning: skipping cover art: %v\n", err)
-			} else {
-				fmt.Printf("[Metadata] Cover art embedded successfully (%d bytes)\n", len(coverData))
+				LogWarn("Metadata", "Skipping cover art: %v", err)
 			}
 		}
 		return nil
@@ -388,6 +387,15 @@ func metadataFromParsedFlac(f *flac.File) *Metadata {
 			metadata.Copyright = getComment(cmt, "COPYRIGHT")
 			metadata.Composer = getComment(cmt, "COMPOSER")
 			metadata.Comment = getComment(cmt, "COMMENT")
+			metadata.Explicit = isTruthyTagValue(getComment(cmt, "ITUNESADVISORY"))
+			metadata.AlbumType = getComment(cmt, "RELEASETYPE")
+			if metadata.AlbumType == "" && isTruthyTagValue(getComment(cmt, "COMPILATION")) {
+				metadata.AlbumType = "compilation"
+			}
+			metadata.UPC = getComment(cmt, "BARCODE")
+			if metadata.UPC == "" {
+				metadata.UPC = getComment(cmt, "UPC")
+			}
 
 			metadata.ReplayGainTrackGain = getComment(cmt, "REPLAYGAIN_TRACK_GAIN")
 			metadata.ReplayGainTrackPeak = getComment(cmt, "REPLAYGAIN_TRACK_PEAK")
@@ -438,6 +446,11 @@ func applyVorbisFieldEdits(cmt *flacvorbis.MetaDataBlockVorbisComment, fields ma
 		"copyright":             "COPYRIGHT",
 		"composer":              "COMPOSER",
 		"comment":               "COMMENT",
+		"explicit":              "ITUNESADVISORY",
+		"album_type":            "RELEASETYPE",
+		"upc":                   "BARCODE",
+		"barcode":               "BARCODE",
+		"compilation":           "COMPILATION",
 		"replaygain_track_gain": "REPLAYGAIN_TRACK_GAIN",
 		"replaygain_track_peak": "REPLAYGAIN_TRACK_PEAK",
 		"replaygain_album_gain": "REPLAYGAIN_ALBUM_GAIN",
@@ -579,6 +592,21 @@ func writeVorbisMetadata(cmt *flacvorbis.MetaDataBlockVorbisComment, metadata Me
 
 	if metadata.Comment != "" {
 		setComment(cmt, "COMMENT", metadata.Comment)
+	}
+
+	if metadata.Explicit {
+		setComment(cmt, "ITUNESADVISORY", "1")
+	}
+
+	if metadata.AlbumType != "" {
+		setComment(cmt, "RELEASETYPE", strings.ToLower(metadata.AlbumType))
+		if strings.EqualFold(metadata.AlbumType, "compilation") {
+			setComment(cmt, "COMPILATION", "1")
+		}
+	}
+
+	if metadata.UPC != "" {
+		setComment(cmt, "BARCODE", metadata.UPC)
 	}
 
 	setComment(cmt, "REPLAYGAIN_TRACK_GAIN", metadata.ReplayGainTrackGain)

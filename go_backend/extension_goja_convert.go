@@ -175,6 +175,7 @@ func parseExtensionTrackValue(vm *goja.Runtime, value goja.Value) ExtTrackMetada
 		ItemType:      gojaObjectString(obj, "item_type", "itemType"),
 		AlbumType:     gojaObjectString(obj, "album_type", "albumType"),
 		Explicit:      gojaObjectBool(obj, "explicit", "is_explicit", "isExplicit"),
+		UPC:           gojaObjectString(obj, "upc", "barcode"),
 		TidalID:       gojaObjectString(obj, "tidal_id", "tidalId"),
 		QobuzID:       gojaObjectString(obj, "qobuz_id", "qobuzId"),
 		DeezerID:      gojaObjectString(obj, "deezer_id", "deezerId"),
@@ -184,6 +185,7 @@ func parseExtensionTrackValue(vm *goja.Runtime, value goja.Value) ExtTrackMetada
 		Copyright:     gojaObjectString(obj, "copyright"),
 		Genre:         gojaObjectString(obj, "genre"),
 		Composer:      gojaObjectString(obj, "composer"),
+		Comment:       gojaObjectString(obj, "comment", "comments"),
 		AudioQuality:  gojaObjectString(obj, "audio_quality", "audioQuality"),
 		AudioModes:    gojaObjectString(obj, "audio_modes", "audioModes"),
 	}
@@ -424,7 +426,7 @@ func parseExtensionArtistValue(vm *goja.Runtime, value goja.Value) (ExtArtistMet
 	}
 
 	topTracks := []ExtTrackMetadata{}
-	if topTracksValue := gojaObjectValue(obj, "top_tracks", "topTracks"); !gojaValueIsEmpty(topTracksValue) {
+	if topTracksValue := gojaObjectValue(obj, "top_tracks", "topTracks", "tracks"); !gojaValueIsEmpty(topTracksValue) {
 		parsedTopTracks, err := parseExtensionTrackArray(vm, topTracksValue)
 		if err != nil {
 			return ExtArtistMetadata{}, err
@@ -453,6 +455,11 @@ func parseExtensionAvailabilityValue(vm *goja.Runtime, value goja.Value) ExtAvai
 		Reason:       gojaObjectString(obj, "reason"),
 		TrackID:      gojaObjectString(obj, "track_id", "trackId"),
 		SkipFallback: gojaObjectBool(obj, "skip_fallback", "skipFallback"),
+		PreparedContext: gojaObjectInterfaceMap(
+			obj,
+			"prepared_context",
+			"preparedContext",
+		),
 	}
 }
 
@@ -504,6 +511,10 @@ func parseExtensionDownloadResultValue(vm *goja.Runtime, value goja.Value) ExtDo
 		Label:             gojaObjectString(obj, "label"),
 		Copyright:         gojaObjectString(obj, "copyright"),
 		Composer:          gojaObjectString(obj, "composer"),
+		Comment:           gojaObjectString(obj, "comment", "comments"),
+		Explicit:          gojaObjectBool(obj, "explicit", "is_explicit", "isExplicit"),
+		AlbumType:         gojaObjectString(obj, "album_type", "albumType"),
+		UPC:               gojaObjectString(obj, "upc", "barcode"),
 		LyricsLRC:         gojaObjectString(obj, "lyrics_lrc", "lyricsLrc"),
 		DecryptionKey:     gojaObjectString(obj, "decryption_key", "decryptionKey"),
 		Decryption:        parseExtensionDownloadDecryptionValue(vm, gojaObjectValue(obj, "decryption")),
@@ -522,6 +533,7 @@ func parseExtensionURLHandleValue(vm *goja.Runtime, value goja.Value) (ExtURLHan
 	obj := value.ToObject(vm)
 	handleResult := ExtURLHandleResult{
 		Type:        gojaObjectString(obj, "type"),
+		ID:          gojaObjectString(obj, "id"),
 		Name:        gojaObjectString(obj, "name"),
 		CoverURL:    gojaObjectString(obj, "cover_url", "coverUrl"),
 		HeaderImage: gojaObjectString(obj, "header_image", "headerImage"),

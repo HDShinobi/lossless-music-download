@@ -2,6 +2,7 @@ package gobackend
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 )
@@ -104,9 +105,54 @@ func TestPreferredReleaseMetadataPrefersRequestValues(t *testing.T) {
 	}
 }
 
-func TestBuildDownloadSuccessResponsePrefersProviderCoverURL(t *testing.T) {
+func TestBuildDownloadSuccessResponsePreservesRequestedTrackAndCover(t *testing.T) {
 	req := DownloadRequest{
-		TrackName:   "Track",
+		TrackName:   "Album Track Title",
+		ArtistName:  "Artist",
+		AlbumName:   "Original Album",
+		AlbumArtist: "Artist",
+		CoverURL:    "https://cdn.source.test/original-album.jpg",
+		ISRC:        "USAAA2600001",
+	}
+
+	result := DownloadResult{
+		Title:    "Single Version Title",
+		Artist:   "Artist",
+		Album:    "Single Version Title",
+		CoverURL: "https://cdn.provider.test/single.jpg",
+		ISRC:     "USAAA2600001",
+	}
+
+	resp := buildDownloadSuccessResponse(
+		req,
+		result,
+		"generic-provider",
+		"ok",
+		"/tmp/test.flac",
+		false,
+	)
+	overlayExtensionDownloadMetadata(&resp, &ExtDownloadResult{
+		Title:    result.Title,
+		Artist:   result.Artist,
+		Album:    result.Album,
+		CoverURL: result.CoverURL,
+		ISRC:     result.ISRC,
+	})
+	applyExtensionRequestFallbacks(&resp, req)
+
+	if resp.Title != req.TrackName {
+		t.Fatalf("title = %q, want requested title %q", resp.Title, req.TrackName)
+	}
+	if resp.Album != req.AlbumName {
+		t.Fatalf("album = %q, want requested album %q", resp.Album, req.AlbumName)
+	}
+	if resp.CoverURL != req.CoverURL {
+		t.Fatalf("cover url = %q, want requested album cover %q", resp.CoverURL, req.CoverURL)
+	}
+}
+
+func TestBuildDownloadSuccessResponseFallsBackToProviderTrackAndCover(t *testing.T) {
+	req := DownloadRequest{
 		ArtistName:  "Artist",
 		AlbumName:   "Album",
 		AlbumArtist: "Artist",
@@ -116,20 +162,55 @@ func TestBuildDownloadSuccessResponsePrefersProviderCoverURL(t *testing.T) {
 		Title:    "Track",
 		Artist:   "Artist",
 		Album:    "Album",
-		CoverURL: "https://cdn.qobuz.test/cover.jpg",
+		CoverURL: "https://cdn.provider.test/cover.jpg",
 	}
 
 	resp := buildDownloadSuccessResponse(
 		req,
 		result,
-		"qobuz",
+		"generic-provider",
 		"ok",
 		"/tmp/test.flac",
 		false,
 	)
 
+	if resp.Title != result.Title {
+		t.Fatalf("title = %q, want provider fallback %q", resp.Title, result.Title)
+	}
 	if resp.CoverURL != result.CoverURL {
-		t.Fatalf("cover url = %q, want %q", resp.CoverURL, result.CoverURL)
+		t.Fatalf("cover url = %q, want provider fallback %q", resp.CoverURL, result.CoverURL)
+	}
+}
+
+func TestBuildDownloadSuccessResponseReturnsResolvedProviderFilename(t *testing.T) {
+	req := DownloadRequest{
+		TrackName:        "Track",
+		ArtistName:       "Artist",
+		DownloadProvider: "soundcloud",
+		ProviderTrackID:  "998877",
+		FilenameFormat:   "{artist} - {title} [{isrc}] [{provider}-{provider_id}]",
+		OutputExt:        ".flac",
+	}
+	result := DownloadResult{
+		ISRC:            "USABC1234567",
+		ActualExtension: ".m4a",
+	}
+
+	resp := buildDownloadSuccessResponse(
+		req,
+		result,
+		"soundcloud",
+		"ok",
+		"/proc/self/fd/10",
+		false,
+	)
+
+	want := "Artist - Track [USABC1234567] [soundcloud-998877].m4a"
+	if resp.ResolvedFileName != want {
+		t.Fatalf("resolved filename = %q, want %q", resp.ResolvedFileName, want)
+	}
+	if resp.ProviderTrackID != req.ProviderTrackID {
+		t.Fatalf("provider track ID = %q, want %q", resp.ProviderTrackID, req.ProviderTrackID)
 	}
 }
 
@@ -680,5 +761,85 @@ func TestBuildReEnrichFFmpegMetadataFormatsTotalsAndComposer(t *testing.T) {
 	}
 	if metadata["COMPOSER"] != "Composer" {
 		t.Fatalf("COMPOSER = %q", metadata["COMPOSER"])
+	}
+}
+
+func TestReEnrichGranularISRCDoesNotChangeReleaseDate(t *testing.T) {
+	req := reEnrichRequest{
+		ReleaseDate:  "2020-01-02",
+		ISRC:         "",
+		UpdateFields: []string{"isrc"},
+	}
+
+	applyReEnrichTrackMetadata(&req, ExtTrackMetadata{
+		ReleaseDate: "2025-04-05",
+		ISRC:        "USRC17607839",
+	})
+
+	if req.ISRC != "USRC17607839" {
+		t.Fatalf("isrc = %q", req.ISRC)
+	}
+	if req.ReleaseDate != "2020-01-02" {
+		t.Fatalf("release date = %q, want existing value", req.ReleaseDate)
+	}
+	metadata := buildReEnrichFFmpegMetadata(&req, "")
+	if metadata["ISRC"] != "USRC17607839" {
+		t.Fatalf("ISRC metadata = %q", metadata["ISRC"])
+	}
+	if _, exists := metadata["DATE"]; exists {
+		t.Fatalf("granular ISRC update unexpectedly included DATE: %#v", metadata)
+	}
+}
+
+func TestBuildReEnrichResultMetadataOnlyIncludesSelectedGranularTags(t *testing.T) {
+	req := reEnrichRequest{
+		TrackName:    "Existing title",
+		AlbumArtist:  "Resolved album artist",
+		ISRC:         "USRC17607839",
+		Genre:        "Rock",
+		UpdateFields: []string{"album_artist", "isrc"},
+	}
+
+	metadata := buildReEnrichResultMetadata(&req)
+	if metadata["album_artist"] != "Resolved album artist" {
+		t.Fatalf("album_artist = %#v", metadata["album_artist"])
+	}
+	if metadata["isrc"] != "USRC17607839" {
+		t.Fatalf("isrc = %#v", metadata["isrc"])
+	}
+	for _, key := range []string{"track_name", "release_date", "genre"} {
+		if _, exists := metadata[key]; exists {
+			t.Fatalf("unexpected key %q in preview metadata: %#v", key, metadata)
+		}
+	}
+}
+
+func TestReEnrichPreviewReturnsBeforeTouchingAudioFile(t *testing.T) {
+	request, err := json.Marshal(reEnrichRequest{
+		FilePath:     "content://library/nonexistent.flac",
+		TrackName:    "Song",
+		ArtistName:   "Artist",
+		ISRC:         "USRC17607839",
+		UpdateFields: []string{"isrc"},
+		PreviewOnly:  true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := ReEnrichFile(string(request))
+	if err != nil {
+		t.Fatalf("preview unexpectedly touched the nonexistent file: %v", err)
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result["method"] != "preview" || result["success"] != true {
+		t.Fatalf("result = %#v", result)
+	}
+	metadata, ok := result["enriched_metadata"].(map[string]any)
+	if !ok || metadata["isrc"] != "USRC17607839" {
+		t.Fatalf("preview metadata = %#v", result["enriched_metadata"])
 	}
 }

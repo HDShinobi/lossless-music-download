@@ -12,6 +12,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class _EmptyBridge extends BackendBridge {
   @override
+  Future<void> setExtensionStorageMasterKey(String masterKey) async {}
+
+  @override
   Future<void> initExtensionSystem(String ext, String data) async {}
 
   @override

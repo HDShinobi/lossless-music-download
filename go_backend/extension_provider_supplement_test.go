@@ -1,9 +1,64 @@
 package gobackend
 
 import (
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+func TestExtensionDownloadCancellationInterruptsBusyJavaScript(t *testing.T) {
+	ext := newTestLoadedExtension(t, ExtensionTypeDownloadProvider)
+	if err := os.WriteFile(filepath.Join(ext.SourceDir, "index.js"), []byte(`
+registerExtension({
+  download: function() {
+    while (true) {}
+  }
+});
+`), 0600); err != nil {
+		t.Fatalf("write busy extension: %v", err)
+	}
+	provider := newExtensionProviderWrapper(ext)
+	const itemID = "busy-download-cancel"
+	outputPath := filepath.Join(t.TempDir(), "busy.flac")
+	done := make(chan error, 1)
+	go func() {
+		_, err := provider.DownloadPrepared(
+			"track",
+			"best",
+			outputPath,
+			itemID,
+			nil,
+			nil,
+		)
+		done <- err
+	}()
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		downloadCancels.mu.Lock()
+		entry := downloadCancels.entries[itemID]
+		ready := entry != nil && entry.refs > 0
+		downloadCancels.mu.Unlock()
+		if ready {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("download cancellation context was not initialized")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancelDownload(itemID)
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrDownloadCancelled) {
+			t.Fatalf("DownloadPrepared error = %v, want ErrDownloadCancelled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("busy extension did not stop after cancellation")
+	}
+}
 
 func TestExtensionProviderWrapperFullSurface(t *testing.T) {
 	ext := newTestLoadedExtension(t, ExtensionTypeMetadataProvider, ExtensionTypeDownloadProvider, ExtensionTypeLyricsProvider)
@@ -21,7 +76,7 @@ func TestExtensionProviderWrapperFullSurface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTrack: %v", err)
 	}
-	if track.Name != "Track track-1" || track.ProviderID != ext.ID || track.AudioQuality == "" {
+	if track.Name != "Track track-1" || track.ProviderID != ext.ID || track.AudioQuality == "" || track.Comment != "https://example.test/album/1" || !track.Explicit || track.UPC != "0012345678901" {
 		t.Fatalf("track = %#v", track)
 	}
 
@@ -64,6 +119,9 @@ func TestExtensionProviderWrapperFullSurface(t *testing.T) {
 	if !availability.Available || availability.TrackID != "download-track" || !availability.SkipFallback {
 		t.Fatalf("availability = %#v", availability)
 	}
+	if availability.PreparedContext["token"] != "prepared" {
+		t.Fatalf("prepared context = %#v", availability.PreparedContext)
+	}
 
 	progress := []int{}
 	download, err := provider.Download("track-1", "LOSSLESS", filepath.Join(t.TempDir(), "song.flac"), "", func(percent int) {
@@ -72,8 +130,19 @@ func TestExtensionProviderWrapperFullSurface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Download: %v", err)
 	}
-	if !download.Success || download.Decryption == nil || download.DecryptionKey != "001122" || len(progress) != 1 || progress[0] != 100 {
+	if !download.Success || download.Decryption == nil || download.DecryptionKey != "001122" || download.Comment != "https://example.test/album/1" || !download.Explicit || download.AlbumType != "compilation" || download.UPC != "0012345678901" || len(progress) != 1 || progress[0] != 100 {
 		t.Fatalf("download = %#v progress=%v", download, progress)
+	}
+	preparedDownload, err := provider.DownloadPrepared(
+		"track-1",
+		"LOSSLESS",
+		filepath.Join(t.TempDir(), "prepared.flac"),
+		"",
+		availability.PreparedContext,
+		nil,
+	)
+	if err != nil || preparedDownload == nil || preparedDownload.Title != "prepared" {
+		t.Fatalf("prepared download = %#v, err=%v", preparedDownload, err)
 	}
 
 	lyrics, err := provider.FetchLyrics("Song", "Artist", "Album", 180)

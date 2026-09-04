@@ -147,8 +147,20 @@ func GetAudioQualityJSON(filePath string) (string, error) {
 
 // --- Extension management ---
 
+// SetExtensionStorageMasterKey installs the platform-keystore-backed key the
+// engine uses to encrypt extension settings/credentials at rest. As of the
+// v4.9.5 sync InitExtensionSystem refuses to configure the extension
+// directories until this key is set, so the host MUST call this (with a base64
+// 32-byte key stored in Android Keystore via flutter_secure_storage) BEFORE
+// InitExtensionSystem — otherwise every extension install/upgrade fails with
+// "extension directory is not configured" and no extensions load.
+func SetExtensionStorageMasterKey(encodedKey string) error {
+	return gobackend.SetExtensionStorageMasterKey(encodedKey)
+}
+
 // InitExtensionSystem initialises the extension subsystem with the given
-// extensions directory and data directory.
+// extensions directory and data directory. Call SetExtensionStorageMasterKey
+// first (see above).
 func InitExtensionSystem(extensionsDir, dataDir string) error {
 	return gobackend.InitExtensionSystem(extensionsDir, dataDir)
 }
@@ -402,7 +414,7 @@ func CheckDuplicate(outputDir, isrc string) (string, error) {
 // minAppVersion, makes the engine reject every upstream extension. So we report
 // the vendored SpotiFLAC baseline to the engine, not the fork version. The fork
 // version is still what users see and what in-app auto-update compares.
-const spotiflacBaselineVersion = "4.8.5"
+const spotiflacBaselineVersion = "4.9.5"
 
 // SetAppVersion is called at startup with the fork's versionName, but reports
 // the vendored SpotiFLAC baseline (see spotiflacBaselineVersion) to the engine

@@ -72,9 +72,11 @@ function track(id) {
     copyright: "Copyright",
     genre: "Pop",
     composer: "Composer",
+    comment: "https://example.test/album/1",
     audioQuality: "FLAC 24-bit",
     audioModes: "DOLBY_ATMOS",
-    explicit: true
+    explicit: true,
+    upc: "0012345678901"
   };
 }
 
@@ -137,12 +139,18 @@ registerExtension({
     return t;
   },
   checkAvailability: function(isrc, name, artist, ids) {
-    return { available: true, reason: "ok", trackId: "download-track", skipFallback: true };
+    return {
+      available: true,
+      reason: "ok",
+      trackId: "download-track",
+      skipFallback: true,
+      prepared_context: { token: "prepared", resolvedTrackId: "download-track" }
+    };
   },
   getDownloadUrl: function(id, quality) {
     return { url: "https://example.test/audio.flac", format: "flac", bitDepth: 24, sampleRate: 96000 };
   },
-  download: function(id, quality, outputPath, onProgress) {
+  download: function(id, quality, outputPath, onProgress, options) {
     if (onProgress) onProgress(100);
     return {
       success: true,
@@ -150,7 +158,9 @@ registerExtension({
       alreadyExists: false,
       bitDepth: 24,
       sampleRate: 96000,
-      title: "Downloaded",
+      title: options && options.preparedContext
+        ? options.preparedContext.token
+        : "Downloaded",
       artist: "Artist",
       album: "Album",
       albumArtist: "Album Artist",
@@ -165,6 +175,10 @@ registerExtension({
       label: "Label",
       copyright: "Copyright",
       composer: "Composer",
+      comment: "https://example.test/album/1",
+      explicit: true,
+      albumType: "compilation",
+      upc: "0012345678901",
       lyricsLrc: "[00:00.00]Hello",
       decryptionKey: "001122",
       decryption: { strategy: "mp4_decryption_key", options: { kid: "1" } }

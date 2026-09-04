@@ -10,6 +10,50 @@ import (
 	"github.com/dop251/goja"
 )
 
+// extensionLifecycleTimeout bounds extension code that runs outside a normal
+// provider/action request. A lifecycle callback is still arbitrary extension
+// JavaScript, so it needs the same interrupt/quarantine contract as a regular
+// invocation. Tests may shorten this value; production keeps the normal JS
+// request budget.
+var extensionLifecycleTimeout = DefaultJSTimeout
+
+func runExtensionLifecycleCall(
+	vm *goja.Runtime,
+	call func() (goja.Value, error),
+) (goja.Value, error) {
+	return runGojaCallWithTimeoutAndRecover(vm, call, extensionLifecycleTimeout)
+}
+
+// discardLifecycleRuntime releases a runtime whose lifecycle execution failed.
+// An interrupted Go callback may still be using the VM after the timeout
+// helper returns, so unsafe runtimes must remain quarantined until the helper's
+// completion signal closes. Safe failures can be closed immediately.
+func discardLifecycleRuntime(
+	ext *loadedExtension,
+	vm *goja.Runtime,
+	runtime *extensionRuntime,
+	err error,
+) {
+	if IsRuntimeUnsafeError(err) {
+		if ext != nil && ext.VM == vm {
+			quarantineRuntimeLocked(ext, vm, err)
+		} else {
+			registerQuarantinedRuntime(ext, runtime, runtimeCompletion(err))
+		}
+		return
+	}
+
+	if runtime != nil {
+		runtime.closeStorageFlusher()
+	}
+	if ext != nil && ext.VM == vm {
+		ext.VM = nil
+		ext.runtime = nil
+		ext.indexProgram = nil
+		ext.initialized = false
+	}
+}
+
 func initializeVMLocked(ext *loadedExtension) error {
 	ext.VM = nil
 	ext.runtime = nil
@@ -21,10 +65,12 @@ func initializeVMLocked(ext *loadedExtension) error {
 	indexPath := filepath.Join(ext.SourceDir, "index.js")
 	jsCode, err := os.ReadFile(indexPath)
 	if err != nil {
+		ext.VM = nil
 		return fmt.Errorf("failed to read index.js: %w", err)
 	}
 	indexProgram, err := goja.Compile(indexPath, string(jsCode), false)
 	if err != nil {
+		ext.VM = nil
 		return fmt.Errorf("failed to compile extension code: %w", err)
 	}
 	ext.indexProgram = indexProgram
@@ -36,11 +82,7 @@ func initializeVMLocked(ext *loadedExtension) error {
 
 	console := vm.NewObject()
 	console.Set("log", func(call goja.FunctionCall) goja.Value {
-		args := make([]any, len(call.Arguments))
-		for i, arg := range call.Arguments {
-			args[i] = arg.Export()
-		}
-		GoLog("[Extension:%s] %v\n", ext.ID, args)
+		GoLog("[Extension:%s] %s\n", ext.ID, formatExtensionLogArgs(call.Arguments))
 		return goja.Undefined()
 	})
 	vm.Set("console", console)
@@ -54,12 +96,16 @@ func initializeVMLocked(ext *loadedExtension) error {
 		return goja.Undefined()
 	})
 
-	_, err = vm.RunProgram(indexProgram)
+	_, err = runExtensionLifecycleCall(vm, func() (goja.Value, error) {
+		return vm.RunProgram(indexProgram)
+	})
 	if err != nil {
+		discardLifecycleRuntime(ext, vm, runtime, err)
 		return fmt.Errorf("failed to execute extension code: %w", err)
 	}
 
 	if registeredExtension == nil || goja.IsUndefined(registeredExtension) {
+		discardLifecycleRuntime(ext, vm, runtime, fmt.Errorf("extension did not call registerExtension()"))
 		return fmt.Errorf("extension did not call registerExtension()")
 	}
 
@@ -103,11 +149,7 @@ func newIsolatedExtensionRuntime(ext *loadedExtension) (*goja.Runtime, *extensio
 
 	console := vm.NewObject()
 	console.Set("log", func(call goja.FunctionCall) goja.Value {
-		args := make([]any, len(call.Arguments))
-		for i, arg := range call.Arguments {
-			args[i] = arg.Export()
-		}
-		GoLog("[Extension:%s] %v\n", ext.ID, args)
+		GoLog("[Extension:%s] %s\n", ext.ID, formatExtensionLogArgs(call.Arguments))
 		return goja.Undefined()
 	})
 	vm.Set("console", console)
@@ -121,20 +163,22 @@ func newIsolatedExtensionRuntime(ext *loadedExtension) (*goja.Runtime, *extensio
 		return goja.Undefined()
 	})
 
-	if _, err := vm.RunProgram(indexProgram); err != nil {
-		runtime.closeStorageFlusher()
+	if _, err := runExtensionLifecycleCall(vm, func() (goja.Value, error) {
+		return vm.RunProgram(indexProgram)
+	}); err != nil {
+		discardLifecycleRuntime(ext, vm, runtime, err)
 		return nil, nil, fmt.Errorf("failed to execute extension code: %w", err)
 	}
 
 	if registeredExtension == nil || goja.IsUndefined(registeredExtension) {
-		runtime.closeStorageFlusher()
+		discardLifecycleRuntime(ext, vm, runtime, fmt.Errorf("extension did not call registerExtension()"))
 		return nil, nil, fmt.Errorf("extension did not call registerExtension()")
 	}
 
 	settings := getExtensionInitSettings(ext.ID)
 	if len(settings) > 0 {
 		if err := initializeExtensionRuntimeWithSettings(vm, ext.ID, settings); err != nil {
-			runtime.closeStorageFlusher()
+			discardLifecycleRuntime(ext, vm, runtime, err)
 			return nil, nil, err
 		}
 	}
@@ -151,6 +195,9 @@ const maxIdleIsolatedRuntimes = 1
 
 // acquireIsolatedExtensionRuntime pops an idle pooled runtime or builds one.
 func acquireIsolatedExtensionRuntime(ext *loadedExtension) (*goja.Runtime, *extensionRuntime, error) {
+	if hasQuarantinedRuntime(ext) {
+		return nil, nil, fmt.Errorf("extension runtime is still stopping after an unresponsive request")
+	}
 	ext.isolatedPoolMu.Lock()
 	if n := len(ext.isolatedPool); n > 0 {
 		handle := ext.isolatedPool[n-1]
@@ -162,13 +209,27 @@ func acquireIsolatedExtensionRuntime(ext *loadedExtension) (*goja.Runtime, *exte
 
 	ext.VMMu.Lock()
 	defer ext.VMMu.Unlock()
+	if hasQuarantinedRuntime(ext) {
+		return nil, nil, fmt.Errorf("extension runtime is still stopping after an unresponsive request")
+	}
 	return newIsolatedExtensionRuntime(ext)
 }
 
 // releaseIsolatedExtensionRuntime pools a healthy runtime for reuse or tears
 // it down. Pass healthy=false after an interrupt/timeout/script error, whose
 // VM state can't be trusted for reuse.
-func releaseIsolatedExtensionRuntime(ext *loadedExtension, vm *goja.Runtime, runtime *extensionRuntime, healthy, cleanupSafe bool) {
+func releaseIsolatedExtensionRuntime(
+	ext *loadedExtension,
+	vm *goja.Runtime,
+	runtime *extensionRuntime,
+	healthy, cleanupSafe bool,
+	unsafeDone <-chan struct{},
+) {
+	if !cleanupSafe {
+		registerQuarantinedRuntime(ext, runtime, unsafeDone)
+		return
+	}
+
 	if runtime != nil {
 		if err := runtime.flushStorageNow(); err != nil {
 			GoLog("[Extension:%s] isolated download storage flush failed: %v\n", ext.ID, err)
@@ -186,7 +247,12 @@ func releaseIsolatedExtensionRuntime(ext *loadedExtension, vm *goja.Runtime, run
 	}
 
 	if cleanupSafe {
-		if cleanupErr := runCleanupOnVM(vm); cleanupErr != nil {
+		cleanupErr := runCleanupOnVM(vm)
+		if IsRuntimeUnsafeError(cleanupErr) {
+			registerQuarantinedRuntime(ext, runtime, runtimeCompletion(cleanupErr))
+			return
+		}
+		if cleanupErr != nil {
 			GoLog("[Extension:%s] isolated download cleanup failed: %v\n", ext.ID, cleanupErr)
 		}
 	}
@@ -195,17 +261,57 @@ func releaseIsolatedExtensionRuntime(ext *loadedExtension, vm *goja.Runtime, run
 	}
 }
 
+func hasQuarantinedRuntime(ext *loadedExtension) bool {
+	if ext == nil {
+		return false
+	}
+	ext.quarantineMu.Lock()
+	defer ext.quarantineMu.Unlock()
+	return ext.quarantinedRuntimes > 0
+}
+
+// registerQuarantinedRuntime keeps the extension gated until the interrupted
+// goroutine actually exits. A Go goroutine cannot be killed safely, so allowing
+// a replacement VM immediately would let a broken extension accumulate an
+// unbounded number of runtimes. The runtime is touched only after completion.
+func registerQuarantinedRuntime(ext *loadedExtension, runtime *extensionRuntime, done <-chan struct{}) {
+	if ext == nil {
+		return
+	}
+	ext.quarantineMu.Lock()
+	ext.quarantinedRuntimes++
+	ext.quarantineMu.Unlock()
+
+	if done == nil {
+		GoLog("[Extension:%s] quarantined runtime has no completion signal; keeping extension gated\n", ext.ID)
+		return
+	}
+	go func() {
+		<-done
+		if runtime != nil {
+			runtime.closeStorageFlusher()
+		}
+		ext.quarantineMu.Lock()
+		if ext.quarantinedRuntimes > 0 {
+			ext.quarantinedRuntimes--
+		}
+		ext.quarantineMu.Unlock()
+	}()
+}
+
 // quarantineRuntimeLocked detaches a VM that remained busy after interrupt.
 // The caller holds VMMu. Touching or cleaning up that VM would race its stuck
-// goroutine; a later call will build a fresh runtime from indexProgram.
-func quarantineRuntimeLocked(ext *loadedExtension, vm *goja.Runtime) {
+// goroutine; replacement calls remain gated until that goroutine exits.
+func quarantineRuntimeLocked(ext *loadedExtension, vm *goja.Runtime, err error) {
 	if ext == nil || ext.VM != vm {
 		return
 	}
+	runtime := ext.runtime
 	ext.VM = nil
 	ext.runtime = nil
 	ext.initialized = false
 	ext.Error = "extension runtime was quarantined after an unresponsive script"
+	registerQuarantinedRuntime(ext, runtime, runtimeCompletion(err))
 }
 
 // drainIsolatedRuntimePool tears down idle isolated runtimes. Called on
@@ -217,7 +323,12 @@ func drainIsolatedRuntimePool(ext *loadedExtension) {
 	ext.isolatedPoolMu.Unlock()
 
 	for _, handle := range pool {
-		if cleanupErr := runCleanupOnVM(handle.vm); cleanupErr != nil {
+		cleanupErr := runCleanupOnVM(handle.vm)
+		if IsRuntimeUnsafeError(cleanupErr) {
+			registerQuarantinedRuntime(ext, handle.runtime, runtimeCompletion(cleanupErr))
+			continue
+		}
+		if cleanupErr != nil {
 			GoLog("[Extension:%s] isolated pool cleanup failed: %v\n", ext.ID, cleanupErr)
 		}
 		if handle.runtime != nil {
@@ -276,7 +387,9 @@ func initializeExtensionRuntimeWithSettings(
 		})()
 	`, string(settingsJSON))
 
-	result, err := vm.RunString(script)
+	result, err := runExtensionLifecycleCall(vm, func() (goja.Value, error) {
+		return vm.RunString(script)
+	})
 	if err != nil {
 		GoLog("[Extension] Initialize error for %s: %v\n", extensionID, err)
 		return err
@@ -310,6 +423,9 @@ func initializeExtensionWithSettingsLocked(
 	if err := initializeExtensionRuntimeWithSettings(ext.VM, ext.ID, settings); err != nil {
 		ext.Error = err.Error()
 		ext.Enabled = false
+		if IsRuntimeUnsafeError(err) {
+			quarantineRuntimeLocked(ext, ext.VM, err)
+		}
 		return err
 	}
 
@@ -349,7 +465,9 @@ func runCleanupOnVM(vm *goja.Runtime) error {
 		})()
 	`
 
-	result, err := vm.RunString(script)
+	result, err := runExtensionLifecycleCall(vm, func() (goja.Value, error) {
+		return vm.RunString(script)
+	})
 	if err != nil {
 		return err
 	}
@@ -372,8 +490,20 @@ func runCleanupOnVM(vm *goja.Runtime) error {
 
 func teardownVMLocked(ext *loadedExtension) {
 	drainIsolatedRuntimePool(ext)
+	// Preserve writes made before cleanup even when the cleanup callback becomes
+	// unresponsive and its VM has to remain quarantined.
+	if ext.runtime != nil {
+		if err := ext.runtime.flushStorageNow(); err != nil {
+			GoLog("[Extension] Failed to flush storage before cleanup for %s: %v\n", ext.ID, err)
+		}
+	}
+	vm := ext.VM
 	if err := runCleanupLocked(ext); err != nil {
 		GoLog("[Extension] Error calling cleanup for %s: %v\n", ext.ID, err)
+		if IsRuntimeUnsafeError(err) {
+			quarantineRuntimeLocked(ext, vm, err)
+			return
+		}
 	}
 	if ext.runtime != nil {
 		if err := ext.runtime.flushStorageNow(); err != nil {

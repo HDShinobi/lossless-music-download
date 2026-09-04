@@ -11,12 +11,15 @@ type DownloadRequest struct {
 	ContractVersion             int    `json:"contract_version,omitempty"`
 	ISRC                        string `json:"isrc"`
 	Service                     string `json:"service"`
+	DownloadProvider            string `json:"download_provider,omitempty"`
+	ProviderTrackID             string `json:"provider_track_id,omitempty"`
 	SpotifyID                   string `json:"spotify_id"`
 	TrackName                   string `json:"track_name"`
 	ArtistName                  string `json:"artist_name"`
 	AlbumName                   string `json:"album_name"`
 	AlbumArtist                 string `json:"album_artist"`
 	CoverURL                    string `json:"cover_url"`
+	CoverMaxDimension           int    `json:"cover_max_dimension,omitempty"`
 	OutputDir                   string `json:"output_dir"`
 	OutputPath                  string `json:"output_path,omitempty"`
 	OutputFD                    int    `json:"output_fd,omitempty"`
@@ -26,7 +29,6 @@ type DownloadRequest struct {
 	EmbedMetadata               bool   `json:"embed_metadata"`
 	ArtistTagMode               string `json:"artist_tag_mode,omitempty"`
 	EmbedLyrics                 bool   `json:"embed_lyrics"`
-	EmbedMaxQualityCover        bool   `json:"embed_max_quality_cover"`
 	EmbedReplayGain             bool   `json:"embed_replaygain,omitempty"`
 	PostProcessingEnabled       bool   `json:"post_processing_enabled,omitempty"`
 	TidalHighFormat             string `json:"tidal_high_format,omitempty"`
@@ -43,6 +45,10 @@ type DownloadRequest struct {
 	Label                       string `json:"label,omitempty"`
 	Copyright                   string `json:"copyright,omitempty"`
 	Composer                    string `json:"composer,omitempty"`
+	Comment                     string `json:"comment,omitempty"`
+	Explicit                    bool   `json:"explicit,omitempty"`
+	AlbumType                   string `json:"album_type,omitempty"`
+	UPC                         string `json:"upc,omitempty"`
 	TidalID                     string `json:"tidal_id,omitempty"`
 	QobuzID                     string `json:"qobuz_id,omitempty"`
 	DeezerID                    string `json:"deezer_id,omitempty"`
@@ -53,12 +59,15 @@ type DownloadRequest struct {
 	AllowQualityVariant         bool   `json:"allow_quality_variant,omitempty"`
 	QualityVariant              string `json:"quality_variant,omitempty"`
 	SongLinkRegion              string `json:"songlink_region,omitempty"`
+	NetworkConcurrencyLimit     int    `json:"network_concurrency_limit,omitempty"`
 }
 
 type DownloadResponse struct {
 	Success                     bool                    `json:"success"`
 	Message                     string                  `json:"message"`
 	FilePath                    string                  `json:"file_path,omitempty"`
+	ResolvedFileName            string                  `json:"resolved_file_name,omitempty"`
+	ProviderTrackID             string                  `json:"provider_track_id,omitempty"`
 	Error                       string                  `json:"error,omitempty"`
 	ErrorType                   string                  `json:"error_type,omitempty"`
 	RetryAfterSeconds           int                     `json:"retry_after_seconds,omitempty"`
@@ -85,6 +94,10 @@ type DownloadResponse struct {
 	Label                       string                  `json:"label,omitempty"`
 	Copyright                   string                  `json:"copyright,omitempty"`
 	Composer                    string                  `json:"composer,omitempty"`
+	Comment                     string                  `json:"comment,omitempty"`
+	Explicit                    bool                    `json:"explicit,omitempty"`
+	AlbumType                   string                  `json:"album_type,omitempty"`
+	UPC                         string                  `json:"upc,omitempty"`
 	SkipMetadataEnrichment      bool                    `json:"skip_metadata_enrichment,omitempty"`
 	LyricsLRC                   string                  `json:"lyrics_lrc,omitempty"`
 	DecryptionKey               string                  `json:"decryption_key,omitempty"`
@@ -110,12 +123,24 @@ type DownloadResult struct {
 	Label                       string
 	Copyright                   string
 	Composer                    string
+	Comment                     string
+	Explicit                    bool
+	AlbumType                   string
+	UPC                         string
 	LyricsLRC                   string
 	DecryptionKey               string
 	Decryption                  *DownloadDecryptionInfo
 	ActualExtension             string
 	ActualContainer             string
 	RequiresContainerConversion bool
+}
+
+func buildDownloadedFileComment(sourceComment, providerComment string) string {
+	comment := strings.TrimSpace(sourceComment)
+	if comment != "" {
+		return comment
+	}
+	return strings.TrimSpace(providerComment)
 }
 
 func buildDownloadSuccessResponse(
@@ -126,9 +151,9 @@ func buildDownloadSuccessResponse(
 	filePath string,
 	alreadyExists bool,
 ) DownloadResponse {
-	title := result.Title
+	title := strings.TrimSpace(req.TrackName)
 	if title == "" {
-		title = req.TrackName
+		title = strings.TrimSpace(result.Title)
 	}
 
 	artist := result.Artist
@@ -171,16 +196,29 @@ func buildDownloadSuccessResponse(
 	if composer == "" {
 		composer = req.Composer
 	}
+	comment := buildDownloadedFileComment(req.Comment, result.Comment)
 
-	coverURL := strings.TrimSpace(result.CoverURL)
+	albumType := result.AlbumType
+	if albumType == "" {
+		albumType = req.AlbumType
+	}
+
+	upc := result.UPC
+	if upc == "" {
+		upc = req.UPC
+	}
+
+	coverURL := strings.TrimSpace(req.CoverURL)
 	if coverURL == "" {
-		coverURL = strings.TrimSpace(req.CoverURL)
+		coverURL = strings.TrimSpace(result.CoverURL)
 	}
 
 	return DownloadResponse{
 		Success:                     true,
 		Message:                     message,
 		FilePath:                    filePath,
+		ResolvedFileName:            resolvedDownloadFilename(req, result, filePath),
+		ProviderTrackID:             req.ProviderTrackID,
 		AlreadyExists:               alreadyExists,
 		ActualBitDepth:              result.BitDepth,
 		ActualSampleRate:            result.SampleRate,
@@ -204,6 +242,10 @@ func buildDownloadSuccessResponse(
 		Label:                       label,
 		Copyright:                   copyright,
 		Composer:                    composer,
+		Comment:                     comment,
+		Explicit:                    result.Explicit || req.Explicit,
+		AlbumType:                   albumType,
+		UPC:                         upc,
 		LyricsLRC:                   result.LyricsLRC,
 		DecryptionKey:               result.DecryptionKey,
 		Decryption:                  normalizeDownloadDecryptionInfo(result.Decryption, result.DecryptionKey),
@@ -391,6 +433,10 @@ func GetAllDownloadProgressDelta(sinceSeq int64) string {
 	return GetMultiProgressDelta(sinceSeq)
 }
 
+func WaitForAllDownloadProgressDelta(sinceSeq, timeoutMs int64) string {
+	return WaitForMultiProgressDelta(sinceSeq, timeoutMs)
+}
+
 func InitItemProgress(itemID string) {
 	StartItemProgress(itemID)
 }
@@ -401,6 +447,18 @@ func ClearItemProgress(itemID string) {
 
 func CancelDownload(itemID string) {
 	cancelDownload(itemID)
+}
+
+// CancelAllActiveDownloads is a lifecycle safety valve for platforms that are
+// about to suspend the process. It only cancels entries with live work and
+// does not create cancellation flags for queued/future items.
+func CancelAllActiveDownloads() string {
+	itemIDs := cancelAllActiveDownloads()
+	payload, err := json.Marshal(itemIDs)
+	if err != nil {
+		return "[]"
+	}
+	return string(payload)
 }
 
 // ResetDownloadCancel drops a pre-registered cancellation flag for an item

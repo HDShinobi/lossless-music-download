@@ -10,6 +10,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
+	"reflect"
 	"strings"
 	"time"
 
@@ -226,9 +228,12 @@ func (r *extensionRuntime) cryptoDecrypt(call goja.FunctionCall) goja.Value {
 func (r *extensionRuntime) cryptoGenerateKey(call goja.FunctionCall) goja.Value {
 	length := 32
 	if len(call.Arguments) > 0 && !goja.IsUndefined(call.Arguments[0]) {
-		if l, ok := call.Arguments[0].Export().(float64); ok {
-			length = int(l)
+		requested := call.Arguments[0].ToFloat()
+		if math.IsNaN(requested) || math.IsInf(requested, 0) ||
+			requested != math.Trunc(requested) || requested < 1 || requested > 4096 {
+			return r.jsError("key length must be an integer between 1 and 4096 bytes")
 		}
+		length = int(requested)
 	}
 
 	key := make([]byte, length)
@@ -361,19 +366,43 @@ func (r *extensionRuntime) logError(call goja.FunctionCall) goja.Value {
 }
 
 func (r *extensionRuntime) formatLogArgs(args []goja.Value) string {
-	parts := make([]string, len(args))
-	for i, arg := range args {
-		parts[i] = fmt.Sprintf("%v", arg.Export())
-	}
-	return strings.Join(parts, " ")
+	return formatExtensionLogArgs(args)
 }
 
-func (r *extensionRuntime) sanitizeFilenameWrapper(call goja.FunctionCall) goja.Value {
-	if len(call.Arguments) < 1 {
-		return r.vm.ToValue("")
+const (
+	maxExtensionLogArgs      = 8
+	maxExtensionLogArgLength = 512
+)
+
+func formatExtensionLogArgs(args []goja.Value) string {
+	limit := len(args)
+	if limit > maxExtensionLogArgs {
+		limit = maxExtensionLogArgs
 	}
-	input := call.Arguments[0].String()
-	return r.vm.ToValue(sanitizeFilename(input))
+	parts := make([]string, 0, limit+1)
+	for _, arg := range args[:limit] {
+		value := "<value>"
+		if exportType := arg.ExportType(); exportType != nil {
+			switch exportType.Kind() {
+			case reflect.Bool,
+				reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+				reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+				reflect.Float32, reflect.Float64,
+				reflect.String:
+				value = arg.String()
+			default:
+				value = "<" + exportType.String() + ">"
+			}
+		}
+		if len(value) > maxExtensionLogArgLength {
+			value = value[:maxExtensionLogArgLength] + "...[truncated]"
+		}
+		parts = append(parts, value)
+	}
+	if len(args) > limit {
+		parts = append(parts, fmt.Sprintf("...[%d more args]", len(args)-limit))
+	}
+	return truncateLogMessage(sanitizeSensitiveLogText(strings.Join(parts, " ")))
 }
 
 func (r *extensionRuntime) RegisterGoBackendAPIs(vm *goja.Runtime) {

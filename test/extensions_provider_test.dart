@@ -18,6 +18,9 @@ class FakeBackendBridge extends BackendBridge {
   FakeBackendBridge(this._extensions);
 
   @override
+  Future<void> setExtensionStorageMasterKey(String masterKey) async {}
+
+  @override
   Future<void> initExtensionSystem(String extDir, String dataDir) async {
     initCalls.add('$extDir|$dataDir');
   }

@@ -72,6 +72,49 @@ func trimKnownProviderPrefix(trackID, providerID string) string {
 	return trimmedID
 }
 
+func buildSourceExtensionTrackMetadata(req DownloadRequest) *ExtTrackMetadata {
+	return &ExtTrackMetadata{
+		ID:          req.SpotifyID,
+		Name:        req.TrackName,
+		Artists:     req.ArtistName,
+		AlbumName:   req.AlbumName,
+		AlbumArtist: req.AlbumArtist,
+		DurationMS:  req.DurationMS,
+		CoverURL:    req.CoverURL,
+		ISRC:        req.ISRC,
+		ReleaseDate: req.ReleaseDate,
+		TrackNumber: req.TrackNumber,
+		TotalTracks: req.TotalTracks,
+		DiscNumber:  req.DiscNumber,
+		TotalDiscs:  req.TotalDiscs,
+		ProviderID:  req.Source,
+		AlbumType:   req.AlbumType,
+		Explicit:    req.Explicit,
+		UPC:         req.UPC,
+		TidalID:     req.TidalID,
+		QobuzID:     req.QobuzID,
+		DeezerID:    req.DeezerID,
+		SpotifyID:   req.SpotifyID,
+		Label:       req.Label,
+		Copyright:   req.Copyright,
+		Genre:       req.Genre,
+		Composer:    req.Composer,
+		Comment:     req.Comment,
+	}
+}
+
+func overlaySourceExtensionTrackIdentity(req *DownloadRequest, enrichedTrack ExtTrackMetadata) {
+	if req == nil {
+		return
+	}
+
+	// The queued track describes the release selected by the user. Enrichment
+	// may fill missing identity fields, but must not rename it to another
+	// release's display title or artist spelling.
+	overlayStr(&req.TrackName, enrichedTrack.Name, "TrackName")
+	overlayStr(&req.ArtistName, enrichedTrack.Artists, "ArtistName")
+}
+
 func resolvePreferredTrackIDForExtension(ext *loadedExtension, req DownloadRequest, explicitTrackID string) string {
 	candidates := make([]string, 0, 8)
 	appendCandidate := func(value string) {
@@ -191,6 +234,10 @@ func normalizeExtensionDownloadResult(result *ExtDownloadResult) (DownloadResult
 		Label:                       result.Label,
 		Copyright:                   result.Copyright,
 		Composer:                    result.Composer,
+		Comment:                     result.Comment,
+		Explicit:                    result.Explicit,
+		AlbumType:                   result.AlbumType,
+		UPC:                         result.UPC,
 		LyricsLRC:                   result.LyricsLRC,
 		DecryptionKey:               result.DecryptionKey,
 		Decryption:                  normalizeDownloadDecryptionInfo(result.Decryption, result.DecryptionKey),
@@ -218,6 +265,22 @@ func overlayStr(dst *string, src, field string) {
 	*dst = src
 	if field != "" {
 		GoLog("[DownloadWithExtensionFallback] %s from enrichment: %s\n", field, src)
+	}
+}
+
+// overlayExtensionReleaseMetadata carries release-level metadata discovered by
+// the source catalog into a provider-agnostic download request. Existing
+// source values always win; enrichment only fills fields that were missing.
+func overlayExtensionReleaseMetadata(req *DownloadRequest, track ExtTrackMetadata) {
+	if req == nil {
+		return
+	}
+	overlayStr(&req.AlbumType, track.AlbumType, "AlbumType")
+	overlayStr(&req.UPC, track.UPC, "UPC")
+	overlayStr(&req.Comment, track.Comment, "Comment")
+	if !req.Explicit && track.Explicit {
+		req.Explicit = true
+		GoLog("[DownloadWithExtensionFallback] Explicit flag from enrichment\n")
 	}
 }
 
@@ -261,6 +324,12 @@ func overlayExtensionDownloadMetadata(resp *DownloadResponse, result *ExtDownloa
 	overlayStrTrim(&resp.Label, result.Label)
 	overlayStrTrim(&resp.Copyright, result.Copyright)
 	overlayStrTrim(&resp.Composer, result.Composer)
+	overlayStrTrim(&resp.Comment, result.Comment)
+	overlayStrTrim(&resp.AlbumType, result.AlbumType)
+	overlayStrTrim(&resp.UPC, result.UPC)
+	if result.Explicit {
+		resp.Explicit = true
+	}
 	if result.LyricsLRC != "" {
 		resp.LyricsLRC = result.LyricsLRC
 	}
@@ -295,6 +364,12 @@ func applyExtensionRequestFallbacks(resp *DownloadResponse, req DownloadRequest)
 	overlayInt(&resp.DiscNumber, req.DiscNumber, "")
 	overlayInt(&resp.TotalDiscs, req.TotalDiscs, "")
 	overlayStr(&resp.CoverURL, req.CoverURL, "")
+	overlayStr(&resp.Comment, req.Comment, "")
+	overlayStr(&resp.AlbumType, req.AlbumType, "")
+	overlayStr(&resp.UPC, req.UPC, "")
+	if req.Explicit {
+		resp.Explicit = true
+	}
 }
 
 func shouldStopProviderFallback(availability *ExtAvailabilityResult) bool {
@@ -306,7 +381,21 @@ func fallbackRuntimeHealthStatus(ext *loadedExtension) string {
 		return "unknown"
 	}
 
-	status := strings.ToLower(strings.TrimSpace(CheckExtensionHealthCached(ext).Status))
+	health, cached := PeekExtensionHealthCached(ext)
+	if !cached {
+		staleHealth, hasStale := peekExtensionHealthStale(ext)
+		RefreshExtensionHealthAsync(ext)
+		if !hasStale {
+			return "unknown"
+		}
+		// An expired offline verdict must not keep suppressing a recovered
+		// provider while its refresh runs in the background.
+		if strings.EqualFold(staleHealth.Status, "offline") {
+			return "unknown"
+		}
+		health = staleHealth
+	}
+	status := strings.ToLower(strings.TrimSpace(health.Status))
 	switch status {
 	case "online", "degraded", "offline":
 		return status

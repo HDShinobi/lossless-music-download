@@ -48,6 +48,9 @@ class _FakeAggregatorUrlNotifier extends AggregatorUrlNotifier {
 // ---------------------------------------------------------------------------
 class _FakeBridge extends BackendBridge {
   @override
+  Future<void> setExtensionStorageMasterKey(String masterKey) async {}
+
+  @override
   Future<void> initExtensionSystem(String ext, String data) async {}
 
   @override

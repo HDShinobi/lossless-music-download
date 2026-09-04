@@ -1,6 +1,7 @@
 package gobackend
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -37,6 +38,17 @@ func TestExtensionRuntimeAuthAndPolyfills(t *testing.T) {
 					Request:    req,
 				}, nil
 			case "api.example.com":
+				if req.URL.Path == "/huge" {
+					return &http.Response{
+						StatusCode: 200,
+						Header:     make(http.Header),
+						Body: io.NopCloser(io.LimitReader(
+							strings.NewReader(strings.Repeat("x", maxExtensionHTTPResponseBytes+1)),
+							maxExtensionHTTPResponseBytes+1,
+						)),
+						Request: req,
+					}, nil
+				}
 				return &http.Response{
 					StatusCode: 200,
 					Header:     http.Header{"X-Test": []string{"yes"}},
@@ -67,9 +79,33 @@ func TestExtensionRuntimeAuthAndPolyfills(t *testing.T) {
 	if openResult["success"] != true {
 		t.Fatalf("authOpenUrl = %#v", openResult)
 	}
-	if pending := GetPendingAuthRequest("auth-ext"); pending == nil || pending.AuthURL == "" {
+	pending := GetPendingAuthRequest("auth-ext")
+	if pending == nil || pending.AuthURL == "" || pending.State == "" || !strings.Contains(pending.AuthURL, "state=") {
 		t.Fatalf("pending auth = %#v", pending)
 	}
+	if extensionID, err := ConsumeExtensionCallbackState(pending.State); err != nil || extensionID != "auth-ext" {
+		t.Fatalf("consume callback state = %q/%v", extensionID, err)
+	}
+	if _, err := ConsumeExtensionCallbackState(pending.State); err == nil {
+		t.Fatal("callback state replay should be rejected")
+	}
+	collisionState := "shared-callback-state"
+	collisionCreatedAt := time.Now()
+	if err := registerPendingAuthRequest(&PendingAuthRequest{
+		ExtensionID: "auth-ext",
+		State:       collisionState,
+		CreatedAt:   collisionCreatedAt,
+	}); err != nil {
+		t.Fatalf("register first callback state: %v", err)
+	}
+	if err := registerPendingAuthRequest(&PendingAuthRequest{
+		ExtensionID: "other-ext",
+		State:       collisionState,
+		CreatedAt:   collisionCreatedAt.Add(time.Second),
+	}); err == nil {
+		t.Fatal("callback state collision should be rejected")
+	}
+	ClearPendingAuthRequest("auth-ext")
 	if code := runtime.authGetCode(goja.FunctionCall{}); !goja.IsUndefined(code) {
 		t.Fatalf("expected undefined code, got %v", code)
 	}
@@ -154,7 +190,8 @@ func TestExtensionRuntimeAuthAndPolyfills(t *testing.T) {
 			ok: response.ok,
 			status: response.status,
 			jsonOk: response.json().ok,
-			bufferLen: response.arrayBuffer().length
+			bufferLen: response.arrayBuffer().length,
+			bufferFirst: response.arrayBuffer()[0]
 		});
 	`)
 	if err != nil {
@@ -164,13 +201,18 @@ func TestExtensionRuntimeAuthAndPolyfills(t *testing.T) {
 	if err := json.Unmarshal([]byte(value.String()), &result); err != nil {
 		t.Fatalf("decode polyfill result: %v", err)
 	}
-	if result["decoded"] != "hello" || result["host"] != "api.example.com" || result["ok"] != true {
+	if result["decoded"] != "hello" || result["host"] != "api.example.com" || result["ok"] != true ||
+		result["bufferLen"] != float64(len(`{"ok":true,"items":[1,2]}`)) || result["bufferFirst"] != float64('{') {
 		t.Fatalf("polyfill result = %#v", result)
 	}
 
 	blocked := runtime.fetchPolyfill(goja.FunctionCall{Arguments: []goja.Value{vm.ToValue("https://blocked.example.com")}}).ToObject(vm)
 	if blocked.Get("ok").ToBoolean() {
 		t.Fatal("expected blocked fetch")
+	}
+	huge := runtime.fetchPolyfill(goja.FunctionCall{Arguments: []goja.Value{vm.ToValue("https://api.example.com/huge")}}).ToObject(vm)
+	if huge.Get("ok").ToBoolean() || !strings.Contains(huge.Get("error").String(), "exceeds") {
+		t.Fatalf("expected bounded fetch response, got %s", huge.String())
 	}
 	runtime.authClear(goja.FunctionCall{})
 	if runtime.authIsAuthenticated(goja.FunctionCall{}).ToBoolean() {
@@ -270,8 +312,10 @@ func TestFileDownloadFailureLeavesNoFinalFile(t *testing.T) {
 func TestFileDownloadDoesNotResumeMidBodyCutByDefault(t *testing.T) {
 	const full = "hello-world!"
 	var attempts int
+	var rangeSeen bool
 	runtime := newFileDownloadTestRuntime(t, func(req *http.Request) (*http.Response, error) {
 		attempts++
+		rangeSeen = rangeSeen || req.Header.Get("Range") != ""
 		h := make(http.Header)
 		h.Set("ETag", `"v1"`)
 		return &http.Response{
@@ -290,8 +334,11 @@ func TestFileDownloadDoesNotResumeMidBodyCutByDefault(t *testing.T) {
 	if result["success"] != false {
 		t.Fatalf("expected failed download, got %#v", result)
 	}
-	if attempts != 1 {
-		t.Fatalf("attempts = %d, want no automatic resume", attempts)
+	if attempts != defaultTransferMaxAttempts {
+		t.Fatalf("attempts = %d, want %d full retries", attempts, defaultTransferMaxAttempts)
+	}
+	if rangeSeen {
+		t.Fatal("default retry unexpectedly sent a Range request")
 	}
 	finalPath := filepath.Join(runtime.dataDir, "out", "track.flac")
 	if _, err := os.Stat(finalPath); !os.IsNotExist(err) {
@@ -475,7 +522,9 @@ func TestExtensionStoreDiskCacheSurvivesRestart(t *testing.T) {
 			Version:    1,
 			Extensions: []repoExtension{{ID: "ext", Name: "ext", Version: "1.0.0"}},
 		},
-		cacheTime: time.Now(),
+		cacheTime:    time.Now(),
+		etag:         `"registry-v1"`,
+		lastModified: "Sun, 30 Aug 2026 00:00:00 GMT",
 	}
 	store.saveDiskCache()
 
@@ -485,6 +534,9 @@ func TestExtensionStoreDiskCacheSurvivesRestart(t *testing.T) {
 	restarted.loadDiskCache()
 	if restarted.getRegistryURL() != registryURL {
 		t.Fatalf("registry URL after restart = %q", restarted.getRegistryURL())
+	}
+	if restarted.etag != `"registry-v1"` || restarted.lastModified == "" {
+		t.Fatalf("conditional cache metadata was not restored: %q / %q", restarted.etag, restarted.lastModified)
 	}
 	restarted.setRegistryURL(registryURL)
 	if restarted.cache == nil || len(restarted.cache.Extensions) != 1 {
@@ -638,6 +690,23 @@ func TestExtensionStoreSettingsAndRuntimeStorage(t *testing.T) {
 	}
 	if all := settingsStore.GetAll("ext"); all["a"] != float64(1) {
 		t.Fatalf("settings all = %#v", all)
+	}
+	settingsCiphertext, err := os.ReadFile(settingsStore.getSettingsPath("ext"))
+	if err != nil {
+		t.Fatalf("read encrypted settings: %v", err)
+	}
+	if bytes.Contains(settingsCiphertext, []byte("hidden")) || bytes.Contains(settingsCiphertext, []byte("quality")) {
+		t.Fatal("extension settings were stored as plaintext")
+	}
+	if _, err := os.Stat(settingsStore.getLegacySettingsPath("ext")); !os.IsNotExist(err) {
+		t.Fatalf("plaintext settings file still exists: %v", err)
+	}
+	reloadedWithData := &ExtensionSettingsStore{settings: map[string]map[string]any{}}
+	if err := reloadedWithData.SetDataDir(settingsStore.dataDir); err != nil {
+		t.Fatalf("reload encrypted settings: %v", err)
+	}
+	if reloadedWithData.GetAll("ext")["_secret"] != "hidden" {
+		t.Fatal("encrypted settings did not round-trip")
 	}
 	if err := settingsStore.Remove("ext", "a"); err != nil {
 		t.Fatalf("settings Remove: %v", err)
@@ -882,6 +951,13 @@ func TestExtensionRuntimeFileAPIs(t *testing.T) {
 		t.Fatal("expected sandbox escape error")
 	}
 	AddAllowedDownloadDir(dir)
+	AddAllowedDownloadDir(filepath.Clean(dir))
+	allowedDownloadDirsMu.RLock()
+	allowedDirCount := len(allowedDownloadDirs)
+	allowedDownloadDirsMu.RUnlock()
+	if allowedDirCount != 1 {
+		t.Fatalf("duplicate allowed directories retained: %d", allowedDirCount)
+	}
 	absolutePath := filepath.Join(dir, "allowed.txt")
 	if got, err := runtime.validatePath(absolutePath); err != nil || got != absolutePath {
 		t.Fatalf("absolute validatePath = %q/%v", got, err)
@@ -1022,6 +1098,12 @@ func TestExtensionRuntimeUtilityAPIs(t *testing.T) {
 	if key["success"] != true || key["key"] == "" || key["hex"] == "" {
 		t.Fatalf("cryptoGenerateKey = %#v", key)
 	}
+	for _, invalidLength := range []float64{-1, 0, 1.5, 4097} {
+		invalidKey := runtime.cryptoGenerateKey(goja.FunctionCall{Arguments: []goja.Value{vm.ToValue(invalidLength)}}).Export().(map[string]any)
+		if invalidKey["success"] != false {
+			t.Fatalf("cryptoGenerateKey(%v) should fail: %#v", invalidLength, invalidKey)
+		}
+	}
 	if runtime.randomUserAgent(goja.FunctionCall{}).String() == "" || runtime.appUserAgent(goja.FunctionCall{}).String() == "" {
 		t.Fatal("expected user agents")
 	}
@@ -1063,13 +1145,16 @@ func TestExtensionRuntimeUtilityAPIs(t *testing.T) {
 	if msg := runtime.formatLogArgs([]goja.Value{vm.ToValue("a"), vm.ToValue(1)}); msg != "a 1" {
 		t.Fatalf("formatLogArgs = %q", msg)
 	}
+	objectLog := runtime.formatLogArgs([]goja.Value{
+		vm.ToValue(map[string]any{"access_token": "must-not-be-exported"}),
+	})
+	if strings.Contains(objectLog, "must-not-be-exported") || !strings.HasPrefix(objectLog, "<") {
+		t.Fatalf("object log was not summarized: %q", objectLog)
+	}
 	runtime.logDebug(goja.FunctionCall{Arguments: []goja.Value{vm.ToValue("debug")}})
 	runtime.logInfo(goja.FunctionCall{Arguments: []goja.Value{vm.ToValue("info")}})
 	runtime.logWarn(goja.FunctionCall{Arguments: []goja.Value{vm.ToValue("warn")}})
 	runtime.logError(goja.FunctionCall{Arguments: []goja.Value{vm.ToValue("error")}})
-	if clean := runtime.sanitizeFilenameWrapper(goja.FunctionCall{Arguments: []goja.Value{vm.ToValue("A/B?")}}).String(); strings.ContainsAny(clean, "/?") {
-		t.Fatalf("sanitize wrapper = %q", clean)
-	}
 }
 
 func TestClassifySignedSessionExpiredAsVerification(t *testing.T) {

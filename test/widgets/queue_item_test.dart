@@ -30,6 +30,9 @@ class _FakeBridge extends BackendBridge {
   // Required: override initExtensionSystem and loadExtensionsFromDir
   // to avoid MethodChannel calls during test.
   @override
+  Future<void> setExtensionStorageMasterKey(String masterKey) async {}
+
+  @override
   Future<void> initExtensionSystem(String extDir, String dataDir) async {}
 
   @override
