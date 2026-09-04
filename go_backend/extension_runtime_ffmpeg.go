@@ -2,7 +2,7 @@ package gobackend
 
 import (
 	"fmt"
-	"strings"
+	"regexp"
 	"sync"
 	"time"
 
@@ -12,20 +12,30 @@ import (
 // FFmpegCommand holds a pending FFmpeg command for Flutter to execute.
 type FFmpegCommand struct {
 	ExtensionID string
-	Command     string
+	Arguments   []string
 	InputPath   string
 	OutputPath  string
 	Completed   bool
+	Claimed     bool
 	Success     bool
 	Error       string
 	Output      string
+	done        chan struct{}
 }
 
 var (
-	ffmpegCommands   = make(map[string]*FFmpegCommand)
-	ffmpegCommandsMu sync.RWMutex
-	ffmpegCommandID  int64
+	ffmpegCommands      = make(map[string]*FFmpegCommand)
+	ffmpegCommandsMu    sync.RWMutex
+	ffmpegCommandID     int64
+	ffmpegCommandQueued = make(chan struct{}, 1)
 )
+
+func notifyFFmpegCommandQueued() {
+	select {
+	case ffmpegCommandQueued <- struct{}{}:
+	default:
+	}
+}
 
 func GetPendingFFmpegCommand(commandID string) *FFmpegCommand {
 	ffmpegCommandsMu.RLock()
@@ -37,10 +47,16 @@ func SetFFmpegCommandResult(commandID string, success bool, output, errorMsg str
 	ffmpegCommandsMu.Lock()
 	defer ffmpegCommandsMu.Unlock()
 	if cmd, exists := ffmpegCommands[commandID]; exists {
+		if cmd.Completed {
+			return
+		}
 		cmd.Completed = true
 		cmd.Success = success
 		cmd.Output = output
 		cmd.Error = errorMsg
+		if cmd.done != nil {
+			close(cmd.done)
+		}
 	}
 }
 
@@ -51,62 +67,63 @@ func ClearFFmpegCommand(commandID string) {
 }
 
 func (r *extensionRuntime) ffmpegExecute(call goja.FunctionCall) goja.Value {
-	if r.manifest == nil || !r.manifest.Permissions.File || !r.manifest.HasCapability("rawFfmpeg") {
-		return r.jsError("raw FFmpeg execution permission denied")
-	}
-	if len(call.Arguments) < 1 {
-		return r.jsError("command is required")
-	}
-
-	return r.executeFFmpegCommand(call.Arguments[0].String(), "", "")
+	// A raw command can introduce additional file inputs and network protocols,
+	// bypassing both validatePath and the extension network allow-list. Keep the
+	// API stub for compatibility, but never forward an unstructured command to
+	// the native FFmpeg process.
+	return r.jsError("raw FFmpeg execution is disabled; use ffmpeg.convert")
 }
 
-func (r *extensionRuntime) executeFFmpegCommand(command, inputPath, outputPath string) goja.Value {
+func (r *extensionRuntime) executeFFmpegCommand(arguments []string, inputPath, outputPath string) goja.Value {
 
 	ffmpegCommandsMu.Lock()
 	ffmpegCommandID++
 	cmdID := fmt.Sprintf("%s_%d", r.extensionID, ffmpegCommandID)
-	ffmpegCommands[cmdID] = &FFmpegCommand{
+	queuedCommand := &FFmpegCommand{
 		ExtensionID: r.extensionID,
-		Command:     command,
+		Arguments:   append([]string(nil), arguments...),
 		InputPath:   inputPath,
 		OutputPath:  outputPath,
 		Completed:   false,
+		done:        make(chan struct{}),
 	}
+	ffmpegCommands[cmdID] = queuedCommand
 	ffmpegCommandsMu.Unlock()
+	notifyFFmpegCommandQueued()
 
 	GoLog("[Extension:%s] FFmpeg command queued: %s\n", r.extensionID, cmdID)
 
-	timeout := 5 * time.Minute
-	start := time.Now()
-	for {
-		ffmpegCommandsMu.RLock()
-		cmd := ffmpegCommands[cmdID]
-		completed := cmd != nil && cmd.Completed
-		ffmpegCommandsMu.RUnlock()
-
-		if completed {
-			ffmpegCommandsMu.RLock()
-			result := map[string]any{
-				"success": cmd.Success,
-				"output":  cmd.Output,
-			}
-			if cmd.Error != "" {
-				result["error"] = cmd.Error
-			}
-			ffmpegCommandsMu.RUnlock()
-
-			ClearFFmpegCommand(cmdID)
-			return r.vm.ToValue(result)
+	select {
+	case <-queuedCommand.done:
+		ffmpegCommandsMu.Lock()
+		result := map[string]any{
+			"success": queuedCommand.Success,
+			"output":  queuedCommand.Output,
 		}
-
-		if time.Since(start) > timeout {
-			ClearFFmpegCommand(cmdID)
-			return r.jsError("FFmpeg command timed out")
+		if queuedCommand.Error != "" {
+			result["error"] = queuedCommand.Error
 		}
-
-		time.Sleep(100 * time.Millisecond)
+		delete(ffmpegCommands, cmdID)
+		ffmpegCommandsMu.Unlock()
+		return r.vm.ToValue(result)
+	case <-time.After(5 * time.Minute):
+		ClearFFmpegCommand(cmdID)
+		return r.jsError("FFmpeg command timed out")
 	}
+}
+
+var ffmpegBitratePattern = regexp.MustCompile(`^[1-9][0-9]{0,7}[kKmM]?$`)
+
+var allowedFFmpegAudioCodecs = map[string]struct{}{
+	"aac":        {},
+	"alac":       {},
+	"copy":       {},
+	"flac":       {},
+	"libmp3lame": {},
+	"libopus":    {},
+	"opus":       {},
+	"pcm_s16le":  {},
+	"pcm_s24le":  {},
 }
 
 func (r *extensionRuntime) ffmpegGetInfo(call goja.FunctionCall) goja.Value {
@@ -160,28 +177,37 @@ func (r *extensionRuntime) ffmpegConvert(call goja.FunctionCall) goja.Value {
 		}
 	}
 
-	var cmdParts []string
-	cmdParts = append(cmdParts, "-i", fmt.Sprintf("%q", inputPath))
+	arguments := []string{"-hide_banner", "-nostdin", "-i", inputPath}
 
 	if codec, ok := options["codec"].(string); ok {
-		cmdParts = append(cmdParts, "-c:a", codec)
+		if _, allowed := allowedFFmpegAudioCodecs[codec]; !allowed {
+			return r.jsError("unsupported audio codec")
+		}
+		arguments = append(arguments, "-c:a", codec)
 	}
 
 	if bitrate, ok := options["bitrate"].(string); ok {
-		cmdParts = append(cmdParts, "-b:a", bitrate)
+		if !ffmpegBitratePattern.MatchString(bitrate) {
+			return r.jsError("invalid audio bitrate")
+		}
+		arguments = append(arguments, "-b:a", bitrate)
 	}
 
 	if sampleRate, ok := options["sample_rate"].(float64); ok {
-		cmdParts = append(cmdParts, "-ar", fmt.Sprintf("%d", int(sampleRate)))
+		if sampleRate < 8_000 || sampleRate > 768_000 || sampleRate != float64(int(sampleRate)) {
+			return r.jsError("invalid sample rate")
+		}
+		arguments = append(arguments, "-ar", fmt.Sprintf("%d", int(sampleRate)))
 	}
 
 	if channels, ok := options["channels"].(float64); ok {
-		cmdParts = append(cmdParts, "-ac", fmt.Sprintf("%d", int(channels)))
+		if channels < 1 || channels > 32 || channels != float64(int(channels)) {
+			return r.jsError("invalid channel count")
+		}
+		arguments = append(arguments, "-ac", fmt.Sprintf("%d", int(channels)))
 	}
 
-	cmdParts = append(cmdParts, "-y", fmt.Sprintf("%q", outputPath))
+	arguments = append(arguments, "-y", outputPath)
 
-	command := strings.Join(cmdParts, " ")
-
-	return r.executeFFmpegCommand(command, inputPath, outputPath)
+	return r.executeFFmpegCommand(arguments, inputPath, outputPath)
 }

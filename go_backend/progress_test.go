@@ -3,7 +3,81 @@ package gobackend
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
+
+func TestWaitForMultiProgressDeltaWakesOnRevision(t *testing.T) {
+	ClearAllItemProgress()
+	defer ClearAllItemProgress()
+
+	multiMu.RLock()
+	since := multiProgressSeq
+	multiMu.RUnlock()
+	result := make(chan string, 1)
+	go func() {
+		result <- WaitForMultiProgressDelta(since, 1_000)
+	}()
+	time.Sleep(10 * time.Millisecond)
+	StartItemProgress("wait-progress")
+	select {
+	case payload := <-result:
+		if payload == "" {
+			t.Fatal("waiter woke without a progress delta")
+		}
+		var delta MultiProgressDelta
+		if err := json.Unmarshal([]byte(payload), &delta); err != nil {
+			t.Fatalf("decode delta: %v", err)
+		}
+		if delta.Items["wait-progress"] == nil {
+			t.Fatalf("delta missing item: %#v", delta)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("progress waiter did not wake")
+	}
+}
+
+func TestWaitForMultiProgressDeltaHeartbeatTimeout(t *testing.T) {
+	ClearAllItemProgress()
+	defer ClearAllItemProgress()
+	multiMu.RLock()
+	since := multiProgressSeq
+	multiMu.RUnlock()
+	startedAt := time.Now()
+	if payload := WaitForMultiProgressDelta(since, 20); payload != "" {
+		t.Fatalf("timeout payload = %q, want empty", payload)
+	}
+	if elapsed := time.Since(startedAt); elapsed < 15*time.Millisecond {
+		t.Fatalf("wait returned too early after %v", elapsed)
+	}
+}
+
+func TestItemTransferProgressReporterCoalescesHotPathUpdates(t *testing.T) {
+	ClearAllItemProgress()
+	defer ClearAllItemProgress()
+
+	const itemID = "coalesced-transfer-progress"
+	const total = int64(1024 * 1024)
+	StartItemProgress(itemID)
+	SetItemDownloading(itemID)
+	SetItemBytesTotal(itemID, total)
+	reporter := NewItemTransferProgressReporter(itemID, 0, total)
+
+	reporter.Report(64*1024, total)
+	if received := multiProgress.Items[itemID].BytesReceived; received != 0 {
+		t.Fatalf("sub-threshold bytes = %d, want 0", received)
+	}
+
+	reporter.Report(progressUpdateThreshold, total)
+	if received := multiProgress.Items[itemID].BytesReceived; received != progressUpdateThreshold {
+		t.Fatalf("threshold bytes = %d, want %d", received, progressUpdateThreshold)
+	}
+
+	reporter.lastReportAt = time.Now().Add(-progressUpdateMaxInterval)
+	reporter.Report(progressUpdateThreshold+1, total)
+	if received := multiProgress.Items[itemID].BytesReceived; received != progressUpdateThreshold+1 {
+		t.Fatalf("interval flush bytes = %d, want %d", received, progressUpdateThreshold+1)
+	}
+}
 
 func TestItemProgressPreparingAndDownloadingStatuses(t *testing.T) {
 	const itemID = "progress-phase-item"

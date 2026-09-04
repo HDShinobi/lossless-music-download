@@ -402,7 +402,7 @@ func CheckDuplicate(outputDir, isrc string) (string, error) {
 // minAppVersion, makes the engine reject every upstream extension. So we report
 // the vendored SpotiFLAC baseline to the engine, not the fork version. The fork
 // version is still what users see and what in-app auto-update compares.
-const spotiflacBaselineVersion = "4.8.5"
+const spotiflacBaselineVersion = "4.9.5"
 
 // SetAppVersion is called at startup with the fork's versionName, but reports
 // the vendored SpotiFLAC baseline (see spotiflacBaselineVersion) to the engine

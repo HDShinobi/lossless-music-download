@@ -10,10 +10,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	goruntime "runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -434,6 +436,68 @@ func TestParallelSignedSessionPreflightSharesOneBootstrap(t *testing.T) {
 	}
 	if got := calls.Load(); got != 1 {
 		t.Fatalf("parallel preflight bootstrap calls = %d, want 1", got)
+	}
+}
+
+func TestParallelSignedSessionPreflightSharesBootstrapFailure(t *testing.T) {
+	var calls atomic.Int32
+	requestStarted := make(chan struct{})
+	releaseRequest := make(chan struct{})
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if calls.Add(1) == 1 {
+			close(requestStarted)
+		}
+		<-releaseRequest
+		return &http.Response{
+			StatusCode: http.StatusServiceUnavailable,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"error":"busy"}`)),
+			Request:    req,
+		}, nil
+	})
+
+	root := t.TempDir()
+	config := &SignedSessionConfig{
+		Namespace: "shared-failed-session",
+		BaseURL:   "https://auth.example.com",
+	}
+	newRuntime := func(extensionID string) *extensionRuntime {
+		return &extensionRuntime{
+			extensionID: extensionID,
+			manifest: &ExtensionManifest{
+				Name:          extensionID,
+				SignedSession: config,
+			},
+			dataDir:    filepath.Join(root, extensionID),
+			vm:         goja.New(),
+			httpClient: &http.Client{Transport: transport},
+		}
+	}
+
+	const workers = 12
+	errors := make(chan error, workers)
+	for worker := range workers {
+		go func(worker int) {
+			_, err := newRuntime(fmt.Sprintf("failed-provider-%d", worker)).preflightSignedSession()
+			errors <- err
+		}(worker)
+	}
+	select {
+	case <-requestStarted:
+	case <-time.After(time.Second):
+		t.Fatal("bootstrap request did not start")
+	}
+	// Give every parallel caller time to join the in-flight generation. The
+	// request remains blocked, so no caller can observe a completed operation.
+	time.Sleep(50 * time.Millisecond)
+	close(releaseRequest)
+	for range workers {
+		if err := <-errors; err == nil || !strings.Contains(err.Error(), "HTTP 503") {
+			t.Fatalf("unexpected coalesced bootstrap error: %v", err)
+		}
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("parallel failed bootstrap calls = %d, want 1", got)
 	}
 }
 
@@ -918,7 +982,8 @@ func TestSignedSessionFetchUnauthenticatedTriggersVerification(t *testing.T) {
 	if result["needsVerification"] != true {
 		t.Fatalf("expected needsVerification=true, got %+v", result)
 	}
-	if result["auth_url"] != "https://auth.example.com/login?state=abc" {
+	authURL, err := url.Parse(result["auth_url"].(string))
+	if err != nil || authURL.Scheme != "https" || authURL.Host != "auth.example.com" || authURL.Path != "/login" || authURL.Query().Get("state") == "" {
 		t.Fatalf("unexpected auth_url: %+v", result)
 	}
 }
@@ -1158,7 +1223,8 @@ func TestSignedSessionFetchCanonicalVerifyDoesNotClearSession(t *testing.T) {
 		runtime.vm.ToValue("/tracks/search"),
 	}}
 	result := runtime.signedSessionFetch(call).Export().(map[string]any)
-	if result["needsVerification"] != true || result["auth_url"] != "https://auth.example.com/verify" {
+	authURL, err := url.Parse(result["auth_url"].(string))
+	if result["needsVerification"] != true || err != nil || authURL.Path != "/verify" || authURL.Query().Get("state") == "" {
 		t.Fatalf("canonical VERIFY_REQUIRED did not open verification: %+v", result)
 	}
 	if calls != 2 {
@@ -1442,7 +1508,10 @@ func TestSignedSessionFetchProviderContractsNeverClearSession(t *testing.T) {
 		previousWait := signedSessionProviderWait
 		previousNow := signedSessionRequestNow
 		var waits []time.Duration
-		signedSessionProviderWait = func(_ context.Context, delay time.Duration) error {
+		signedSessionProviderWait = func(ctx context.Context, delay time.Duration) error {
+			if err := ctx.Err(); err != nil {
+				return fmt.Errorf("retry context was already done after the response closed: %w", err)
+			}
 			waits = append(waits, delay)
 			return nil
 		}
@@ -1484,6 +1553,10 @@ func TestSignedSessionFetchProviderContractsNeverClearSession(t *testing.T) {
 			}, nil
 		})
 		runtime := newSignedSessionTestRuntime(t, "provider-unavailable", transport)
+		// Production extension API clients have a finite timeout. net/http
+		// cancels that per-request context after the response body is closed;
+		// provider retry waits must outlive the completed request.
+		runtime.httpClient.Timeout = 15 * time.Second
 		config := SignedSessionConfig{Namespace: "provider-unavailable", BaseURL: "https://auth.example.com"}
 		runtime.manifest.SignedSession = &config
 		resolved := saveUsableSignedSession(t, runtime, config, "sess-provider-retry")
@@ -1522,6 +1595,49 @@ func TestSignedSessionFetchProviderContractsNeverClearSession(t *testing.T) {
 		}
 		if reloaded.SessionID != "sess-provider-retry" {
 			t.Fatalf("provider retry changed the gateway session: %+v", reloaded)
+		}
+	})
+
+	t.Run("temporary provider retry still honors user cancellation", func(t *testing.T) {
+		previousWait := signedSessionProviderWait
+		const itemID = "provider-retry-user-cancel"
+		signedSessionProviderWait = func(ctx context.Context, _ time.Duration) error {
+			cancelDownload(itemID)
+			return sleepRetry(ctx, time.Hour)
+		}
+		t.Cleanup(func() { signedSessionProviderWait = previousWait })
+
+		calls := 0
+		transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			calls++
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Header:     http.Header{"Retry-After": []string{"10"}},
+				Body: io.NopCloser(strings.NewReader(
+					`{"error":"Provider temporarily unavailable","code":"PROVIDER_UNAVAILABLE","origin":"provider","retryable":true,"retry_mode":"same_operation","retry_after_seconds":10}`,
+				)),
+				Request: req,
+			}, nil
+		})
+		runtime := newSignedSessionTestRuntime(t, "provider-retry-user-cancel", transport)
+		runtime.httpClient.Timeout = 15 * time.Second
+		runtime.setActiveDownloadItemID(itemID)
+		initDownloadCancel(itemID)
+		t.Cleanup(func() {
+			clearDownloadCancel(itemID)
+			runtime.clearActiveDownloadItemID()
+		})
+		config := SignedSessionConfig{Namespace: runtime.extensionID, BaseURL: "https://auth.example.com"}
+		runtime.manifest.SignedSession = &config
+		saveUsableSignedSession(t, runtime, config, "sess-provider-cancel")
+
+		call := goja.FunctionCall{Arguments: []goja.Value{
+			runtime.vm.ToValue("POST"),
+			runtime.vm.ToValue("/tickets"),
+		}}
+		result := runtime.signedSessionFetch(call).Export().(map[string]any)
+		if calls != 1 || !strings.Contains(fmt.Sprint(result["error"]), context.Canceled.Error()) {
+			t.Fatalf("user cancellation did not stop provider retry: calls=%d result=%+v", calls, result)
 		}
 	})
 
@@ -1725,12 +1841,13 @@ func TestExchangeSignedSessionGrant(t *testing.T) {
 		pendingSignedSessionGrantsMu.Lock()
 		pendingSignedSessionGrants = make(map[string]string)
 		pendingSignedSessionGrantsMu.Unlock()
-		previousWait := signedSessionRetryWait
+		previousWait := signedSessionRetryWaitContext
 		var waits []time.Duration
-		signedSessionRetryWait = func(delay time.Duration) {
+		signedSessionRetryWaitContext = func(_ context.Context, delay time.Duration) error {
 			waits = append(waits, delay)
+			return nil
 		}
-		t.Cleanup(func() { signedSessionRetryWait = previousWait })
+		t.Cleanup(func() { signedSessionRetryWaitContext = previousWait })
 
 		calls := 0
 		transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -1784,9 +1901,11 @@ func TestExchangeSignedSessionGrant(t *testing.T) {
 		pendingSignedSessionGrantsMu.Lock()
 		pendingSignedSessionGrants = make(map[string]string)
 		pendingSignedSessionGrantsMu.Unlock()
-		previousWait := signedSessionRetryWait
-		signedSessionRetryWait = func(time.Duration) {}
-		t.Cleanup(func() { signedSessionRetryWait = previousWait })
+		previousWait := signedSessionRetryWaitContext
+		signedSessionRetryWaitContext = func(context.Context, time.Duration) error {
+			return nil
+		}
+		t.Cleanup(func() { signedSessionRetryWaitContext = previousWait })
 
 		calls := 0
 		transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -1902,6 +2021,160 @@ func TestRefreshSignedSession(t *testing.T) {
 	})
 }
 
+func TestRefreshSignedSessionCoalescesWithoutHoldingCoordinatorMutex(t *testing.T) {
+	var calls int32
+	requestStarted := make(chan struct{})
+	releaseRequest := make(chan struct{})
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if atomic.AddInt32(&calls, 1) == 1 {
+			close(requestStarted)
+		}
+		<-releaseRequest
+		payload := signedSessionExchangeResponse{
+			SessionSecret: "rotated-secret",
+			ExpiresAt:     time.Now().Add(2 * time.Hour).UTC().Format(time.RFC3339),
+		}
+		body, _ := json.Marshal(payload)
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(string(body))),
+			Request:    req,
+		}, nil
+	})
+	runtime := newSignedSessionTestRuntime(t, "refresh-coalesced", transport)
+	config := signedSessionConfigWithDefaults(&SignedSessionConfig{
+		Namespace: "refresh-coalesced",
+		BaseURL:   "https://auth.example.com",
+		Endpoints: SignedSessionEndpoints{Refresh: "/session/refresh"},
+	})
+	record, err := runtime.loadSignedSession(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.SessionID = "session-1"
+	record.SessionSecret = "old-secret"
+	record.ExpiresAt = time.Now().Add(time.Minute).UTC().Format(time.RFC3339)
+	if err := runtime.saveSignedSession(config, record); err != nil {
+		t.Fatal(err)
+	}
+	coordinator, err := runtime.signedSessionCoordinator(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const workers = 12
+	results := make(chan *signedSessionRecord, workers)
+	errors := make(chan error, workers)
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for range workers {
+		go func() {
+			defer wg.Done()
+			refreshed, refreshErr := runtime.refreshSignedSessionCoalesced(config, coordinator)
+			results <- refreshed
+			errors <- refreshErr
+		}()
+	}
+	select {
+	case <-requestStarted:
+	case <-time.After(time.Second):
+		t.Fatal("refresh request did not start")
+	}
+
+	mutexAvailable := make(chan struct{})
+	go func() {
+		coordinator.mu.Lock()
+		coordinator.mu.Unlock()
+		close(mutexAvailable)
+	}()
+	select {
+	case <-mutexAvailable:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("coordinator mutex was held during refresh HTTP")
+	}
+
+	close(releaseRequest)
+	wg.Wait()
+	close(results)
+	close(errors)
+	for refreshErr := range errors {
+		if refreshErr != nil {
+			t.Fatalf("coalesced refresh failed: %v", refreshErr)
+		}
+	}
+	for refreshed := range results {
+		if refreshed == nil || refreshed.SessionSecret != "rotated-secret" {
+			t.Fatalf("unexpected refreshed record: %+v", refreshed)
+		}
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("refresh requests = %d, want 1", got)
+	}
+}
+
+func TestRefreshSignedSessionSharesFailureWithWaiters(t *testing.T) {
+	var calls atomic.Int32
+	requestStarted := make(chan struct{})
+	releaseRequest := make(chan struct{})
+	transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		if calls.Add(1) == 1 {
+			close(requestStarted)
+		}
+		<-releaseRequest
+		return &http.Response{
+			StatusCode: http.StatusServiceUnavailable,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{}`)),
+			Request:    req,
+		}, nil
+	})
+	runtime := newSignedSessionTestRuntime(t, "refresh-failure-coalesced", transport)
+	config := signedSessionConfigWithDefaults(&SignedSessionConfig{
+		Namespace: "refresh-failure-coalesced",
+		BaseURL:   "https://auth.example.com",
+		Endpoints: SignedSessionEndpoints{Refresh: "/session/refresh"},
+	})
+	record, err := runtime.loadSignedSession(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.SessionID = "session-1"
+	record.SessionSecret = "old-secret"
+	record.ExpiresAt = time.Now().Add(time.Minute).UTC().Format(time.RFC3339)
+	if err := runtime.saveSignedSession(config, record); err != nil {
+		t.Fatal(err)
+	}
+	coordinator, err := runtime.signedSessionCoordinator(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const workers = 12
+	errors := make(chan error, workers)
+	for range workers {
+		go func() {
+			_, refreshErr := runtime.refreshSignedSessionCoalesced(config, coordinator)
+			errors <- refreshErr
+		}()
+	}
+	select {
+	case <-requestStarted:
+	case <-time.After(time.Second):
+		t.Fatal("refresh request did not start")
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(releaseRequest)
+	for range workers {
+		if refreshErr := <-errors; refreshErr == nil || !strings.Contains(refreshErr.Error(), "HTTP 503") {
+			t.Fatalf("unexpected coalesced refresh error: %v", refreshErr)
+		}
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("parallel failed refresh calls = %d, want 1", got)
+	}
+}
+
 func TestSignedSessionCompleteGrant(t *testing.T) {
 	t.Run("uses the grant argument when provided", func(t *testing.T) {
 		transport := roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -1959,7 +2232,7 @@ func TestBuildSignedSessionChallengeURL(t *testing.T) {
 	})
 	runtime := newSignedSessionTestRuntime(t, "tidal-ext", nil)
 
-	got := runtime.buildSignedSessionChallengeURL(config, "chal-123")
+	got := runtime.buildSignedSessionChallengeURL(config, "chal-123", "state-123")
 
 	if !strings.HasPrefix(got, "https://auth.example.com/challenge?") {
 		t.Fatalf("unexpected base URL: %q", got)

@@ -39,8 +39,9 @@ type extCallOpts struct {
 	perfName  string
 	invoke    func(vm *goja.Runtime) (goja.Value, error)
 	timeout   time.Duration
-	itemID    string // optional: binds download-cancel + active-item tracking
-	requestID string // optional: binds request-cancel via context (customSearch only)
+	itemID    string          // optional: binds download-cancel + active-item tracking
+	requestID string          // optional: binds request-cancel via context (customSearch only)
+	context   context.Context // optional: caller lifecycle for non-download work
 	// beforeRun runs after lock+cancel setup, right before the invocation. Its
 	// returned cleanup, if any, runs after the call.
 	beforeRun func() func()
@@ -58,6 +59,10 @@ type extCallOpts struct {
 // any ProviderID stamping.
 func callExtension[T any](p *extensionProviderWrapper, opts extCallOpts, parse func(perf *extensionCallPerf, result goja.Value) (T, error)) (T, error) {
 	var zero T
+	ctx := opts.context
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	perf := newExtensionCallPerf(p.extension.ID, opts.perfName)
 	defer perf.finish()
@@ -73,14 +78,13 @@ func callExtension[T any](p *extensionProviderWrapper, opts extCallOpts, parse f
 			p.extension.runtime.setActiveDownloadItemID(opts.itemID)
 			defer p.extension.runtime.clearActiveDownloadItemID()
 		}
-		initDownloadCancel(opts.itemID)
+		ctx = initDownloadCancel(opts.itemID)
 		defer clearDownloadCancel(opts.itemID)
 		if isDownloadCancelled(opts.itemID) {
 			return zero, ErrDownloadCancelled
 		}
 	}
 
-	ctx := context.Background()
 	if opts.requestID != "" {
 		if p.extension.runtime != nil {
 			p.extension.runtime.setActiveRequestID(opts.requestID)
@@ -107,7 +111,7 @@ func callExtension[T any](p *extensionProviderWrapper, opts extCallOpts, parse f
 	perf.recordPayload(result)
 	if err != nil {
 		if IsRuntimeUnsafeError(err) {
-			quarantineRuntimeLocked(p.extension, p.vm)
+			quarantineRuntimeLocked(p.extension, p.vm, err)
 		}
 		if opts.requestID != "" && isExtensionRequestCancelled(opts.requestID) {
 			return zero, ErrExtensionRequestCancelled
@@ -259,8 +263,10 @@ func extensionTrackInput(track *ExtTrackMetadata) map[string]any {
 		"copyright":      track.Copyright,
 		"genre":          track.Genre,
 		"composer":       track.Composer,
+		"comment":        track.Comment,
 		"audio_quality":  track.AudioQuality,
 		"audio_modes":    track.AudioModes,
+		"upc":            track.UPC,
 	}
 }
 
@@ -454,12 +460,13 @@ func (p *extensionProviderWrapper) EnrichTrackForItemID(track *ExtTrackMetadata,
 	}
 	perf.recordInit(time.Since(initStartedAt))
 	defer p.extension.VMMu.Unlock()
+	downloadCtx := context.Background()
 	if itemID != "" {
 		if p.extension.runtime != nil {
 			p.extension.runtime.setActiveDownloadItemID(itemID)
 			defer p.extension.runtime.clearActiveDownloadItemID()
 		}
-		initDownloadCancel(itemID)
+		downloadCtx = initDownloadCancel(itemID)
 		defer clearDownloadCancel(itemID)
 		if isDownloadCancelled(itemID) {
 			return track, ErrDownloadCancelled
@@ -467,14 +474,14 @@ func (p *extensionProviderWrapper) EnrichTrackForItemID(track *ExtTrackMetadata,
 	}
 
 	jsStartedAt := time.Now()
-	result, err := runGojaCallWithTimeoutAndRecover(p.vm, func() (goja.Value, error) {
+	result, err := runGojaCallWithTimeoutContextAndRecover(downloadCtx, p.vm, func() (goja.Value, error) {
 		return invokeExtensionMethod(p.vm, "enrichTrack", extensionTrackInput(track))
 	}, DefaultJSTimeout)
 	perf.recordJS(time.Since(jsStartedAt))
 	perf.recordPayload(result)
 	if err != nil {
 		if IsRuntimeUnsafeError(err) {
-			quarantineRuntimeLocked(p.extension, p.vm)
+			quarantineRuntimeLocked(p.extension, p.vm, err)
 		}
 		if isDownloadCancelled(itemID) {
 			return track, ErrDownloadCancelled
@@ -503,7 +510,7 @@ func (p *extensionProviderWrapper) EnrichTrackForItemID(track *ExtTrackMetadata,
 	return &enrichedTrack, nil
 }
 
-func (p *extensionProviderWrapper) CheckAvailabilityForItemID(isrc, trackName, artistName, spotifyID, deezerID, tidalID, qobuzID string, durationMS int, itemID string) (*ExtAvailabilityResult, error) {
+func (p *extensionProviderWrapper) CheckAvailabilityForItemID(isrc, trackName, artistName, spotifyID, deezerID, tidalID, qobuzID string, durationMS int, itemID string, trackContexts ...map[string]any) (*ExtAvailabilityResult, error) {
 	if !p.extension.Manifest.IsDownloadProvider() {
 		return nil, fmt.Errorf("extension '%s' is not a download provider", p.extension.ID)
 	}
@@ -517,6 +524,9 @@ func (p *extensionProviderWrapper) CheckAvailabilityForItemID(isrc, trackName, a
 		"tidal_id":    tidalID,
 		"qobuz_id":    qobuzID,
 		"duration_ms": durationMS,
+	}
+	if len(trackContexts) > 0 && len(trackContexts[0]) > 0 {
+		availabilityOptions["track"] = trackContexts[0]
 	}
 
 	return callExtension(p, extCallOpts{
@@ -563,6 +573,25 @@ const ExtDownloadTimeout = DownloadTimeout
 // an isolated VM/runtime (not p.vm/p.extension.VMMu) with a progress
 // callback, which the helper's lock+perf model doesn't cover.
 func (p *extensionProviderWrapper) Download(trackID, quality, outputPath, itemID string, onProgress func(percent int)) (*ExtDownloadResult, error) {
+	return p.DownloadPrepared(
+		trackID,
+		quality,
+		outputPath,
+		itemID,
+		nil,
+		onProgress,
+	)
+}
+
+// DownloadPrepared passes the opaque context returned by checkAvailability to
+// the isolated download runtime. Existing extensions remain compatible because
+// JavaScript ignores the additional options argument; extensions that opt in
+// can reuse already-resolved metadata or stream preparation.
+func (p *extensionProviderWrapper) DownloadPrepared(
+	trackID, quality, outputPath, itemID string,
+	preparedContext map[string]any,
+	onProgress func(percent int),
+) (*ExtDownloadResult, error) {
 	if !p.extension.Manifest.IsDownloadProvider() {
 		return nil, fmt.Errorf("extension '%s' is not a download provider", p.extension.ID)
 	}
@@ -584,15 +613,24 @@ func (p *extensionProviderWrapper) Download(trackID, quality, outputPath, itemID
 	}
 	vmHealthy := false
 	cleanupSafe := true
+	var unsafeDone <-chan struct{}
 	defer func() {
-		releaseIsolatedExtensionRuntime(p.extension, vm, runtime, vmHealthy, cleanupSafe)
+		releaseIsolatedExtensionRuntime(
+			p.extension,
+			vm,
+			runtime,
+			vmHealthy,
+			cleanupSafe,
+			unsafeDone,
+		)
 	}()
 	if runtime != nil {
 		runtime.setActiveDownloadItemID(itemID)
 		defer runtime.clearActiveDownloadItemID()
 	}
+	downloadCtx := context.Background()
 	if itemID != "" {
-		initDownloadCancel(itemID)
+		downloadCtx = initDownloadCancel(itemID)
 		defer clearDownloadCancel(itemID)
 		SetItemPreparing(itemID)
 	}
@@ -620,14 +658,30 @@ func (p *extensionProviderWrapper) Download(trackID, quality, outputPath, itemID
 	}
 
 	jsStartedAt := time.Now()
-	result, err := runGojaCallWithTimeoutAndRecover(vm, func() (goja.Value, error) {
-		return invokeExtensionMethod(vm, "download", trackID, quality, outputPath, progressCallback)
+	downloadOptions := map[string]any{}
+	if len(preparedContext) > 0 {
+		downloadOptions["preparedContext"] = preparedContext
+	}
+	result, err := runGojaCallWithTimeoutContextAndRecover(downloadCtx, vm, func() (goja.Value, error) {
+		return invokeExtensionMethod(
+			vm,
+			"download",
+			trackID,
+			quality,
+			outputPath,
+			progressCallback,
+			downloadOptions,
+		)
 	}, ExtDownloadTimeout)
 	perf.recordJS(time.Since(jsStartedAt))
 	perf.recordPayload(result)
 	vmHealthy = err == nil
 	cleanupSafe = !IsRuntimeUnsafeError(err)
+	unsafeDone = runtimeCompletion(err)
 	if err != nil {
+		if itemID != "" && isDownloadCancelled(itemID) {
+			return nil, ErrDownloadCancelled
+		}
 		errMsg := err.Error()
 		errType := "script_error"
 		if IsTimeoutError(err) {
@@ -724,7 +778,11 @@ func (p *extensionProviderWrapper) customSearch(query string, options map[string
 }
 
 type ExtURLHandleResult struct {
-	Type        string             `json:"type"`
+	Type string `json:"type"`
+	// ID identifies the handled resource itself (e.g. a playlist ID). Track,
+	// album, and artist results already carry their own ID inside their
+	// nested metadata; this covers result types with no such nested object.
+	ID          string             `json:"id,omitempty"`
 	Track       *ExtTrackMetadata  `json:"track,omitempty"`
 	Tracks      []ExtTrackMetadata `json:"tracks,omitempty"`
 	Album       *ExtAlbumMetadata  `json:"album,omitempty"`
@@ -905,6 +963,10 @@ type ExtLyricsLine struct {
 }
 
 func (p *extensionProviderWrapper) FetchLyrics(trackName, artistName, albumName string, durationSec float64) (*LyricsResponse, error) {
+	return p.FetchLyricsContext(context.Background(), trackName, artistName, albumName, durationSec)
+}
+
+func (p *extensionProviderWrapper) FetchLyricsContext(ctx context.Context, trackName, artistName, albumName string, durationSec float64) (*LyricsResponse, error) {
 	if !p.extension.Manifest.IsLyricsProvider() {
 		return nil, fmt.Errorf("extension '%s' is not a lyrics provider", p.extension.ID)
 	}
@@ -916,6 +978,7 @@ func (p *extensionProviderWrapper) FetchLyrics(trackName, artistName, albumName 
 		perfName: "fetchLyrics",
 		invoke:   extensionMethodInvocation("fetchLyrics", trackName, artistName, albumName, durationSec),
 		timeout:  DefaultJSTimeout,
+		context:  ctx,
 	}, func(perf *extensionCallPerf, result goja.Value) (*LyricsResponse, error) {
 		if result == nil || goja.IsUndefined(result) || goja.IsNull(result) {
 			return nil, fmt.Errorf("fetchLyrics returned null")

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,34 +28,40 @@ func normalizeExtensionTrackMetadataMap(
 	}
 
 	return map[string]any{
-		"id":            track.ID,
-		"name":          track.Name,
-		"artists":       track.Artists,
-		"album_name":    track.AlbumName,
-		"album_artist":  track.AlbumArtist,
-		"album_id":      track.AlbumID,
-		"album_url":     track.AlbumURL,
-		"artist_id":     track.ArtistID,
-		"artist_url":    track.ArtistURL,
-		"external_urls": track.ExternalURL,
-		"duration_ms":   track.DurationMS,
-		"images":        coverURL,
-		"cover_url":     coverURL,
-		"preview_url":   track.PreviewURL,
-		"release_date":  track.ReleaseDate,
-		"track_number":  trackNum,
-		"total_tracks":  track.TotalTracks,
-		"disc_number":   track.DiscNumber,
-		"total_discs":   track.TotalDiscs,
-		"isrc":          track.ISRC,
-		"provider_id":   track.ProviderID,
-		"item_type":     track.ItemType,
-		"album_type":    track.AlbumType,
-		"spotify_id":    track.SpotifyID,
-		"composer":      track.Composer,
-		"audio_quality": track.AudioQuality,
-		"audio_modes":   track.AudioModes,
-		"explicit":      track.Explicit,
+		"id":             track.ID,
+		"name":           track.Name,
+		"artists":        track.Artists,
+		"album_name":     track.AlbumName,
+		"album_artist":   track.AlbumArtist,
+		"album_id":       track.AlbumID,
+		"album_url":      track.AlbumURL,
+		"artist_id":      track.ArtistID,
+		"artist_url":     track.ArtistURL,
+		"external_urls":  track.ExternalURL,
+		"duration_ms":    track.DurationMS,
+		"images":         coverURL,
+		"cover_url":      coverURL,
+		"preview_url":    track.PreviewURL,
+		"release_date":   track.ReleaseDate,
+		"track_number":   trackNum,
+		"total_tracks":   track.TotalTracks,
+		"disc_number":    track.DiscNumber,
+		"total_discs":    track.TotalDiscs,
+		"isrc":           track.ISRC,
+		"provider_id":    track.ProviderID,
+		"item_type":      track.ItemType,
+		"album_type":     track.AlbumType,
+		"spotify_id":     track.SpotifyID,
+		"external_links": track.ExternalLinks,
+		"genre":          track.Genre,
+		"label":          track.Label,
+		"copyright":      track.Copyright,
+		"composer":       track.Composer,
+		"comment":        track.Comment,
+		"audio_quality":  track.AudioQuality,
+		"audio_modes":    track.AudioModes,
+		"explicit":       track.Explicit,
+		"upc":            track.UPC,
 	}
 }
 
@@ -276,6 +283,9 @@ func getEnabledExtensionProviderMetadataResponse(providerID, resourceType, resou
 }
 
 func InitExtensionSystem(extensionsDir, dataDir string) error {
+	if !extensionStorageKeyConfigured() {
+		return fmt.Errorf("extension storage master key is not configured")
+	}
 	manager := getExtensionManager()
 	if err := manager.SetDirectories(extensionsDir, dataDir); err != nil {
 		return err
@@ -285,6 +295,7 @@ func InitExtensionSystem(extensionsDir, dataDir string) error {
 	if err := settingsStore.SetDataDir(dataDir); err != nil {
 		return err
 	}
+	globalLyricsCache.SetPersistencePath(filepath.Join(dataDir, ".lyrics_cache.json"))
 
 	return nil
 }
@@ -467,12 +478,16 @@ func preflightExtensionDownloadSession(extensionID string) (bool, error) {
 	if _, err := ext.lockReadyVM(); err != nil {
 		return false, err
 	}
-	defer ext.VMMu.Unlock()
-	if ext.runtime == nil {
+	runtime := ext.runtime
+	ext.VMMu.Unlock()
+	if runtime == nil {
 		return false, fmt.Errorf("extension '%s' runtime is unavailable", extensionID)
 	}
 
-	return ext.runtime.preflightSignedSession()
+	// Preflight touches only the runtime's thread-safe HTTP/session state. Do
+	// not hold the Goja VM lock across bootstrap network I/O: metadata/status
+	// calls on the same extension must remain responsive while auth is slow.
+	return runtime.preflightSignedSession()
 }
 
 func DownloadWithExtensionsJSON(requestJSON string) (string, error) {
@@ -704,7 +719,7 @@ func GetPendingFFmpegCommandJSON(commandID string) (string, error) {
 	result := map[string]any{
 		"command_id":   commandID,
 		"extension_id": cmd.ExtensionID,
-		"command":      cmd.Command,
+		"arguments":    cmd.Arguments,
 		"input_path":   cmd.InputPath,
 		"output_path":  cmd.OutputPath,
 	}
@@ -722,16 +737,57 @@ func GetAllPendingFFmpegCommandsJSON() (string, error) {
 
 	commands := make([]map[string]any, 0)
 	for cmdID, cmd := range ffmpegCommands {
-		if !cmd.Completed {
+		if !cmd.Completed && !cmd.Claimed {
 			commands = append(commands, map[string]any{
 				"command_id":   cmdID,
 				"extension_id": cmd.ExtensionID,
-				"command":      cmd.Command,
+				"arguments":    cmd.Arguments,
 			})
 		}
 	}
 
 	return marshalJSONString(commands)
+}
+
+// WaitForPendingFFmpegCommandsJSON blocks until work is available or the
+// timeout elapses. Native command pumps use this instead of polling the bridge
+// every 100 ms while still retaining GetAllPendingFFmpegCommandsJSON for older
+// clients.
+func WaitForPendingFFmpegCommandsJSON(timeoutMillis int64) (string, error) {
+	if timeoutMillis < 0 {
+		timeoutMillis = 0
+	}
+	deadline := time.NewTimer(time.Duration(timeoutMillis) * time.Millisecond)
+	defer deadline.Stop()
+
+	for {
+		ffmpegCommandsMu.Lock()
+		commands := make([]map[string]any, 0)
+		for cmdID, cmd := range ffmpegCommands {
+			if cmd.Completed || cmd.Claimed {
+				continue
+			}
+			cmd.Claimed = true
+			commands = append(commands, map[string]any{
+				"command_id":   cmdID,
+				"extension_id": cmd.ExtensionID,
+				"arguments":    cmd.Arguments,
+			})
+		}
+		ffmpegCommandsMu.Unlock()
+		if len(commands) > 0 {
+			return marshalJSONString(commands)
+		}
+
+		select {
+		case <-ffmpegCommandQueued:
+			// A buffered notification can be stale if another command pump
+			// already consumed the work, so re-check until the deadline.
+			continue
+		case <-deadline.C:
+			return "[]", nil
+		}
+	}
 }
 
 func EnrichTrackWithExtensionJSON(extensionID, trackJSON string) (string, error) {
@@ -816,6 +872,7 @@ func HandleURLWithExtensionJSON(url string) (string, error) {
 
 	response := map[string]any{
 		"type":         result.Type,
+		"id":           result.ID,
 		"extension_id": extensionID,
 		"name":         result.Name,
 		"cover_url":    result.CoverURL,
@@ -996,7 +1053,7 @@ func callExtensionFunctionJSONWithRequestID(extensionID, functionName string, ti
 	perf.recordJS(time.Since(jsStartedAt))
 	if err != nil {
 		if IsRuntimeUnsafeError(err) {
-			quarantineRuntimeLocked(ext, vm)
+			quarantineRuntimeLocked(ext, vm, err)
 		}
 		if isExtensionRequestCancelled(requestID) || errors.Is(err, ErrExtensionRequestCancelled) {
 			return "", ErrExtensionRequestCancelled

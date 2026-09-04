@@ -2,6 +2,8 @@ package gobackend
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"net/http"
@@ -62,6 +64,7 @@ type PendingAuthRequest struct {
 	ExtensionID string
 	AuthURL     string
 	CallbackURL string
+	State       string
 	CreatedAt   time.Time
 }
 
@@ -71,8 +74,101 @@ const pendingAuthRequestTTL = 5 * time.Minute
 
 var (
 	pendingAuthRequests   = make(map[string]*PendingAuthRequest)
+	pendingAuthStates     = make(map[string]string)
 	pendingAuthRequestsMu sync.RWMutex
 )
+
+func newExtensionCallbackState() (string, error) {
+	random := make([]byte, 32)
+	if _, err := rand.Read(random); err != nil {
+		return "", fmt.Errorf("generate callback state: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(random), nil
+}
+
+func registerPendingAuthRequest(request *PendingAuthRequest) error {
+	if request == nil || strings.TrimSpace(request.ExtensionID) == "" {
+		return fmt.Errorf("extension id is required")
+	}
+	if request.State == "" {
+		state, err := newExtensionCallbackState()
+		if err != nil {
+			return err
+		}
+		request.State = state
+	}
+	if request.CreatedAt.IsZero() {
+		request.CreatedAt = time.Now()
+	}
+
+	pendingAuthRequestsMu.Lock()
+	if owner := pendingAuthStates[request.State]; owner != "" && owner != request.ExtensionID {
+		ownerRequest := pendingAuthRequests[owner]
+		sameChallenge := ownerRequest != nil &&
+			ownerRequest.State == request.State &&
+			ownerRequest.AuthURL == request.AuthURL &&
+			ownerRequest.CallbackURL == request.CallbackURL &&
+			ownerRequest.CreatedAt.Equal(request.CreatedAt)
+		if !sameChallenge {
+			pendingAuthRequestsMu.Unlock()
+			return fmt.Errorf("callback state is already registered")
+		}
+	}
+	if previous := pendingAuthRequests[request.ExtensionID]; previous != nil && previous.State != request.State {
+		removePendingAuthRequestLocked(request.ExtensionID)
+	}
+	pendingAuthRequests[request.ExtensionID] = request
+	if pendingAuthStates[request.State] == "" {
+		pendingAuthStates[request.State] = request.ExtensionID
+	}
+	pendingAuthRequestsMu.Unlock()
+	return nil
+}
+
+func removePendingAuthRequestLocked(extensionID string) {
+	request := pendingAuthRequests[extensionID]
+	delete(pendingAuthRequests, extensionID)
+	if request == nil || pendingAuthStates[request.State] != extensionID {
+		return
+	}
+	delete(pendingAuthStates, request.State)
+	for candidateID, candidate := range pendingAuthRequests {
+		if candidate != nil && candidate.State == request.State &&
+			time.Since(candidate.CreatedAt) < pendingAuthRequestTTL {
+			pendingAuthStates[request.State] = candidateID
+			return
+		}
+	}
+}
+
+func removePendingAuthStateLocked(state string) {
+	delete(pendingAuthStates, state)
+	for extensionID, request := range pendingAuthRequests {
+		if request != nil && request.State == state {
+			delete(pendingAuthRequests, extensionID)
+		}
+	}
+}
+
+func ConsumeExtensionCallbackState(state string) (string, error) {
+	state = strings.TrimSpace(state)
+	if state == "" {
+		return "", fmt.Errorf("callback state is required")
+	}
+
+	pendingAuthRequestsMu.Lock()
+	extensionID := pendingAuthStates[state]
+	request := pendingAuthRequests[extensionID]
+	if extensionID == "" || request == nil || request.State != state ||
+		time.Since(request.CreatedAt) >= pendingAuthRequestTTL {
+		removePendingAuthStateLocked(state)
+		pendingAuthRequestsMu.Unlock()
+		return "", fmt.Errorf("callback state is invalid, expired, or already used")
+	}
+	removePendingAuthStateLocked(state)
+	pendingAuthRequestsMu.Unlock()
+	return extensionID, nil
+}
 
 func GetPendingAuthRequest(extensionID string) *PendingAuthRequest {
 	pendingAuthRequestsMu.RLock()
@@ -83,7 +179,7 @@ func GetPendingAuthRequest(extensionID string) *PendingAuthRequest {
 func ClearPendingAuthRequest(extensionID string) {
 	pendingAuthRequestsMu.Lock()
 	defer pendingAuthRequestsMu.Unlock()
-	delete(pendingAuthRequests, extensionID)
+	removePendingAuthRequestLocked(extensionID)
 }
 
 func SetExtensionAuthCode(extensionID string, authCode string) {
@@ -293,17 +389,27 @@ func (r *extensionRuntime) bindDownloadCancelContext(req *http.Request) *http.Re
 	if req == nil {
 		return nil
 	}
+	return req.WithContext(r.activeOperationContext(req.Context()))
+}
 
+// activeOperationContext is stable for the full extension operation. An
+// http.Client with a finite Timeout derives a per-request child context and
+// cancels it when that response body closes, so that request context must not
+// be reused for provider retry delays between requests.
+func (r *extensionRuntime) activeOperationContext(fallback context.Context) context.Context {
 	itemID := r.getActiveDownloadItemID()
 	if itemID == "" {
 		requestID := r.getActiveRequestID()
 		if requestID == "" {
-			return req
+			if fallback != nil {
+				return fallback
+			}
+			return context.Background()
 		}
-		return req.WithContext(extensionRequestCancelContext(requestID))
+		return extensionRequestCancelContext(requestID)
 	}
 
-	return req.WithContext(downloadCancelContext(itemID))
+	return downloadCancelContext(itemID)
 }
 
 // downloadStallTimeout is how long a download may go without receiving a single
@@ -380,7 +486,10 @@ func newExtensionHTTPClient(ext *loadedExtension, jar http.CookieJar, timeout ti
 			GoLog("[Extension:%s] Redirect blocked: domain '%s' not in allowed list\n", ext.ID, domain)
 			return &RedirectBlockedError{Domain: domain}
 		}
-		if isPrivateIP(domain) {
+		// The transport resolves and pins every redirect target before dialing.
+		// Reject literals/local aliases here without doing a second, uncancellable
+		// DNS lookup on the redirect path.
+		if isPrivateIPLiteralOrLocal(domain) {
 			GoLog("[Extension:%s] Redirect blocked: private IP '%s'\n", ext.ID, domain)
 			return &RedirectBlockedError{Domain: domain, IsPrivate: true}
 		}
@@ -415,13 +524,8 @@ func isPrivateIP(host string) bool {
 	if hostLower == "" {
 		return false
 	}
-
-	if hostLower == "localhost" || strings.HasSuffix(hostLower, ".local") {
+	if isPrivateIPLiteralOrLocal(hostLower) {
 		return true
-	}
-
-	if ip := net.ParseIP(hostLower); ip != nil {
-		return isPrivateIPAddr(ip)
 	}
 
 	if cached, ok := getPrivateIPCache(hostLower); ok {
@@ -430,6 +534,8 @@ func isPrivateIP(host string) bool {
 
 	ips, err := net.LookupIP(hostLower)
 	if err != nil {
+		// Defer the final decision to dialWithDoHFallback. It resolves and filters
+		// every concrete address (including DoH answers) before opening a socket.
 		setPrivateIPCache(hostLower, false, privateIPErrorCacheTTL)
 		return false
 	}
@@ -438,6 +544,28 @@ func isPrivateIP(host string) bool {
 
 	setPrivateIPCache(hostLower, isPrivate, privateIPCacheTTL)
 	return isPrivate
+}
+
+// isPrivateIPLiteralOrLocal performs the validation that does not require DNS.
+// Extension HTTP requests use this before dispatch; dialWithDoHFallback remains
+// the authoritative hostname check because it filters and pins the exact DNS
+// answers used by the socket, closing the rebinding window without a duplicate
+// lookup.
+func isPrivateIPLiteralOrLocal(host string) bool {
+	if allowPrivateNetworkAccess.Load() {
+		return false
+	}
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return false
+	}
+	if host == "localhost" || strings.HasSuffix(host, ".local") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return isPrivateIPAddr(ip)
+	}
+	return false
 }
 
 func getPrivateIPCache(host string) (bool, bool) {
@@ -592,6 +720,7 @@ func (r *extensionRuntime) RegisterAPIs(vm *goja.Runtime) {
 	if r.manifest != nil && r.manifest.Permissions.File {
 		fileObj := vm.NewObject()
 		fileObj.Set("download", r.fileDownload)
+		fileObj.Set("downloadSegments", r.fileDownloadSegments)
 		fileObj.Set("exists", r.fileExists)
 		fileObj.Set("delete", r.fileDelete)
 		fileObj.Set("read", r.fileRead)
@@ -601,6 +730,7 @@ func (r *extensionRuntime) RegisterAPIs(vm *goja.Runtime) {
 		fileObj.Set("copy", r.fileCopy)
 		fileObj.Set("move", r.fileMove)
 		fileObj.Set("getSize", r.fileGetSize)
+		fileObj.Set("transformPatternedBlocks", r.fileTransformPatternedBlocks)
 		vm.Set("file", fileObj)
 
 		ffmpegObj := vm.NewObject()
@@ -649,10 +779,6 @@ func (r *extensionRuntime) RegisterAPIs(vm *goja.Runtime) {
 	logObj.Set("warn", r.logWarn)
 	logObj.Set("error", r.logError)
 	vm.Set("log", logObj)
-
-	gobackendObj := vm.NewObject()
-	gobackendObj.Set("sanitizeFilename", r.sanitizeFilenameWrapper)
-	vm.Set("gobackend", gobackendObj)
 
 	vm.Set("fetch", r.fetchPolyfill)
 

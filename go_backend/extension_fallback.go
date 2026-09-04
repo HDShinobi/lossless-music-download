@@ -20,11 +20,15 @@ func attemptExtensionDownload(
 	ext *loadedExtension,
 	provider *extensionProviderWrapper,
 	trackID, quality, providerLabel string,
+	preparedContext map[string]any,
 	applyTitleFallback bool,
 	lastErr *error,
 	lastErrType *string,
 	lastRetryAfterSeconds *int,
 ) (resp *DownloadResponse, cancelledOuter bool) {
+	req.DownloadProvider = strings.TrimSpace(providerLabel)
+	req.ProviderTrackID = strings.TrimSpace(trackID)
+	preparedContext = extensionPreparedDownloadContext(req, preparedContext)
 	outputPath := buildOutputPathForExtension(req, ext)
 	if shouldReuseExistingOutput(req, outputPath) {
 		result := DownloadResult{FilePath: outputPath}
@@ -47,7 +51,7 @@ func attemptExtensionDownload(
 		SetItemPreparingStage(req.ItemID, "resolving_stream")
 	}
 
-	result, err := provider.Download(trackID, quality, outputPath, req.ItemID, func(percent int) {
+	result, err := provider.DownloadPrepared(trackID, quality, outputPath, req.ItemID, preparedContext, func(percent int) {
 		if req.ItemID != "" {
 			normalized := float64(percent) / 100.0
 			if normalized < 0 {
@@ -86,7 +90,9 @@ func attemptExtensionDownload(
 
 	if downloadSucceeded {
 		metadataStartedAt := time.Now()
-		enrichRequestExtendedMetadata(&req)
+		if !ext.Manifest.SkipMetadataEnrichment {
+			enrichRequestExtendedMetadata(&req)
+		}
 		LogDebug(
 			"DownloadPipeline",
 			"item=%s provider=%s post-transfer metadataMs=%.1f",
@@ -216,6 +222,7 @@ func attemptVerifiedResumeBeforeMetadata(
 			req.QobuzID,
 			req.DurationMS,
 			req.ItemID,
+			extensionAvailabilityTrackContext(req),
 		)
 		if shouldAbortCancelledFallback(req.ItemID, err) {
 			return nil, true
@@ -250,6 +257,12 @@ func attemptVerifiedResumeBeforeMetadata(
 		trackID,
 		req.Quality,
 		selectedProvider,
+		func() map[string]any {
+			if availability == nil {
+				return nil
+			}
+			return availability.PreparedContext
+		}(),
 		strings.EqualFold(sourceProvider, selectedProvider),
 		&lastErr,
 		&lastErrType,
@@ -287,6 +300,41 @@ func attemptVerifiedResumeBeforeMetadata(
 	// better provider-native ID. The normal path below retains strict/stop-
 	// fallback semantics for that prepared retry.
 	return nil, false
+}
+
+func extensionAvailabilityTrackContext(req DownloadRequest) map[string]any {
+	return map[string]any{
+		"id":           req.ProviderTrackID,
+		"name":         req.TrackName,
+		"artists":      req.ArtistName,
+		"album_name":   req.AlbumName,
+		"album_artist": req.AlbumArtist,
+		"cover_url":    req.CoverURL,
+		"release_date": req.ReleaseDate,
+		"track_number": req.TrackNumber,
+		"total_tracks": req.TotalTracks,
+		"disc_number":  req.DiscNumber,
+		"total_discs":  req.TotalDiscs,
+		"duration_ms":  req.DurationMS,
+		"isrc":         req.ISRC,
+		"genre":        req.Genre,
+		"label":        req.Label,
+		"copyright":    req.Copyright,
+		"composer":     req.Composer,
+		"comment":      req.Comment,
+		"explicit":     req.Explicit,
+		"album_type":   req.AlbumType,
+		"upc":          req.UPC,
+	}
+}
+
+func extensionPreparedDownloadContext(req DownloadRequest, prepared map[string]any) map[string]any {
+	merged := make(map[string]any, len(prepared)+1)
+	for key, value := range prepared {
+		merged[key] = value
+	}
+	merged["host_track"] = extensionAvailabilityTrackContext(req)
+	return merged
 }
 
 func buildOutputStorageFailureResponse(
@@ -400,7 +448,7 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 		ext, err := extManager.GetExtension(req.Source)
 		if err == nil && ext.Enabled && ext.Error == "" && ext.Manifest.IsDownloadProvider() {
 			provider := newExtensionProviderWrapper(ext)
-			availability, availErr := provider.CheckAvailabilityForItemID(req.ISRC, req.TrackName, req.ArtistName, req.SpotifyID, req.DeezerID, req.TidalID, req.QobuzID, req.DurationMS, req.ItemID)
+			availability, availErr := provider.CheckAvailabilityForItemID(req.ISRC, req.TrackName, req.ArtistName, req.SpotifyID, req.DeezerID, req.TidalID, req.QobuzID, req.DurationMS, req.ItemID, extensionAvailabilityTrackContext(req))
 			if shouldAbortCancelledFallback(req.ItemID, availErr) {
 				return nil, ErrDownloadCancelled
 			}
@@ -423,21 +471,7 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 				GoLog("[DownloadWithExtensionFallback] Enriching track from extension '%s'...\n", req.Source)
 
 				provider := newExtensionProviderWrapper(ext)
-				trackMeta := &ExtTrackMetadata{
-					ID:          req.SpotifyID,
-					Name:        req.TrackName,
-					Artists:     req.ArtistName,
-					AlbumName:   req.AlbumName,
-					DurationMS:  req.DurationMS,
-					ISRC:        req.ISRC,
-					ReleaseDate: req.ReleaseDate,
-					TrackNumber: req.TrackNumber,
-					TotalTracks: req.TotalTracks,
-					DiscNumber:  req.DiscNumber,
-					TotalDiscs:  req.TotalDiscs,
-					ProviderID:  req.Source,
-					Composer:    req.Composer,
-				}
+				trackMeta := buildSourceExtensionTrackMetadata(req)
 
 				enrichedTrack, err := provider.EnrichTrackForItemID(trackMeta, req.ItemID)
 				if shouldAbortCancelledFallback(req.ItemID, err) {
@@ -460,12 +494,7 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 						GoLog("[DownloadWithExtensionFallback] Deezer ID from Odesli: %s\n", enrichedTrack.DeezerID)
 						req.DeezerID = enrichedTrack.DeezerID
 					}
-					if enrichedTrack.Name != "" {
-						req.TrackName = enrichedTrack.Name
-					}
-					if enrichedTrack.Artists != "" {
-						req.ArtistName = enrichedTrack.Artists
-					}
+					overlaySourceExtensionTrackIdentity(&req, *enrichedTrack)
 					overlayStr(&req.AlbumName, enrichedTrack.AlbumName, "AlbumName")
 					overlayStr(&req.AlbumArtist, enrichedTrack.AlbumArtist, "")
 					overlayInt(&req.DurationMS, enrichedTrack.DurationMS, "DurationMS")
@@ -480,6 +509,7 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 					overlayInt(&req.DiscNumber, enrichedTrack.DiscNumber, "DiscNumber")
 					overlayInt(&req.TotalDiscs, enrichedTrack.TotalDiscs, "TotalDiscs")
 					overlayStr(&req.Composer, enrichedTrack.Composer, "Composer")
+					overlayExtensionReleaseMetadata(&req, *enrichedTrack)
 				}
 			}
 		}
@@ -516,6 +546,7 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 				overlayStr(&req.Genre, track.Genre, "")
 				overlayStr(&req.Label, track.Label, "")
 				overlayStr(&req.Copyright, track.Copyright, "")
+				overlayExtensionReleaseMetadata(&req, track)
 			} else if searchErr != nil {
 				GoLog("[DownloadWithExtensionFallback] Metadata provider search failed (non-fatal): %v\n", searchErr)
 			}
@@ -544,7 +575,11 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 
 			GoLog("[DownloadWithExtensionFallback] Downloading from source extension with trackID: %s (stopProviderFallback: %v)\n", trackID, stopProviderFallback)
 
-			resp, cancelledOuter := attemptExtensionDownload(req, ext, provider, trackID, req.Quality, req.Source, true, &lastErr, &lastErrType, &lastRetryAfterSeconds)
+			var preparedContext map[string]any
+			if sourceExtensionAvailability != nil {
+				preparedContext = sourceExtensionAvailability.PreparedContext
+			}
+			resp, cancelledOuter := attemptExtensionDownload(req, ext, provider, trackID, req.Quality, req.Source, preparedContext, true, &lastErr, &lastErrType, &lastRetryAfterSeconds)
 			if cancelledOuter {
 				return nil, ErrDownloadCancelled
 			}
@@ -637,7 +672,7 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 
 			provider := newExtensionProviderWrapper(ext)
 
-			availability, err := provider.CheckAvailabilityForItemID(req.ISRC, req.TrackName, req.ArtistName, req.SpotifyID, req.DeezerID, req.TidalID, req.QobuzID, req.DurationMS, req.ItemID)
+			availability, err := provider.CheckAvailabilityForItemID(req.ISRC, req.TrackName, req.ArtistName, req.SpotifyID, req.DeezerID, req.TidalID, req.QobuzID, req.DurationMS, req.ItemID, extensionAvailabilityTrackContext(req))
 			if shouldAbortCancelledFallback(req.ItemID, err) {
 				return nil, ErrDownloadCancelled
 			}
@@ -689,7 +724,7 @@ func DownloadWithExtensionFallback(req DownloadRequest) (*DownloadResponse, erro
 				}
 			}
 
-			resp, cancelledOuter := attemptExtensionDownload(req, ext, provider, availability.TrackID, fallbackQuality, providerID, false, &lastErr, &lastErrType, &lastRetryAfterSeconds)
+			resp, cancelledOuter := attemptExtensionDownload(req, ext, provider, availability.TrackID, fallbackQuality, providerID, availability.PreparedContext, false, &lastErr, &lastErrType, &lastRetryAfterSeconds)
 			if cancelledOuter {
 				return nil, ErrDownloadCancelled
 			}

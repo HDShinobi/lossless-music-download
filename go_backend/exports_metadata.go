@@ -29,6 +29,9 @@ func applyAudioMetadataToResult(result map[string]any, meta *AudioMetadata) {
 	result["copyright"] = meta.Copyright
 	result["composer"] = meta.Composer
 	result["comment"] = meta.Comment
+	result["album_type"] = meta.AlbumType
+	result["explicit"] = meta.Explicit
+	result["upc"] = meta.UPC
 	result["replaygain_track_gain"] = meta.ReplayGainTrackGain
 	result["replaygain_track_peak"] = meta.ReplayGainTrackPeak
 	result["replaygain_album_gain"] = meta.ReplayGainAlbumGain
@@ -68,6 +71,9 @@ func ReadFileMetadata(filePath string) (string, error) {
 		"copyright":    "",
 		"composer":     "",
 		"comment":      "",
+		"album_type":   "",
+		"explicit":     false,
+		"upc":          "",
 		"duration":     0,
 		"format":       "",
 		"audio_codec":  "",
@@ -83,23 +89,7 @@ func ReadFileMetadata(filePath string) (string, error) {
 			GoLog("[ReadFileMetadata] FLAC parse failed for %s, trying Ogg fallback: %v\n", filePath, err)
 			oggMeta, oggErr := ReadOggVorbisComments(filePath)
 			if oggErr == nil && oggMeta != nil {
-				result["title"] = oggMeta.Title
-				result["artist"] = oggMeta.Artist
-				result["album"] = oggMeta.Album
-				result["album_artist"] = oggMeta.AlbumArtist
-				result["date"] = oggMeta.Date
-				if oggMeta.Date == "" {
-					result["date"] = oggMeta.Year
-				}
-				result["track_number"] = oggMeta.TrackNumber
-				result["total_tracks"] = oggMeta.TotalTracks
-				result["disc_number"] = oggMeta.DiscNumber
-				result["total_discs"] = oggMeta.TotalDiscs
-				result["isrc"] = oggMeta.ISRC
-				result["lyrics"] = oggMeta.Lyrics
-				result["genre"] = oggMeta.Genre
-				result["composer"] = oggMeta.Composer
-				result["comment"] = oggMeta.Comment
+				applyAudioMetadataToResult(result, oggMeta)
 				quality, qualityErr := GetOggQuality(filePath)
 				if qualityErr == nil {
 					result["sample_rate"] = quality.SampleRate
@@ -130,6 +120,9 @@ func ReadFileMetadata(filePath string) (string, error) {
 			result["copyright"] = metadata.Copyright
 			result["composer"] = metadata.Composer
 			result["comment"] = metadata.Comment
+			result["album_type"] = metadata.AlbumType
+			result["explicit"] = metadata.Explicit
+			result["upc"] = metadata.UPC
 			result["replaygain_track_gain"] = metadata.ReplayGainTrackGain
 			result["replaygain_track_peak"] = metadata.ReplayGainTrackPeak
 			result["replaygain_album_gain"] = metadata.ReplayGainAlbumGain
@@ -534,12 +527,22 @@ func RewriteSplitArtistTagsExport(filePath, artist, albumArtist string) (string,
 	return s, nil
 }
 
-func DownloadCoverToFile(coverURL string, outputPath string, maxQuality bool) error {
+// The final bool is retained for gomobile ABI compatibility with existing
+// native shells. Resolution selection is extension-owned and the value is
+// intentionally ignored.
+func DownloadCoverToFile(coverURL string, outputPath string, _ bool) error {
+	return DownloadCoverToFileSized(coverURL, outputPath, 0)
+}
+
+// DownloadCoverToFileSized downloads provider artwork and optionally caps its
+// longest side before writing it. It is a separate export so the legacy
+// gomobile ABI remains available to older native shells.
+func DownloadCoverToFileSized(coverURL string, outputPath string, maxDimension int) error {
 	if coverURL == "" {
 		return fmt.Errorf("no cover URL provided")
 	}
 
-	data, err := downloadCoverToMemory(coverURL, maxQuality)
+	data, err := downloadCoverToMemorySized(coverURL, maxDimension)
 	if err != nil {
 		return fmt.Errorf("failed to download cover: %w", err)
 	}
@@ -548,7 +551,6 @@ func DownloadCoverToFile(coverURL string, outputPath string, maxQuality bool) er
 		return fmt.Errorf("failed to write cover file: %w", err)
 	}
 
-	GoLog("[Cover] Downloaded cover to: %s (%d KB)\n", outputPath, len(data)/1024)
 	return nil
 }
 
@@ -583,6 +585,5 @@ func ExtractCoverToFile(audioPath string, outputPath string) error {
 		return fmt.Errorf("failed to write cover file: %w", err)
 	}
 
-	GoLog("[Cover] Extracted cover art to: %s (%d KB)\n", outputPath, len(coverData)/1024)
 	return nil
 }

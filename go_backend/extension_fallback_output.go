@@ -26,6 +26,8 @@ func buildDownloadFilename(req DownloadRequest) string {
 		"date":              req.ReleaseDate,
 		"release_date":      req.ReleaseDate,
 		"isrc":              req.ISRC,
+		"provider":          req.DownloadProvider,
+		"provider_id":       req.ProviderTrackID,
 		"composer":          req.Composer,
 		"quality":           req.Quality,
 		"quality_variant":   req.QualityVariant,
@@ -45,6 +47,24 @@ func buildDownloadFilename(req DownloadRequest) string {
 	}
 
 	return filename + ext
+}
+
+func resolvedDownloadFilename(req DownloadRequest, result DownloadResult, filePath string) string {
+	resolved := req
+	if isrc := strings.TrimSpace(result.ISRC); isrc != "" {
+		resolved.ISRC = isrc
+	}
+	extension := strings.TrimSpace(result.ActualExtension)
+	if extension == "" {
+		extension = filepath.Ext(strings.TrimSpace(result.FilePath))
+	}
+	if extension == "" {
+		extension = filepath.Ext(strings.TrimSpace(filePath))
+	}
+	if extension != "" {
+		resolved.OutputExt = extension
+	}
+	return buildDownloadFilename(resolved)
 }
 
 func buildOutputPath(req DownloadRequest) string {
@@ -126,7 +146,7 @@ func embedExtensionDownloadMetadata(resp DownloadResponse, req DownloadRequest, 
 	coverURL := firstNonEmptyTrimmed(resp.CoverURL, req.CoverURL)
 	var coverData []byte
 	if coverURL != "" {
-		data, err := downloadCoverToMemory(coverURL, req.EmbedMaxQualityCover)
+		data, err := downloadCoverToMemorySized(coverURL, req.CoverMaxDimension)
 		if err != nil {
 			GoLog("[DownloadWithExtensionFallback] Warning: failed to download cover for metadata embed: %v\n", err)
 		} else if len(data) > 0 {
@@ -150,6 +170,10 @@ func embedExtensionDownloadMetadata(resp DownloadResponse, req DownloadRequest, 
 		Label:         firstNonEmptyTrimmed(resp.Label, req.Label),
 		Copyright:     firstNonEmptyTrimmed(resp.Copyright, req.Copyright),
 		Composer:      firstNonEmptyTrimmed(resp.Composer, req.Composer),
+		Comment:       firstNonEmptyTrimmed(resp.Comment, req.Comment),
+		Explicit:      resp.Explicit || req.Explicit,
+		AlbumType:     firstNonEmptyTrimmed(resp.AlbumType, req.AlbumType),
+		UPC:           firstNonEmptyTrimmed(resp.UPC, req.UPC),
 	}
 	if req.EmbedLyrics {
 		metadata.Lyrics = resp.LyricsLRC

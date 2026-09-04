@@ -1,23 +1,86 @@
 package gobackend
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestLyricsLookupSingleflightAndPersistentCache(t *testing.T) {
+	SetLyricsProviderOrder([]string{LyricsProviderLRCLIB})
+	defer SetLyricsProviderOrder(nil)
+	clearLyricsProviderHealth()
+	globalLyricsCache.ClearAll()
+
+	var calls atomic.Int32
+	client := &LyricsClient{httpClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		calls.Add(1)
+		time.Sleep(25 * time.Millisecond)
+		return &http.Response{
+			StatusCode: 200,
+			Header:     make(http.Header),
+			Body: io.NopCloser(strings.NewReader(
+				`{"id":1,"trackName":"Singleflight Song","artistName":"Cache Artist","duration":180,"plainLyrics":"Cached lyric"}`,
+			)),
+			Request: req,
+		}, nil
+	})}}
+
+	var wait sync.WaitGroup
+	for range 8 {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			lyrics, err := client.FetchLyricsAllSources("", "Singleflight Song", "Cache Artist", 180)
+			if err != nil || lyrics == nil {
+				t.Errorf("FetchLyricsAllSources = %#v/%v", lyrics, err)
+			}
+		}()
+	}
+	wait.Wait()
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("identical lyrics lookups made %d HTTP calls, want 1", got)
+	}
+
+	path := filepath.Join(t.TempDir(), "lyrics-cache.json")
+	cache := &lyricsCache{cache: make(map[string]*lyricsCacheEntry)}
+	cache.SetPersistencePath(path)
+	cache.Set("Cache Artist", "Persistent Song", 180, &LyricsResponse{PlainLyrics: "Persisted", Source: "test"})
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("persistent lyrics cache was not written")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	reloaded := &lyricsCache{cache: make(map[string]*lyricsCacheEntry)}
+	reloaded.SetPersistencePath(path)
+	lyrics, ok := reloaded.Get("Cache Artist", "Persistent Song", 180)
+	if !ok || lyrics.PlainLyrics != "Persisted" {
+		t.Fatalf("reloaded persistent lyrics = %#v/%v", lyrics, ok)
+	}
+}
 
 func TestLyricsCacheParsingAndLRCLibClient(t *testing.T) {
 	SetAppVersion("4.5.0")
 	if ua := appUserAgent(); !strings.Contains(ua, "4.5.0") {
 		t.Fatalf("user agent = %q", ua)
 	}
-	SetLyricsProviderOrder([]string{"LRCLIB", "bad", "netease"})
-	if providers := GetLyricsProviderOrder(); len(providers) != 2 || providers[0] != LyricsProviderLRCLIB {
+	SetLyricsProviderOrder([]string{"LRCLIB", "bad", "extension:Apple-Music", "netease", "extension:apple-music"})
+	if providers := GetLyricsProviderOrder(); len(providers) != 3 || providers[0] != LyricsProviderLRCLIB || providers[1] != "extension:apple-music" {
 		t.Fatalf("providers = %#v", providers)
 	}
 	SetLyricsProviderOrder(nil)
@@ -165,6 +228,23 @@ func TestLyricsCacheParsingAndLRCLibClient(t *testing.T) {
 	}
 }
 
+func TestPaxsenixEmptyLyricsPayloadMarksProviderUnavailable(t *testing.T) {
+	lyrics, err := parsePaxsenixLyricsPayload(
+		`{"error":false,"lyrics":""}`,
+		"Genius",
+		false,
+	)
+	if lyrics != nil || err == nil {
+		t.Fatalf("empty PAX Senix payload = %#v/%v", lyrics, err)
+	}
+	if !isLyricsProviderUnavailableError(err) {
+		t.Fatalf("empty PAX Senix payload was not marked unavailable: %v", err)
+	}
+	if strings.Contains(strings.ToLower(err.Error()), "decode") {
+		t.Fatalf("empty JSON payload was misreported as a decode failure: %v", err)
+	}
+}
+
 func TestLyricsProviderHealthSkipsUnavailableProvider(t *testing.T) {
 	SetLyricsProviderOrder([]string{LyricsProviderLRCLIB})
 	defer SetLyricsProviderOrder(nil)
@@ -228,7 +308,7 @@ func TestConcurrentLyricsProvidersReturnFastFallback(t *testing.T) {
 	defer clearLyricsProviderHealth()
 
 	start := time.Now()
-	lyrics, err := fetchBuiltInLyricsProviders(
+	lyrics, err := fetchLyricsProviders(
 		[]string{LyricsProviderLRCLIB, LyricsProviderAppleMusic},
 		lyricsProviderSearchRequest{},
 		func(providerName string, _ lyricsProviderSearchRequest) (*LyricsResponse, error, bool) {
@@ -250,11 +330,36 @@ func TestConcurrentLyricsProvidersReturnFastFallback(t *testing.T) {
 	}
 }
 
+func TestResolveLyricsProviderOrderOnlyIncludesSelectedAvailableExtensions(t *testing.T) {
+	availableExtensions := map[string]*extensionProviderWrapper{
+		"extension:apple-music":     nil,
+		"extension:future-provider": nil,
+	}
+	providers := resolveLyricsProviderOrder(
+		[]string{
+			LyricsProviderLRCLIB,
+			"extension:future-provider",
+			"extension:not-installed",
+			LyricsProviderNetease,
+		},
+		availableExtensions,
+	)
+
+	want := []string{
+		LyricsProviderLRCLIB,
+		"extension:future-provider",
+		LyricsProviderNetease,
+	}
+	if !equalLyricsProviderOrders(providers, want) {
+		t.Fatalf("providers = %#v, want %#v", providers, want)
+	}
+}
+
 func TestConcurrentLyricsProvidersPreferEarlierProviderWithinGrace(t *testing.T) {
 	clearLyricsProviderHealth()
 	defer clearLyricsProviderHealth()
 
-	lyrics, err := fetchBuiltInLyricsProviders(
+	lyrics, err := fetchLyricsProviders(
 		[]string{LyricsProviderLRCLIB, LyricsProviderAppleMusic},
 		lyricsProviderSearchRequest{},
 		func(providerName string, _ lyricsProviderSearchRequest) (*LyricsResponse, error, bool) {
@@ -390,21 +495,19 @@ func TestExternalLyricsProvidersWithFakeHTTP(t *testing.T) {
 	}
 
 	qq := &QQMusicClient{httpClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.Method != http.MethodPost {
-			t.Fatalf("unexpected QQ method %s", req.Method)
+		switch req.URL.Path {
+		case "/soso/fcgi-bin/client_search_cp":
+			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"code":0,"data":{"song":{"list":[{"mid":"qq-mid","id":123,"name":"Song","interval":180,"singer":[{"name":"Artist"}]}]}}}`)), Request: req}, nil
+		case "/lyric/fcgi-bin/fcg_query_lyric_new.fcg":
+			encoded := base64.StdEncoding.EncodeToString([]byte("[00:01.00]QQ Direct"))
+			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"retcode":0,"code":0,"lyric":"` + encoded + `"}`)), Request: req}, nil
+		default:
+			return &http.Response{StatusCode: 404, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`)), Request: req}, nil
 		}
-		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"lyrics":[{"timestamp":1000,"text":[{"text":"QQ","part":false,"timestamp":1000}]}]}`)), Request: req}, nil
 	})}}
-	qqRaw, err := qq.fetchLyricsByMetadata("Song", "Artist", 180)
-	if err != nil || !strings.Contains(qqRaw, "lyrics") {
-		t.Fatalf("qq raw = %q/%v", qqRaw, err)
-	}
 	qqLyrics, err := qq.FetchLyrics("Song", "Artist", 180, false)
-	if err != nil || qqLyrics.Provider != "QQ Music" {
+	if err != nil || qqLyrics.Provider != "QQ Music" || qqLyrics.Source != "QQ Music Direct" || qqLyrics.SyncType != "LINE_SYNCED" {
 		t.Fatalf("qq lyrics = %#v/%v", qqLyrics, err)
-	}
-	if _, err := formatQQLyricsMetadataToLRC(`{"lyrics":[]}`, false); err == nil {
-		t.Fatal("expected empty QQ metadata error")
 	}
 
 	spotify := &SpotifyLyricsClient{httpClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -447,16 +550,17 @@ func TestExternalLyricsProvidersWithFakeHTTP(t *testing.T) {
 
 	kugou := &KugouLyricsClient{httpClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch {
-		case strings.Contains(req.URL.Path, "/kugou/search"):
-			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`[{"hash":"kg-1","title":"Song","artist":"Artist","duration":180}]`)), Request: req}, nil
-		case strings.Contains(req.URL.Path, "/kugou/lyrics"):
-			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"lyrics_text":"[00:01.00]Kugou"}`)), Request: req}, nil
+		case req.URL.Path == "/search":
+			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"status":200,"errcode":200,"candidates":[{"id":"kg-1","accesskey":"key","song":"Song","singer":"Artist","duration":180000}]}`)), Request: req}, nil
+		case req.URL.Path == "/download":
+			encoded := base64.StdEncoding.EncodeToString([]byte("[00:01.00]Kugou"))
+			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"status":200,"error_code":0,"content":"` + encoded + `"}`)), Request: req}, nil
 		default:
 			return &http.Response{StatusCode: 404, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`)), Request: req}, nil
 		}
 	})}}
 	kugouLyrics, err := kugou.FetchLyrics("Song", "Artist", 180)
-	if err != nil || kugouLyrics.Provider != "Kugou" || kugouLyrics.SyncType != "LINE_SYNCED" {
+	if err != nil || kugouLyrics.Provider != "Kugou" || kugouLyrics.Source != "Kugou Direct" || kugouLyrics.SyncType != "LINE_SYNCED" {
 		t.Fatalf("kugou lyrics = %#v/%v", kugouLyrics, err)
 	}
 
@@ -467,14 +571,14 @@ func TestExternalLyricsProvidersWithFakeHTTP(t *testing.T) {
 				t.Fatalf("genius per_page = %q", got)
 			}
 			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"response":{"sections":[{"hits":[{"type":"song","result":{"title":"Song","primary_artist_names":"Artist","url":"https://genius.com/artist-song-lyrics"}}]}]}}`)), Request: req}, nil
-		case strings.Contains(req.URL.Path, "/genius/lyrics"):
-			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"error":false,"lyrics":"Genius line"}`)), Request: req}, nil
+		case req.URL.Host == "genius.com" && req.URL.Path == "/artist-song-lyrics":
+			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`<html><div data-lyrics-container="true"><div data-exclude-from-selection="true">Contributors</div>[00:01.00]Genius<br/>Direct line</div><div data-lyrics-container="true">[00:02.00]Second section</div></html>`)), Request: req}, nil
 		default:
 			return &http.Response{StatusCode: 404, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{}`)), Request: req}, nil
 		}
 	})}}
 	geniusLyrics, err := genius.FetchLyrics("Song", "Artist", 180)
-	if err != nil || geniusLyrics.Provider != "Genius" || geniusLyrics.SyncType != "UNSYNCED" {
+	if err != nil || geniusLyrics.Provider != "Genius" || geniusLyrics.Source != "Genius Direct" || geniusLyrics.SyncType != "LINE_SYNCED" || !strings.Contains(geniusLyrics.PlainLyrics, "Second section") {
 		t.Fatalf("genius lyrics = %#v/%v", geniusLyrics, err)
 	}
 }
