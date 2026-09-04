@@ -131,12 +131,26 @@ and the Dart side (`lib/services/backend_bridge.dart`) before declaring done.
 
 `native/bridge/bridge.go` is our glue layer. It links `go_backend` **by source**
 (`replace github.com/zarz/spotiflac_android/go_backend => ../../go_backend` in
-`native/bridge/go.mod`), then calls **30 exported functions**. As of the current
-baseline, **all 30 are inherited from upstream and byte-identical to v4.6.0** —
-none are ours. So every one of them is a potential break point on a future sync.
+`native/bridge/go.mod`), then calls **31 exported functions** — all inherited
+from upstream (none are our own Go). So every one of them is a potential break
+point on a future sync.
+
+> **v4.9.5 post-sync fix (2026-09-04):** the sync bumped the baseline + gates but
+> missed a *new startup requirement*. v4.9.5's "encrypted extension storage at
+> rest" makes `InitExtensionSystem` return early with
+> `"extension storage master key is not configured"` unless
+> `SetExtensionStorageMasterKey` (a new export) is called first — leaving the
+> extension dirs unconfigured so **every extension install/upgrade failed with
+> "extension directory is not configured" and no extensions loaded**. Fix wired
+> `SetExtensionStorageMasterKey` through `bridge.go` → Kotlin
+> (`setExtensionStorageMasterKey` channel method) → Dart
+> (`ExtensionMasterKey.loadOrCreate()` via `flutter_secure_storage`, called
+> before `initExtensionSystem` in `extensions_provider.dart`). **Lesson: a sync
+> must also re-check for new *required-order* bridge calls, not just changed
+> signatures.**
 
 ```
-bridge.go  ──calls 30 funcs──▶  go_backend exports (exports.go, metadata.go,
+bridge.go  ──calls 31 funcs──▶  go_backend exports (exports.go, metadata.go,
                                  lyrics.go, library_scan.go)
 ```
 

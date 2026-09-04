@@ -63,6 +63,9 @@ dependencies:
   device_info_plus: ^10.1.0
   # XML parsing for TTML lyrics format
   xml: ^6.5.0
+  # Keystore-backed master key for v4.9.5 encrypted extension storage-at-rest.
+  # Required before InitExtensionSystem, else extension install/load fails.
+  flutter_secure_storage: ^9.2.2
 
 dev_dependencies:
   flutter_test:

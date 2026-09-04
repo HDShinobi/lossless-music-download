@@ -157,6 +157,14 @@ class MainActivity : FlutterActivity() {
     private fun dispatch(call: MethodCall): Pair<Boolean, Any?> = when (call.method) {
         "ping" -> true to Bridge.ping()
         "getAudioQuality" -> true to Bridge.getAudioQualityJSON(call.argument<String>("path")!!)
+        "setExtensionStorageMasterKey" -> {
+            // v4.9.5 gates InitExtensionSystem on this key. Must run before
+            // "initExtensionSystem" or extension dirs stay unconfigured and
+            // every install/upgrade fails with "extension directory is not
+            // configured". Key is a base64 32-byte value held in Keystore.
+            Bridge.setExtensionStorageMasterKey(call.argument<String>("masterKey")!!)
+            true to null
+        }
         "initExtensionSystem" -> {
             Bridge.initExtensionSystem(
                 call.argument<String>("extDir")!!,

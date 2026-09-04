@@ -37,6 +37,7 @@ func SetExtensionEnabledByID(extensionID string, enabled bool) error {
 func SetExtensionFallbackProviderIDsJSON(providerIDsJSON string) error {
 func SetExtensionSessionGrantByID(extensionID, grant string) {
 func SetExtensionSettingsJSON(extensionID, settingsJSON string) error {
+func SetExtensionStorageMasterKey(encodedKey string) error {
 func SetLibraryCoverCacheDir(cacheDir string) {
 func SetMetadataProviderPriorityJSON(priorityJSON string) error {
 func SetProviderPriorityJSON(priorityJSON string) error {

@@ -71,6 +71,12 @@ class BackendBridge {
 
   static const _progressChannel = EventChannel('xyz.losslessmusic/progress');
 
+  /// Installs the keystore-backed master key used to encrypt extension storage
+  /// at rest (v4.9.5). MUST be called before [initExtensionSystem] — the engine
+  /// refuses to configure extension directories until the key is set.
+  Future<void> setExtensionStorageMasterKey(String masterKey) =>
+      _c.invokeMethod('setExtensionStorageMasterKey', {'masterKey': masterKey});
+
   Future<void> initExtensionSystem(String extDir, String dataDir) =>
       _c.invokeMethod('initExtensionSystem', {'extDir': extDir, 'dataDir': dataDir});
 

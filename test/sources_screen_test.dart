@@ -18,6 +18,9 @@ class _FakeBridge extends BackendBridge {
   _FakeBridge(this._list);
 
   @override
+  Future<void> setExtensionStorageMasterKey(String masterKey) async {}
+
+  @override
   Future<void> initExtensionSystem(String ext, String data) async {}
 
   @override
