@@ -659,7 +659,18 @@ func (r *extensionRuntime) signedSessionFetch(call goja.FunctionCall) goja.Value
 		if authURL != "" {
 			return r.signedSessionVerificationRequiredValue(authURL)
 		} else if verificationErr != nil {
-			return r.vm.ToValue(map[string]any{"ok": false, "error": verificationErr.Error()})
+			// LM-FORK: minting a fresh challenge failed (network blip/5xx on the
+			// bootstrap call) right after we detected the session needs
+			// re-auth. Returning a bare error here drops the auth-required
+			// signal: extensions that gate on the needsVerification flag (not
+			// error text) swallow it as a generic transient failure, and the
+			// download fails with an opaque provider error that never reopens
+			// the verification browser. Tag it as verification-required with
+			// no URL yet so the next attempt retries the challenge instead of
+			// looping silently. See docs/UPSTREAM-SYNC.md divergence registry.
+			LogWarn("SignedSession", "Challenge mint failed for extension %s after session expiry: %v", r.extensionID, verificationErr)
+			return r.signedSessionVerificationRequiredValue("")
+			// END LM-FORK
 		}
 		return r.vm.ToValue(map[string]any{"ok": false, "error": err.Error()})
 	}
@@ -674,8 +685,14 @@ func (r *extensionRuntime) signedSessionFetch(call goja.FunctionCall) goja.Value
 			return r.signedSessionVerificationRequiredValue(authURL)
 		}
 		if verificationErr != nil {
+			// LM-FORK: same challenge-mint failure as the ensureSignedSession
+			// branch above — tag as verification-required instead of a bare
+			// error the caller's needsVerification check would miss. See
+			// docs/UPSTREAM-SYNC.md divergence registry.
 			coordinator.mu.Unlock()
-			return r.vm.ToValue(map[string]any{"ok": false, "error": verificationErr.Error()})
+			LogWarn("SignedSession", "Challenge mint failed for extension %s (blocked generation): %v", r.extensionID, verificationErr)
+			return r.signedSessionVerificationRequiredValue("")
+			// END LM-FORK
 		}
 		record, err = r.loadSignedSession(config)
 		if err != nil {
@@ -684,10 +701,11 @@ func (r *extensionRuntime) signedSessionFetch(call goja.FunctionCall) goja.Value
 		}
 		if !signedSessionRecordIsUsable(record) || coordinator.generationIsBlocked(record) {
 			coordinator.mu.Unlock()
-			return r.vm.ToValue(map[string]any{
-				"ok":    false,
-				"error": "verification_required: signed-session generation is blocked",
-			})
+			// LM-FORK: same tagging fix — "verification_required:"-prefixed
+			// text is a no-op for callers that only check needsVerification.
+			// See docs/UPSTREAM-SYNC.md divergence registry.
+			return r.signedSessionVerificationRequiredValue("")
+			// END LM-FORK
 		}
 	}
 	coordinator.mu.Unlock()

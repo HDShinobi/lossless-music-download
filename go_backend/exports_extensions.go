@@ -512,7 +512,17 @@ func DownloadWithExtensionsJSON(requestJSON string) (string, error) {
 	preflightStartedAt := time.Now()
 	verificationRequired, preflightErr := preflightExtensionDownloadSession(sessionProvider)
 	if preflightErr != nil {
-		message := fmt.Sprintf("Could not start verification for %s: %v", sessionProvider, preflightErr)
+		// LM-FORK: a preflight failure here means we couldn't even mint a
+		// verification challenge (network blip/5xx on the bootstrap call) —
+		// conceptually the same "needs verification" case as the branch
+		// below, just one that failed before we got a challenge URL. The
+		// original message/classifyDownloadErrorType(message) combo produced
+		// an opaque error with no recognizable signal, so the app's
+		// auto-reopen-browser detection (which pattern-matches error text)
+		// never fired and the user was stuck on manual retry forever. Word
+		// it like the sibling branch so it's recognizable. See
+		// docs/UPSTREAM-SYNC.md divergence registry.
+		message := fmt.Sprintf("Verification required for %s but could not start it: %v", sessionProvider, preflightErr)
 		GoLog("[DownloadWithExtensions] Signed-session preflight for %s failed after %s: %v\n", sessionProvider, time.Since(preflightStartedAt).Round(time.Millisecond), preflightErr)
 		if req.ItemID != "" {
 			RemoveItemProgress(req.ItemID)
@@ -520,9 +530,10 @@ func DownloadWithExtensionsJSON(requestJSON string) (string, error) {
 		return marshalJSONString(&DownloadResponse{
 			Success:   false,
 			Error:     message,
-			ErrorType: classifyDownloadErrorType(message),
+			ErrorType: "verification_required",
 			Service:   sessionProvider,
 		})
+		// END LM-FORK
 	} else if verificationRequired {
 		GoLog("[DownloadWithExtensions] Signed-session verification required for %s after %s; skipping metadata preparation\n", sessionProvider, time.Since(preflightStartedAt).Round(time.Millisecond))
 		cacheUnpreparedDownloadRequest(downloadPreparationKey(req), req)

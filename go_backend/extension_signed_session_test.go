@@ -491,9 +491,14 @@ func TestDownloadWithExtensionsStopsAfterFailedSignedSessionPreflight(t *testing
 	if err := json.Unmarshal([]byte(responseJSON), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response.ErrorType != "network" || response.Service != extensionID || !strings.Contains(response.Error, "Could not start verification") {
+	// LM-FORK: a failed challenge mint is worded/classified as
+	// verification_required now instead of an opaque "network" error the
+	// app's auto-reopen-browser detection couldn't recognize. See
+	// docs/UPSTREAM-SYNC.md divergence registry.
+	if response.ErrorType != "verification_required" || response.Service != extensionID || !strings.Contains(response.Error, "Verification required") {
 		t.Fatalf("response = %#v", response)
 	}
+	// END LM-FORK
 	if calls != 2 {
 		t.Fatalf("bootstrap calls = %d, want only the initial attempt and its transport retry", calls)
 	}
