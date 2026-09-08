@@ -68,20 +68,30 @@ class MainActivity : FlutterActivity() {
         }
         val grant = (uri.getQueryParameter("grant") ?: uri.getQueryParameter("code"))
             ?.trim().orEmpty()
-        val extensionId = uri.getQueryParameter("state")?.trim().orEmpty()
-        if (grant.isEmpty() || extensionId.isEmpty()) {
+        // `state` is a one-time random callback nonce (go_backend's
+        // newExtensionCallbackState), NOT the extension ID. It must be resolved
+        // to the extension that raised the challenge via consumeExtensionCallbackState
+        // before the grant is stored — passing the nonce straight to
+        // setExtensionSessionGrantByID fails with "extension not found". See
+        // upstream AppDelegate.swift / MainActivity.kt for the reference flow.
+        val callbackState = uri.getQueryParameter("state")?.trim().orEmpty()
+        if (grant.isEmpty() || callbackState.isEmpty()) {
             android.util.Log.w("MainActivity", "session-grant redirect missing grant/state")
             return
         }
         intent.data = null
         bridgeExecutor.execute {
+            var extensionId = ""
             try {
+                extensionId = Bridge.consumeExtensionCallbackState(callbackState)
                 Bridge.setExtensionSessionGrantByID(extensionId, grant)
                 Bridge.invokeExtensionActionJSON(extensionId, "completeGrant")
                 mainHandler.post { notifySessionGrantCompleted(extensionId, true) }
             } catch (e: Exception) {
                 android.util.Log.w("MainActivity", "session-grant exchange failed: ${e.message}")
-                mainHandler.post { notifySessionGrantCompleted(extensionId, false) }
+                if (extensionId.isNotEmpty()) {
+                    mainHandler.post { notifySessionGrantCompleted(extensionId, false) }
+                }
             }
         }
     }

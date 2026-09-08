@@ -213,6 +213,18 @@ func SetExtensionSessionGrantByID(extensionID, grant string) {
 	gobackend.SetExtensionSessionGrantByID(extensionID, grant)
 }
 
+// ConsumeExtensionCallbackState validates and consumes the one-time callback
+// nonce that arrives as the `state` query param of the spotiflac://session-grant
+// (or OAuth callback) deep link, returning the extension ID that raised the
+// challenge. The `state` is a random nonce (newExtensionCallbackState), NOT the
+// extension ID, so the callback handler MUST resolve it here before granting —
+// otherwise SetExtensionSessionGrantByID gets the nonce and fails with
+// "extension not found". Matches upstream's app-side flow (AppDelegate.swift /
+// MainActivity.kt: consumeExtensionCallbackState → setExtensionSessionGrantByID).
+func ConsumeExtensionCallbackState(state string) (string, error) {
+	return gobackend.ConsumeExtensionCallbackState(state)
+}
+
 // InvokeExtensionActionJSON calls a named action exported by an extension's
 // JS runtime (e.g. "completeGrant") and returns its JSON-encoded result.
 func InvokeExtensionActionJSON(extensionID, actionName string) (string, error) {
