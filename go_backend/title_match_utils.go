@@ -1,6 +1,7 @@
 package gobackend
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
 
@@ -120,8 +121,8 @@ func artistsMatch(expectedArtist, foundArtist string) bool {
 		return true
 	}
 
-	expectedArtists := splitArtists(normExpected)
-	foundArtists := splitArtists(normFound)
+	expectedArtists := splitArtists(expectedArtist)
+	foundArtists := splitArtists(foundArtist)
 
 	for _, expected := range expectedArtists {
 		for _, found := range foundArtists {
@@ -142,20 +143,21 @@ func artistsMatch(expectedArtist, foundArtist string) bool {
 }
 
 func splitArtists(artists string) []string {
-	normalized := artists
+	normalized := strings.ToLower(artists)
 	normalized = strings.ReplaceAll(normalized, " feat. ", "|")
 	normalized = strings.ReplaceAll(normalized, " feat ", "|")
 	normalized = strings.ReplaceAll(normalized, " ft. ", "|")
 	normalized = strings.ReplaceAll(normalized, " ft ", "|")
 	normalized = strings.ReplaceAll(normalized, " & ", "|")
 	normalized = strings.ReplaceAll(normalized, " and ", "|")
-	normalized = strings.ReplaceAll(normalized, ", ", "|")
+	normalized = strings.ReplaceAll(normalized, ",", "|")
+	normalized = strings.ReplaceAll(normalized, ";", "|")
 	normalized = strings.ReplaceAll(normalized, " x ", "|")
 
 	parts := strings.Split(normalized, "|")
 	result := make([]string, 0, len(parts))
 	for _, part := range parts {
-		trimmed := strings.TrimSpace(part)
+		trimmed := normalizeLooseArtistName(part)
 		if trimmed != "" {
 			result = append(result, trimmed)
 		}
@@ -251,6 +253,34 @@ func titlesMatch(expectedTitle, foundTitle string) bool {
 	}
 
 	return false
+}
+
+var trackTitleAnnotationPattern = regexp.MustCompile(`(?i)[(\[]\s*(?:(?:feat\.?|ft\.?|featuring)\s+[^)\]]+|from\s+["“][^)\]]+["”]\s*)[)\]]`)
+
+func normalizeTrackIdentityTitle(title string) string {
+	return normalizeLooseTitle(trackTitleAnnotationPattern.ReplaceAllString(title, " "))
+}
+
+func trackTitlesMatch(expectedTitle, foundTitle string) bool {
+	expectedTitle = trackTitleAnnotationPattern.ReplaceAllString(expectedTitle, " ")
+	foundTitle = trackTitleAnnotationPattern.ReplaceAllString(foundTitle, " ")
+	expected := normalizeLooseTitle(expectedTitle)
+	found := normalizeLooseTitle(foundTitle)
+	if expected != "" && expected == found {
+		return true
+	}
+
+	// Version words identify recordings; punctuation around them does not.
+	for _, title := range []string{expected, found} {
+		for _, word := range strings.Fields(title) {
+			switch word {
+			case "mix", "remix", "live", "acoustic", "demo", "instrumental",
+				"karaoke", "edit", "extended", "slowed", "sped":
+				return false
+			}
+		}
+	}
+	return titlesMatch(expectedTitle, foundTitle)
 }
 
 func extractCoreTitle(title string) string {
@@ -396,7 +426,7 @@ func hasStrongTrackIdentity(req DownloadRequest, resolved resolvedTrackInfo) boo
 		return false
 	}
 
-	titleExact := exactLooseIdentityMatch(req.TrackName, resolved.Title, normalizeLooseTitle)
+	titleExact := exactLooseIdentityMatch(req.TrackName, resolved.Title, normalizeTrackIdentityTitle)
 	if !titleExact {
 		return false
 	}
@@ -425,7 +455,7 @@ func trackMatchesRequest(req DownloadRequest, resolved resolvedTrackInfo, logPre
 		}
 
 		if req.TrackName != "" && resolved.Title != "" &&
-			!titlesMatch(req.TrackName, resolved.Title) {
+			!trackTitlesMatch(req.TrackName, resolved.Title) {
 			GoLog("[%s] Verification failed: title mismatch — expected '%s', got '%s'\n",
 				logPrefix, req.TrackName, resolved.Title)
 			return false
@@ -450,6 +480,17 @@ func trackMatchesRequest(req DownloadRequest, resolved resolvedTrackInfo, logPre
 			diff = -diff
 		}
 		if diff > 10 {
+			// Catalog durations can disagree even for the same recording. Require
+			// both its ISRC and matching names; a preview still cannot qualify.
+			if exactISRCMatch && req.TrackName != "" && resolved.Title != "" &&
+				exactLooseIdentityMatch(req.TrackName, resolved.Title, normalizeTrackIdentityTitle) &&
+				req.ArtistName != "" && resolved.ArtistName != "" &&
+				artistsMatch(req.ArtistName, resolved.ArtistName) &&
+				!(resolved.Duration <= 35 && expectedDurationSec > 45) {
+				GoLog("[%s] Accepted catalog duration difference for matching ISRC and recording names: expected %ds, got %ds\n",
+					logPrefix, expectedDurationSec, resolved.Duration)
+				return true
+			}
 			GoLog("[%s] Verification failed: duration mismatch — expected %ds, got %ds\n",
 				logPrefix, expectedDurationSec, resolved.Duration)
 			return false
@@ -457,4 +498,76 @@ func trackMatchesRequest(req DownloadRequest, resolved resolvedTrackInfo, logPre
 	}
 
 	return true
+}
+
+// selectBestMetadataEnrichmentTrack only returns a provider result when it is
+// safe to copy missing tags into a download request. Search ordering alone is
+// not evidence of identity: providers can put covers, remixes, or unrelated
+// same-title recordings first.
+func selectBestMetadataEnrichmentTrack(req DownloadRequest, tracks []ExtTrackMetadata) *ExtTrackMetadata {
+	var best *ExtTrackMetadata
+	bestScore := -1 << 30
+	expectedISRC := strings.TrimSpace(req.ISRC)
+
+	for i := range tracks {
+		track := &tracks[i]
+		candidateISRC := strings.TrimSpace(track.ISRC)
+		exactISRCMatch := expectedISRC != "" && candidateISRC != "" &&
+			strings.EqualFold(expectedISRC, candidateISRC)
+		if expectedISRC != "" && candidateISRC != "" && !exactISRCMatch {
+			GoLog("[MetadataEnrichment] Rejected %s result with conflicting ISRC %s\n", track.ProviderID, candidateISRC)
+			continue
+		}
+
+		resolved := resolvedTrackInfo{
+			Title:      track.Name,
+			ArtistName: track.Artists,
+			AlbumName:  track.AlbumName,
+			ISRC:       track.ISRC,
+			Duration:   track.DurationMS / 1000,
+		}
+		if !trackMatchesRequest(req, resolved, "MetadataEnrichment") {
+			continue
+		}
+		if !exactISRCMatch && !hasStrongTrackIdentity(req, resolved) {
+			GoLog("[MetadataEnrichment] Rejected low-confidence result: %s - %s\n", track.Name, track.Artists)
+			continue
+		}
+
+		score := 2000
+		if exactISRCMatch {
+			score += 10000
+		}
+		if exactLooseIdentityMatch(req.TrackName, track.Name, normalizeLooseTitle) {
+			score += 400
+		}
+		if exactLooseIdentityMatch(req.ArtistName, track.Artists, normalizeLooseArtistName) {
+			score += 320
+		}
+		if req.AlbumName != "" && track.AlbumName != "" && titlesMatch(req.AlbumName, track.AlbumName) {
+			score += 120
+		}
+		if durationMatchesRequest(req, resolved) {
+			score += 80
+		}
+		if track.ISRC != "" {
+			score += 40
+		}
+		if track.AlbumName != "" {
+			score += 30
+		}
+		if track.ReleaseDate != "" {
+			score += 30
+		}
+		if track.TrackNumber > 0 {
+			score += 10
+		}
+
+		if best == nil || score > bestScore {
+			best = track
+			bestScore = score
+		}
+	}
+
+	return best
 }

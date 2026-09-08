@@ -70,7 +70,7 @@ type PendingAuthRequest struct {
 
 // Challenge URLs are short-lived; serving one past this age sends the user
 // to an already-expired verification page.
-const pendingAuthRequestTTL = 5 * time.Minute
+const pendingAuthRequestTTL = 3 * time.Minute
 
 var (
 	pendingAuthRequests   = make(map[string]*PendingAuthRequest)
@@ -150,6 +150,32 @@ func removePendingAuthStateLocked(state string) {
 	}
 }
 
+func resolveExtensionCallbackStateLocked(state string) (string, error) {
+	extensionID := pendingAuthStates[state]
+	request := pendingAuthRequests[extensionID]
+	if extensionID == "" || request == nil || request.State != state ||
+		time.Since(request.CreatedAt) >= pendingAuthRequestTTL {
+		removePendingAuthStateLocked(state)
+		return "", fmt.Errorf("callback state is invalid, expired, or already used")
+	}
+	return extensionID, nil
+}
+
+// ResolveExtensionCallbackState validates a callback nonce without consuming
+// it. Callback handlers use this before an exchange so a transient exchange
+// failure can still be retried with the same short-lived challenge.
+func ResolveExtensionCallbackState(state string) (string, error) {
+	state = strings.TrimSpace(state)
+	if state == "" {
+		return "", fmt.Errorf("callback state is required")
+	}
+
+	pendingAuthRequestsMu.Lock()
+	extensionID, err := resolveExtensionCallbackStateLocked(state)
+	pendingAuthRequestsMu.Unlock()
+	return extensionID, err
+}
+
 func ConsumeExtensionCallbackState(state string) (string, error) {
 	state = strings.TrimSpace(state)
 	if state == "" {
@@ -157,13 +183,10 @@ func ConsumeExtensionCallbackState(state string) (string, error) {
 	}
 
 	pendingAuthRequestsMu.Lock()
-	extensionID := pendingAuthStates[state]
-	request := pendingAuthRequests[extensionID]
-	if extensionID == "" || request == nil || request.State != state ||
-		time.Since(request.CreatedAt) >= pendingAuthRequestTTL {
-		removePendingAuthStateLocked(state)
+	extensionID, err := resolveExtensionCallbackStateLocked(state)
+	if err != nil {
 		pendingAuthRequestsMu.Unlock()
-		return "", fmt.Errorf("callback state is invalid, expired, or already used")
+		return "", err
 	}
 	removePendingAuthStateLocked(state)
 	pendingAuthRequestsMu.Unlock()
@@ -221,6 +244,9 @@ type extensionRuntime struct {
 
 	activeDownloadMu     sync.RWMutex
 	activeDownloadItemID string
+
+	resolutionMu     sync.RWMutex
+	resolutionBudget *resolutionBudget
 
 	activeRequestMu sync.RWMutex
 	activeRequestID string
@@ -397,6 +423,9 @@ func (r *extensionRuntime) bindDownloadCancelContext(req *http.Request) *http.Re
 // cancels it when that response body closes, so that request context must not
 // be reused for provider retry delays between requests.
 func (r *extensionRuntime) activeOperationContext(fallback context.Context) context.Context {
+	if budget := r.currentResolutionBudget(); budget != nil {
+		return budget.ctx
+	}
 	itemID := r.getActiveDownloadItemID()
 	if itemID == "" {
 		requestID := r.getActiveRequestID()
@@ -446,13 +475,6 @@ func (w *stallWatchdog) reset() { w.timer.Reset(w.timeout) }
 func (w *stallWatchdog) stop() {
 	w.timer.Stop()
 	w.cancel()
-}
-
-// stallError is returned when the watchdog fires. The message is deliberately
-// free of "cancel" and worded to classify as retryable network failure, so the
-// fallback layer retries instead of treating it as a user cancellation.
-func (r *extensionRuntime) stallError() goja.Value {
-	return r.jsError("download stalled: no data received for %ds (network timeout)", int(downloadStallTimeout.Seconds()))
 }
 
 func newExtensionHTTPClient(ext *loadedExtension, jar http.CookieJar, timeout time.Duration, compressResponses bool) *http.Client {
@@ -768,6 +790,7 @@ func (r *extensionRuntime) RegisterAPIs(vm *goja.Runtime) {
 	utilsObj.Set("appVersion", r.appVersion)
 	utilsObj.Set("appUserAgent", r.appUserAgent)
 	utilsObj.Set("sleep", r.sleep)
+	utilsObj.Set("getResolutionRemainingMs", r.getResolutionRemainingMs)
 	utilsObj.Set("isDownloadCancelled", r.isDownloadCancelled)
 	utilsObj.Set("isRequestCancelled", r.isRequestCancelled)
 	utilsObj.Set("setDownloadStatus", r.setDownloadStatus)

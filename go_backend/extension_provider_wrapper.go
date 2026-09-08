@@ -105,7 +105,11 @@ func callExtension[T any](p *extensionProviderWrapper, opts extCallOpts, parse f
 
 	jsStartedAt := time.Now()
 	result, err := runGojaCallWithTimeoutContextAndRecover(ctx, p.vm, func() (goja.Value, error) {
-		return opts.invoke(p.vm)
+		result, err := opts.invoke(p.vm)
+		if err != nil {
+			err = p.normalizePendingVerificationError(err)
+		}
+		return result, err
 	}, opts.timeout)
 	perf.recordJS(time.Since(jsStartedAt))
 	perf.recordPayload(result)
@@ -141,6 +145,40 @@ func callExtension[T any](p *extensionProviderWrapper, opts extCallOpts, parse f
 	}
 
 	return parse(perf, result)
+}
+
+func (p *extensionProviderWrapper) normalizePendingVerificationError(err error) error {
+	var exception *goja.Exception
+	if !errors.As(err, &exception) {
+		return err
+	}
+	// A script may rethrow an earlier challenge after the per-call runtime
+	// marker was cleared. Only trust an existing, fresh challenge for this
+	// extension; the exception alone must not start verification.
+	pending := GetPendingAuthRequest(p.extension.ID)
+	if pending == nil || pending.ExtensionID != p.extension.ID || strings.TrimSpace(pending.AuthURL) == "" {
+		return err
+	}
+	if age := time.Since(pending.CreatedAt); age < 0 || age >= pendingAuthRequestTTL {
+		return err
+	}
+	value := exception.Value()
+	if gojaValueIsEmpty(value) {
+		return err
+	}
+	var message string
+	if extractionErr := p.vm.Try(func() {
+		if object, ok := value.(*goja.Object); ok {
+			if field := object.Get("message"); !gojaValueIsEmpty(field) {
+				message = field.String()
+			}
+		} else {
+			message = value.String()
+		}
+	}); extractionErr != nil || strings.TrimSpace(message) != "VERIFY_REQUIRED" {
+		return err
+	}
+	return fmt.Errorf("verification_required: extension '%s' needs signed-session verification: %w", p.extension.ID, err)
 }
 
 func invokeExtensionMethod(vm *goja.Runtime, method string, args ...any) (goja.Value, error) {
@@ -529,21 +567,47 @@ func (p *extensionProviderWrapper) CheckAvailabilityForItemID(isrc, trackName, a
 		availabilityOptions["track"] = trackContexts[0]
 	}
 
+	var availabilityRuntime *extensionRuntime
+	consumeVerificationError := func() error {
+		if availabilityRuntime != nil && availabilityRuntime.consumeVerificationRequired() != "" {
+			return fmt.Errorf(
+				"verification_required: extension '%s' needs signed-session verification",
+				p.extension.ID,
+			)
+		}
+		return nil
+	}
+
 	return callExtension(p, extCallOpts{
 		perfName: "checkAvailability",
-		invoke:   extensionMethodInvocation("checkAvailability", isrc, trackName, artistName, availabilityOptions),
-		timeout:  DefaultJSTimeout,
-		itemID:   itemID,
+		invoke: func(vm *goja.Runtime) (goja.Value, error) {
+			result, err := invokeExtensionMethod(vm, "checkAvailability", isrc, trackName, artistName, availabilityOptions)
+			// A thrown JS error must preserve the same canonical runtime evidence
+			// as a returned unavailable result. Cancellation and timeout still
+			// take precedence in callExtension.
+			if err != nil {
+				if verificationErr := consumeVerificationError(); verificationErr != nil {
+					return nil, verificationErr
+				}
+			}
+			return result, err
+		},
+		timeout: DefaultJSTimeout,
+		itemID:  itemID,
 		beforeRun: func() func() {
 			// Drop any stale flag so the post-run check below only sees
 			// verification requested by THIS call.
-			if p.extension.runtime != nil {
-				p.extension.runtime.consumeVerificationRequired()
+			availabilityRuntime = p.extension.runtime
+			if availabilityRuntime != nil {
+				availabilityRuntime.consumeVerificationRequired()
 			}
 			return nil
 		},
 	}, func(perf *extensionCallPerf, result goja.Value) (*ExtAvailabilityResult, error) {
 		if result == nil || goja.IsUndefined(result) || goja.IsNull(result) {
+			if err := consumeVerificationError(); err != nil {
+				return nil, err
+			}
 			return &ExtAvailabilityResult{Available: false, Reason: "not implemented"}, nil
 		}
 		parseStartedAt := time.Now()
@@ -555,12 +619,9 @@ func (p *extensionProviderWrapper) CheckAvailabilityForItemID(isrc, trackName, a
 		// "not available", which would silently skip this provider's
 		// challenge; surface it as an error so the fallback loop pauses and
 		// opens the challenge instead.
-		if !availability.Available && p.extension.runtime != nil {
-			if p.extension.runtime.consumeVerificationRequired() != "" {
-				return nil, fmt.Errorf(
-					"verification_required: extension '%s' needs signed-session verification",
-					p.extension.ID,
-				)
+		if !availability.Available {
+			if err := consumeVerificationError(); err != nil {
+				return nil, err
 			}
 		}
 		return &availability, nil
@@ -635,6 +696,12 @@ func (p *extensionProviderWrapper) DownloadPrepared(
 		SetItemPreparing(itemID)
 	}
 
+	if runtime != nil {
+		var finishResolution func()
+		downloadCtx, finishResolution = runtime.beginResolutionBudget(downloadCtx, extensionResolutionTimeout)
+		defer finishResolution()
+	}
+
 	progressCallback := vm.ToValue(func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) > 0 {
 			percent := int(call.Arguments[0].ToInteger())
@@ -658,7 +725,7 @@ func (p *extensionProviderWrapper) DownloadPrepared(
 	}
 
 	jsStartedAt := time.Now()
-	downloadOptions := map[string]any{}
+	downloadOptions := map[string]any{"resolutionTimeoutMs": extensionResolutionTimeout.Milliseconds()}
 	if len(preparedContext) > 0 {
 		downloadOptions["preparedContext"] = preparedContext
 	}
@@ -686,6 +753,9 @@ func (p *extensionProviderWrapper) DownloadPrepared(
 		errType := "script_error"
 		if IsTimeoutError(err) {
 			errMsg = "download timeout: extension took too long to complete"
+			if context.Cause(downloadCtx) == context.DeadlineExceeded {
+				errMsg = "stream resolution timeout: extension took too long to resolve an audio stream"
+			}
 			errType = "timeout"
 		}
 		return &ExtDownloadResult{

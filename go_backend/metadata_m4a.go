@@ -101,7 +101,7 @@ func readM4ATagsFromIlst(f *os.File, fileSize int64, ilst atomHeader) (*AudioMet
 					if metadata.Copyright == "" {
 						metadata.Copyright = value
 					}
-				case "LYRICS", "UNSYNCEDLYRICS":
+				case "LYRICS", "UNSYNCEDLYRICS", "SYNCEDLYRICS":
 					if metadata.Lyrics == "" {
 						metadata.Lyrics = value
 					}
@@ -842,6 +842,8 @@ func normalizeM4AAudioCodec(atomType string) string {
 		return "ac3"
 	case "ac-4":
 		return "ac4"
+	case "Opus":
+		return "opus"
 	default:
 		return strings.TrimSpace(atomType)
 	}
@@ -1154,6 +1156,7 @@ func findAudioSampleEntry(f *os.File, start, end, fileSize int64) (int64, string
 		[]byte("ec-3"),
 		[]byte("ac-3"),
 		[]byte("ac-4"),
+		[]byte("Opus"),
 	}
 
 	var tail []byte

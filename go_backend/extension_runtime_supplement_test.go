@@ -15,6 +15,12 @@ import (
 	"github.com/dop251/goja"
 )
 
+func TestPendingAuthRequestExpiresAfterThreeMinutes(t *testing.T) {
+	if pendingAuthRequestTTL != 3*time.Minute {
+		t.Fatalf("pending auth request TTL = %v", pendingAuthRequestTTL)
+	}
+}
+
 func TestExtensionRuntimeAuthAndPolyfills(t *testing.T) {
 	vm := goja.New()
 	runtime := &extensionRuntime{
@@ -82,6 +88,12 @@ func TestExtensionRuntimeAuthAndPolyfills(t *testing.T) {
 	pending := GetPendingAuthRequest("auth-ext")
 	if pending == nil || pending.AuthURL == "" || pending.State == "" || !strings.Contains(pending.AuthURL, "state=") {
 		t.Fatalf("pending auth = %#v", pending)
+	}
+	if extensionID, err := ResolveExtensionCallbackState(pending.State); err != nil || extensionID != "auth-ext" {
+		t.Fatalf("resolve callback state = %q/%v", extensionID, err)
+	}
+	if extensionID, err := ResolveExtensionCallbackState(pending.State); err != nil || extensionID != "auth-ext" {
+		t.Fatalf("resolve callback state retry = %q/%v", extensionID, err)
 	}
 	if extensionID, err := ConsumeExtensionCallbackState(pending.State); err != nil || extensionID != "auth-ext" {
 		t.Fatalf("consume callback state = %q/%v", extensionID, err)
@@ -1158,7 +1170,7 @@ func TestExtensionRuntimeUtilityAPIs(t *testing.T) {
 }
 
 func TestClassifySignedSessionExpiredAsVerification(t *testing.T) {
-	got := classifyDownloadErrorType("Failed to resolve Deezer download: signed session expired")
+	got := classifyDownloadErrorType("Failed to resolve provider download: signed session expired")
 	if got != "verification_required" {
 		t.Fatalf("expected verification_required, got %q", got)
 	}

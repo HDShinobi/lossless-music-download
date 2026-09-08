@@ -180,31 +180,18 @@ func (c *signedSessionCoordinator) clearChallenge() {
 	c.pendingExtensionIDs = nil
 }
 
-// LM-FORK: rememberChallenge must stamp the coordinator with the SAME CreatedAt
-// as the PendingAuthRequest registered for this challenge. Upstream v4.9.5 used
-// a fresh time.Now() here, so when a second extension shares the gateway (our
-// amazon+ytmusic → Zarz qobuz-web case) and registers with
-// coordinator.challengeCreatedAt, that timestamp never equalled the first
-// extension's registered CreatedAt. The v4.9.5 "validate callback state" check
-// (registerPendingAuthRequest) then rejected it as "callback state is already
-// registered", and the download died with an opaque error that never reopened
-// verification. Take the real createdAt from the caller so both registrations
-// agree. Drop when upstream aligns the two timestamps. See
-// docs/UPSTREAM-SYNC.md divergence registry.
-func (c *signedSessionCoordinator) rememberChallenge(extensionID, authURL, callbackURL, callbackState string, createdAt time.Time) {
+func (c *signedSessionCoordinator) rememberChallenge(request *PendingAuthRequest) {
 	if c.pendingExtensionIDs == nil {
 		c.pendingExtensionIDs = make(map[string]struct{})
 	}
-	if createdAt.IsZero() {
-		createdAt = time.Now()
-	}
-	c.authURL = authURL
-	c.callbackURL = callbackURL
-	c.callbackState = callbackState
-	c.challengeCreatedAt = createdAt
-	c.pendingExtensionIDs[extensionID] = struct{}{}
+	c.authURL = request.AuthURL
+	c.callbackURL = request.CallbackURL
+	c.callbackState = request.State
+	// Reusers must register the exact same challenge identity, including its
+	// original timestamp. A fresh time both breaks nonce sharing and extends TTL.
+	c.challengeCreatedAt = request.CreatedAt
+	c.pendingExtensionIDs[request.ExtensionID] = struct{}{}
 }
-// END LM-FORK
 
 func (c *signedSessionCoordinator) activeChallenge() bool {
 	return strings.TrimSpace(c.authURL) != "" &&
@@ -652,11 +639,7 @@ func (r *extensionRuntime) exchangeSignedSessionGrant(grant string) error {
 func (r *extensionRuntime) signedSessionExchangeContext() (context.Context, context.CancelFunc) {
 	parent := context.Background()
 	if r != nil {
-		if itemID := r.getActiveDownloadItemID(); itemID != "" {
-			parent = downloadCancelContext(itemID)
-		} else if requestID := r.getActiveRequestID(); requestID != "" {
-			parent = extensionRequestCancelContext(requestID)
-		}
+		parent = r.activeOperationContext(parent)
 	}
 	return context.WithTimeout(parent, signedSessionExchangeTimeout)
 }
@@ -1284,16 +1267,6 @@ func (r *extensionRuntime) refreshSignedSession(config SignedSessionConfig, reco
 	return nil
 }
 
-func (r *extensionRuntime) startSignedSessionVerification(config SignedSessionConfig, reason string) (string, error) {
-	coordinator, err := r.signedSessionCoordinator(config)
-	if err != nil {
-		return "", err
-	}
-	coordinator.mu.Lock()
-	defer coordinator.mu.Unlock()
-	return r.startSignedSessionVerificationLocked(config, coordinator, reason)
-}
-
 func (r *extensionRuntime) startSignedSessionVerificationLocked(
 	config SignedSessionConfig,
 	coordinator *signedSessionCoordinator,
@@ -1318,13 +1291,7 @@ func (r *extensionRuntime) startSignedSessionVerificationLocked(
 	if pending := GetPendingAuthRequest(r.extensionID); pending != nil {
 		if time.Since(pending.CreatedAt) < pendingAuthRequestTTL &&
 			strings.TrimSpace(pending.AuthURL) != "" {
-			coordinator.rememberChallenge(
-				r.extensionID,
-				pending.AuthURL,
-				pending.CallbackURL,
-				pending.State,
-				pending.CreatedAt, // LM-FORK: match coordinator ts to registered request; see rememberChallenge
-			)
+			coordinator.rememberChallenge(pending)
 			return pending.AuthURL, nil
 		}
 		ClearPendingAuthRequest(r.extensionID)
@@ -1401,13 +1368,7 @@ func (r *extensionRuntime) startSignedSessionVerificationLocked(
 		if registerErr := registerPendingAuthRequest(request); registerErr != nil {
 			finalErr = registerErr
 		} else {
-			coordinator.rememberChallenge(
-				r.extensionID,
-				bootstrap.AuthURL,
-				bootstrap.CallbackURL,
-				bootstrap.CallbackState,
-				request.CreatedAt, // LM-FORK: match coordinator ts to registered request; see rememberChallenge
-			)
+			coordinator.rememberChallenge(request)
 			authURL = bootstrap.AuthURL
 		}
 	}
