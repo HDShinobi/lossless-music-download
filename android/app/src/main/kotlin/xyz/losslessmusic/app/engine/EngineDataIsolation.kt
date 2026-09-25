@@ -14,6 +14,7 @@ object EngineDataIsolation {
 
     data class Dirs(val extensions: File, val data: File)
 
+    @Synchronized
     fun ensureRustCopy(goExtDir: File, goDataDir: File): Dirs {
         val parent = requireNotNull(goExtDir.absoluteFile.parentFile) { "extension dir has no parent" }
         val root = File(parent, ROOT_NAME)
@@ -24,7 +25,9 @@ object EngineDataIsolation {
             try {
                 copyOrCreate(goExtDir, File(staging, goExtDir.name))
                 copyOrCreate(goDataDir, File(staging, goDataDir.name))
-                check(staging.renameTo(root)) { "failed to publish $root" }
+                if (!staging.renameTo(root)) {
+                    check(root.isDirectory) { "failed to publish $root" }
+                }
             } finally {
                 if (staging.exists()) staging.deleteRecursively()
             }

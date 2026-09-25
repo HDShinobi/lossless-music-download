@@ -7,6 +7,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class EngineDataIsolationTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -67,6 +70,39 @@ class EngineDataIsolationTest {
         assertFalse(stale.exists())
         assertFalse(File(dirs.extensions, "half").exists())
         assertTrue(File(dirs.extensions, "qobuz/manifest.json").exists())
+    }
+
+    @Test fun concurrentCallsPublishOneCompleteCopyWithoutChangingGoDirs() {
+        val (ext, data) = goDirs()
+        val payload = ByteArray(4 * 1024 * 1024) { (it % 251).toByte() }
+        File(ext, "qobuz/large.bin").writeBytes(payload)
+        val expected = EngineDataIsolation.Dirs(
+            File(ext.parentFile, "engine-rust/extensions"),
+            File(ext.parentFile, "engine-rust/ext_data"),
+        )
+        val callers = 12
+        val start = CountDownLatch(1)
+        val executor = Executors.newFixedThreadPool(callers)
+        try {
+            val results = (1..callers).map {
+                executor.submit<EngineDataIsolation.Dirs> {
+                    start.await()
+                    EngineDataIsolation.ensureRustCopy(ext, data)
+                }
+            }
+            start.countDown()
+            results.forEach { assertEquals(expected, it.get(30, TimeUnit.SECONDS)) }
+        } finally {
+            executor.shutdownNow()
+        }
+
+        assertEquals("{\"id\":\"qobuz\"}", File(expected.extensions, "qobuz/manifest.json").readText())
+        assertTrue(File(expected.extensions, "qobuz/large.bin").readBytes().contentEquals(payload))
+        assertTrue(File(expected.data, "qobuz/storage.enc").readBytes().contentEquals(byteArrayOf(1, 2, 3)))
+        assertTrue(File(ext, "qobuz/large.bin").readBytes().contentEquals(payload))
+        assertEquals("{\"id\":\"qobuz\"}", File(ext, "qobuz/manifest.json").readText())
+        assertTrue(File(data, "qobuz/storage.enc").readBytes().contentEquals(byteArrayOf(1, 2, 3)))
+        assertTrue(ext.parentFile.listFiles { file -> file.name.startsWith("engine-rust.tmp-") }!!.isEmpty())
     }
 
     @Test fun engineVersionIsTheVendoredBaseline() {
