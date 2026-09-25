@@ -6,6 +6,8 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.Bundle
+import android.util.Log
+import java.io.File
 import java.net.Inet4Address
 import android.os.Handler
 import android.os.Looper
@@ -16,12 +18,16 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
 import xyz.losslessmusic.backend.bridge.Bridge
+import xyz.losslessmusic.app.engine.RustEngineProbe
 
 class MainActivity : FlutterActivity() {
     private val channel = "xyz.losslessmusic/native"
 
     // Held while the DLNA MediaServer runs so SSDP multicast can be received.
     private var multicastLock: WifiManager.MulticastLock? = null
+
+    // Phase-1 Rust probe inputs, captured from the Go init calls (debug builds only).
+    @Volatile private var probeMasterKey: String? = null
 
     // Bridge calls do blocking I/O (network search/download, file probing, server
     // start). Running them on the platform main thread blocks the UI and causes
@@ -172,14 +178,23 @@ class MainActivity : FlutterActivity() {
             // "initExtensionSystem" or extension dirs stay unconfigured and
             // every install/upgrade fails with "extension directory is not
             // configured". Key is a base64 32-byte value held in Keystore.
-            Bridge.setExtensionStorageMasterKey(call.argument<String>("masterKey")!!)
+            val key = call.argument<String>("masterKey")!!
+            Bridge.setExtensionStorageMasterKey(key)
+            probeMasterKey = key
             true to null
         }
         "initExtensionSystem" -> {
-            Bridge.initExtensionSystem(
-                call.argument<String>("extDir")!!,
-                call.argument<String>("dataDir")!!
-            )
+            val extDir = call.argument<String>("extDir")!!
+            val dataDir = call.argument<String>("dataDir")!!
+            Bridge.initExtensionSystem(extDir, dataDir)
+            val key = probeMasterKey
+            if (BuildConfig.DEBUG && key != null) {
+                Thread {
+                    if (RustEngineProbe.runIfRequested(filesDir, File(extDir), File(dataDir), key)) {
+                        Log.i("RustProbe", File(filesDir, RustEngineProbe.RESULT_FILE).readText())
+                    }
+                }.apply { isDaemon = true }.start()
+            }
             true to null
         }
         "loadExtensionFromPath" -> true to Bridge.loadExtensionFromPath(call.argument<String>("path")!!)
