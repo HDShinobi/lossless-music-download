@@ -1,6 +1,6 @@
 # Upstream Inheritance & Sync — SpotiFLAC
 
-This fork **inherits** the Go download/file-management engine from
+This fork **inherits** the Rust engine from
 [SpotiFLAC-Mobile](https://github.com/spotiflacapp/SpotiFLAC-Mobile). The goal
 is to absorb upstream updates with minimal effort. This doc is the single
 source of truth for *what we inherit, what we changed, and how to sync*.
@@ -92,12 +92,14 @@ Every edit to an inherited (`go_backend/`) file lives here. These are the
 | ~~`go_backend/extension_signed_session.go` — `rememberChallenge`~~ | **Retired 2026-09-08** | Upstream's v4.9.6 `fdb4a0ea` "preserve shared signed-session challenge identity" is the same fix: `rememberChallenge` now takes the whole `*PendingAuthRequest` and stamps `c.challengeCreatedAt = request.CreatedAt`, so both coalesced registrations agree on the timestamp (and the callback nonce). Our LM-FORK (which passed the real `createdAt` as an extra param) was retired on the v4.9.6 sync — took upstream's version wholesale at all 3 sites. `TestParallelSignedSessionPreflightSharesOneBootstrap` + the new `TestRememberSignedSessionChallengePreservesOriginalLifetime` cover it. | n/a (patch retired) |
 | ~~`go_backend/extension_signed_session.go` (prior v4.9.5 form)~~ | **Superseded** (`rememberChallenge` signature + body + 2 call sites) | Fix for an **inherited upstream v4.9.5 bug** found during the v4.9.5 sync (2026-09-04): `TestParallelSignedSessionPreflightSharesOneBootstrap` fails on *pristine* upstream v4.9.5. When two extensions share a signed-session gateway (our amazon/ytmusic → Zarz qobuz-web case) and a verification challenge coalesces onto one bootstrap, the winner registered its `PendingAuthRequest` with `CreatedAt: time.Now()` while `rememberChallenge` stamped `coordinator.challengeCreatedAt` from a *second* `time.Now()`. The second extension then registered with the coordinator's timestamp, which never equalled the winner's — and v4.9.5's new `registerPendingAuthRequest` callback-state validation rejected it as `"callback state is already registered"`, killing that download with an opaque error that never reopened verification (same failure class as the Zarz rows above). Fix: `rememberChallenge` now takes the challenge's real `createdAt` (`pending.CreatedAt` / `request.CreatedAt`) so both registrations agree. **Retire when upstream aligns the two timestamps.** | ✅ Wrapped in `// LM-FORK` (3 sites) |
 
-The edits are deliberately thin call-sites — the real feature code lives in the
+The frozen Go edits were deliberately thin call-sites — the real feature code lives in the
 own-file `embed_after_download.go`, which never conflicts on sync. To list every
 divergence inside inherited files at a glance:
 
+Historical Go-only lookup (the Go registry is frozen):
+
 ```bash
-grep -rn 'LM-FORK' go_backend/
+git grep -n 'LM-FORK' -- go_backend/
 ```
 
 ---
@@ -105,14 +107,16 @@ grep -rn 'LM-FORK' go_backend/
 ## The golden rules (keep sync cheap)
 
 1. **Prefer new files over editing upstream files.** New feature in the engine?
-   Add `go_backend/<feature>.go` (like `embed_after_download.go`) — new files
-   never conflict.
+   Add an owned file alongside `rust_backend/` where possible; new files avoid
+   in-place conflicts in inherited Layer 1.
 2. **If you MUST edit an upstream file**, keep the change minimal, wrap it in
-   `// LM-FORK: <why>` … `// END LM-FORK`, and add a row to the registry above.
+   `// LM-FORK(<id>): <why>` … `// END LM-FORK`, and add one active row per id
+   to the Rust divergence registry above.
 3. **Never reformat or reorder** upstream files — it turns a 1-line change into
    a whole-file conflict.
-4. **Keep `native/bridge` in step with `go_backend` exports** (`exports.go`):
-   when upstream changes a signature, the bridge is where it surfaces.
+4. **Keep our Kotlin glue in step with Rust engine API changes.** Adapt our
+   glue around `CoreBackend.kt` and generated bindings; `native/bridge` is
+   historical Go glue, not the Rust integration point.
 5. **`lib/` is ours** — there we follow SpotiFLAC's data models, API contracts,
    and queue/download semantics, but write our own widgets/screens.
 
@@ -131,34 +135,40 @@ grep -rn 'LM-FORK' go_backend/
 > looks alarming but only reflects our registry divergences.
 
 ```bash
-# 1. Preview what an upstream release changes in our inherited paths
-scripts/sync-upstream.sh v4.7.0            # or: scripts/sync-upstream.sh  (= upstream/main)
+# 1. Preview what an upstream release changes in Layer 1 and WATCHED paths
+scripts/sync-upstream.sh v5.1.0            # or: scripts/sync-upstream.sh  (= upstream/main)
 
 # 2. Apply the 3-way merge
-scripts/sync-upstream.sh v4.7.0 --apply
+scripts/sync-upstream.sh v5.1.0 --apply
 
-# 3. Resolve conflicts (only in registry files), keeping our intentional changes
-grep -rn '<<<<<<<' go_backend
+# 3. Resolve conflicts, keeping registered LM-FORK(<id>) intent where needed
+git grep -n '<<<<<<<' -- rust_backend/ scripts/build_rust_backend.sh android/app/src/main/kotlin/com/zarz/spotiflac/CoreBackend.kt
 
-# 4. Verify
-cd go_backend && go build ./... && go test ./...
-#    then rebuild the AAR and smoke-test the app
+# 4. Bump SPOTIFLAC_ENGINE_VERSION in EngineVersion.kt to the target version
 
-# 5. Lock in the new baseline + commit
+# 5. Verify
+(cd rust_backend && cargo test --locked -p spotiflac-extensions)
+(cd android && ./gradlew :app:buildRustBackend :app:testDebugUnitTest :app:assembleDebug)
+flutter test
+
+# 6. Review the WATCHED diff-stat from the preview and port relevant glue changes
+
+# 7. Advance the baseline, then check Layer 1
 git tag -f vendor/spotiflac-base <target-sha>
-git add -A && git commit -m "chore(upstream): sync go_backend to v4.7.0"
+scripts/sync-upstream.sh --check-vendored
 
-# 6. Update this file: bump "Synced to", "Last sync", and the registry
+# 8. Commit and update this file: baseline, last sync, and Rust registry rows
 ```
 
-If a sync touches `exports.go` signatures, re-check `native/bridge/bridge.go`
-and the Dart side (`lib/services/backend_bridge.dart`) before declaring done.
+The `native/bridge` and `go_backend` signature checks below describe the frozen
+Go-era bridge. Those Go-only instructions are historical and are not run for
+Rust releases.
 
 ---
 
-## Bridge contract surface
+## Bridge contract surface (historical Go era; frozen)
 
-`native/bridge/bridge.go` is our glue layer. It links `go_backend` **by source**
+`native/bridge/bridge.go` is our frozen Go glue layer. It links `go_backend` **by source**
 (`replace github.com/zarz/spotiflac_android/go_backend => ../../go_backend` in
 `native/bridge/go.mod`), then calls **31 exported functions** — all inherited
 from upstream (none are our own Go). So every one of them is a potential break

@@ -182,7 +182,7 @@ fi
 cat <<EOF
 
 ==> Next steps:
-  1. Resolve conflict markers: grep -rn '<<<<<<<' ${INHERIT_PATHS[*]}
+  1. Resolve conflict markers: git grep -n '<<<<<<<' -- ${INHERIT_PATHS[*]}
      Keep our LM-FORK(<id>) intent, or take upstream's hunk if it now contains the fix.
   2. Bump SPOTIFLAC_ENGINE_VERSION in $ENGINE_VERSION_FILE to the target version.
   3. Verify:
