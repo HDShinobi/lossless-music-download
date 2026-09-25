@@ -16,8 +16,15 @@ source of truth for *what we inherit, what we changed, and how to sync*.
 | | |
 | --- | --- |
 | Baseline tag | `vendor/spotiflac-base` |
-| Synced to | **v4.9.6** (commit `c0f6a607`) |
+| Synced to | **v5.0.0** (commit `1e3414b3`) — Rust engine (`rust_backend/`) |
+| Go engine | Frozen at **v4.9.6** (`vendor/spotiflac-go-final` → `c0f6a607`); still active in the app until migration phase 5 removes it. No longer synced. |
 | Upstream remote | `upstream` → `https://github.com/spotiflacapp/SpotiFLAC-Mobile.git` |
+| Last sync | 2026-09-25 — vendored v5.0.0 Rust engine alongside Go (migration phase 1; spec `docs/superpowers/specs/2026-09-25-rust-engine-migration-design.md`). |
+
+### History (Go engine)
+
+| | |
+| --- | --- |
 | Last sync | 2026-09-08 (v4.9.5 → v4.9.6, 64 files in `go_backend/`, +3509/−651). **Verification/signed-session bug-fix release** — the trigger for this sync. Upstream shipped a whole cluster of auth fixes: `fdb4a0ea` (preserve shared signed-session challenge identity — **upstream's own fix for the exact `rememberChallenge` timestamp bug we had forked in v4.9.5**, so our LM-FORK there is now **retired**), `4fc837b9` (preserve `verification_required` when `checkAvailability` *throws* instead of returns — download no longer dies silently without reopening the browser), `1b0c28b9` (route verification notifications to the right pending challenge), `717e8967` (preserve verification provider across fallback), `7be959e7` (preserve verification callback retries), `90da359e` (prepare fallback sessions before availability checks), `448a3426` (shorten verification timeout). Also: metadata preservation across screens + Opus-in-MP4 quality, new album-folder finalize before publish (`c48406f5` — merged into our `extension_fallback.go` LM-FORK call-site), memory release, ReplayGain Opus, new `id3_reader.go`, `extension_resolution_budget.go`, perf work. **No Go-toolchain bump** (go.mod unchanged). **Bridge contract (signatures) unchanged** (`snapshot-bridge-contract.sh --check` clean → no Dart-side edits needed); the only `bridge.go` edit is the mandatory `spotiflacBaselineVersion` bump 4.9.5 → 4.9.6 (reported to the engine for extension `minAppVersion` gates + upstream User-Agent — a const, not part of the exported signature, so the snapshot doesn't flag it; AAR rebuilt to bake it in). **2 conflicts, both in LM-FORK files** — resolved: retired `rememberChallenge` fork (took upstream's `*PendingAuthRequest` signature), and merged upstream's `finalizeDownloadAlbumFolder` step ahead of our lyrics-embed helper. **New cross-tree test dependency:** upstream's new `lyrics_usability_test.go` reads a *shared* fixture at `android/app/src/test/resources/lyrics_usability_cases.tsv` (their fixture-decoupling in `0e71003e`); the sync script only covers `go_backend/`, so that fixture was copied in by hand from `v4.9.6` — re-copy on future syncs if it changes. All 430+ Dart tests unaffected (contract stable); `go build`+`go test` green.) |
 | ~~Prior sync~~ | 2026-09-04 (v4.8.5 → v4.9.5, 113 files in `go_backend/`, ~11.7k+/2.4k−). **Large release.** Extension-runtime **security hardening** (network-sandbox bypass fixes, FFmpeg-exec sandbox, encrypted extension storage at rest, callback-state validation, secret redaction in logs), signed-session lifecycle coalescing, a new cross-platform resolver fallback chain (`platform_resolver_fallbacks.go`), direct Kugou/QQ/Genius lyrics, parallel/resumable SAF+CIFS library scan, player sleep timer + headset controls, streaming `.sflb` ZIP backups, resume+verify APK updater. **Go toolchain 1.26.5 → 1.26.6** (bumped `native/bridge/go.mod` to match; `go mod tidy` refreshed goja/x-crypto/x-image/etc). **3-way patch applied clean; all prior LM-FORK touch-points survived.** **Trigger for this sync:** upstream extensions now gate installs on `minAppVersion ≥ 4.9.1` (they rely on the new security contract), so with the old `4.8.5` baseline the engine rejected every extension (`requires app 4.9.1 or later`); `spotiflacBaselineVersion` bumped 4.8.5 → 4.9.5 to reopen the gate. **One new in-place divergence** (see registry): `rememberChallenge` timestamp fix for an *inherited* v4.9.5 bug that broke shared-gateway (amazon/ytmusic → Zarz qobuz-web) coalesced verification with an opaque "callback state is already registered" failure — reproduced on pristine upstream v4.9.5. Bridge contract gained 2 already-called entries (`ReadAudioMetadataJSON`, `ExtractCoverArt`); snapshot refreshed, `native/bridge` builds clean.) |
 
@@ -35,18 +42,38 @@ tests green** (see protocol below).
 
 | Path | Relationship | Sync policy |
 | --- | --- | --- |
-| `go_backend/` | **Inherited** — 87/88 Go files byte-identical to upstream | 3-way sync via script |
+| `rust_backend/`, `scripts/build_rust_backend.sh`, `android/app/src/main/kotlin/com/zarz/spotiflac/CoreBackend.kt` | **Inherited (Layer 1)** — byte-identical to upstream except registered `LM-FORK(<id>)` blocks | 3-way sync via script; `--check-vendored` guard |
+| `go_backend/` | **Frozen** at v4.9.6, removed in migration phase 5 | not synced |
 | `lib/` | **Ours** — fresh Flutter rebuild (0 files match upstream) | Follow upstream *patterns/contracts*, do NOT merge files |
 | `native/bridge`, `native/server` | **Ours** — Go↔Flutter bridge + UPnP server | Keep bridge signatures compatible with `go_backend` exports |
 | `landing/`, `branding/`, `docs/` | **Ours** — not in upstream | n/a |
 
-Only `go_backend/` is driven by the sync script. The `INHERIT_PATHS` array in
+The `INHERIT_PATHS` array in
 [`scripts/sync-upstream.sh`](../scripts/sync-upstream.sh) is the authoritative
-list — keep this table and that array in agreement.
+list of synced files; `WATCH_PATHS` lists upstream glue to review and port by hand.
+Keep this table and those arrays in agreement.
 
 ---
 
-## Divergence registry (our changes inside inherited paths)
+## Rust divergence registry
+
+Active forks use a row beginning ``| `LM-FORK(<id>)` |``; retired ones ``| ~~`LM-FORK(<id>)`~~ |``.
+`scripts/sync-upstream.sh --check-vendored` requires the set of ids found in Layer 1 to equal the
+active rows here.
+
+| Fork id | File(s) | What & why | Upstream PR |
+| --- | --- | --- | --- |
+| _(none yet — phase 3 adds `signed-session-mint`)_ | | | |
+
+### Our shims for inherited files (not forks)
+
+| File | Why |
+| --- | --- |
+| `android/app/src/main/kotlin/xyz/losslessmusic/app/engine/EngineShims.kt` | Declares `com.zarz.spotiflac.NativeDownloadFinalizer.runFFmpegArguments` (our ffmpeg-kit) and `com.zarz.spotiflac.BuildConfig.APPLICATION_ID` so vendored `CoreBackend.kt` compiles unchanged. If upstream changes that contract, the build fails here. |
+
+---
+
+## Go divergence registry (frozen)
 
 Every edit to an inherited (`go_backend/`) file lives here. These are the
 **only** places a 3-way sync can conflict. Keep this list exhaustive.
