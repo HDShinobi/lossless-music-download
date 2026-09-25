@@ -349,7 +349,7 @@ Each phase on its own branch, ends with build + tests green.
    coexistence build with `engine=rust`, evidence committed (§8).
 5. **Remove Go & retool:** rollback branch; delete Go; contract snapshot; docs/CLAUDE.md/memory.
 6. **Verify & release:** re-run the full E2E matrix on the Rust-only release candidate
-   (+ in-place upgrade of a populated v0.9.1 profile), metrics, v0.10.0 release.
+   (+ in-place upgrade of a populated v0.9.1 profile), metrics, v0.11.0 release (v0.10.0 was used for the phase-1 pre-release).
 
 ---
 
