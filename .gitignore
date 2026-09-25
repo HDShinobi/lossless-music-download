@@ -36,3 +36,6 @@ docs/superpowers/
 .maestro/
 .remember/
 test/golden/failures/
+
+# Rust engine build output (cargo target dir, bindings, jniLibs)
+rust_backend/target/
