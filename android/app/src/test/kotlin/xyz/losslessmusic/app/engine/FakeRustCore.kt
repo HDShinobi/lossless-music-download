@@ -6,6 +6,7 @@ class FakeRustCore : RustCore {
     var openLeases = 0
     var leasesOpened = 0
     var allowed: List<String> = emptyList()
+    val badDownloadDirs = mutableSetOf<String>()
     var priorities = "{\"download\":[],\"metadata\":[]}"
     var progress = "{\"items\":{\"a\":{\"item_id\":\"a\",\"progress\":0.5}}}"
     var downloadResult = "{\"success\":true,\"file_path\":\"/out/a.flac\",\"isrc\":\"ISRC1\"}"
@@ -42,7 +43,11 @@ class FakeRustCore : RustCore {
     override fun downloadWithPump(requestJson: String): String { rec("download"); downloadThrows?.let { throw it }; return downloadResult }
     override fun allProgress() = progress.also { rec("allProgress") }
     override fun cancelDownload(itemId: String) = rec("cancel:$itemId")
-    override fun setAllowedDownloadDirectories(directories: List<String>) { allowed = directories; rec("setAllowed") }
+    override fun setAllowedDownloadDirectories(directories: List<String>) {
+        if (directories.any { it in badDownloadDirs }) throw IllegalStateException("unavailable download directory")
+        allowed = directories
+        rec("setAllowed")
+    }
     override fun grantDownloadDirectories(directories: List<String>): AutoCloseable {
         synchronized(calls) { openLeases++; leasesOpened++; calls += "grant:${directories.first()}" }
         return AutoCloseable { synchronized(calls) { openLeases--; calls += "release" } }

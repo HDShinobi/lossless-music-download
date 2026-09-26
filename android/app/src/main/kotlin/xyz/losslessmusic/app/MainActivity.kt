@@ -39,6 +39,7 @@ class MainActivity : FlutterActivity() {
     // ANRs, so they run on this pool and reply on the main thread. A pool (not a
     // single thread) lets progress polling run while a long download is in flight.
     private val bridgeExecutor = Executors.newFixedThreadPool(4)
+    private val initExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
 
     // Set once configureFlutterEngine runs; used by handleSessionGrantIntent to
@@ -129,7 +130,11 @@ class MainActivity : FlutterActivity() {
         Engines.current.setAppVersion(versionName)
         val methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
         methodChannel.setMethodCallHandler { call, result ->
-                bridgeExecutor.execute {
+                val executor = when (call.method) {
+                    "setExtensionStorageMasterKey", "initExtensionSystem" -> initExecutor
+                    else -> bridgeExecutor
+                }
+                executor.execute {
                     try {
                         val (handled, value) = dispatch(call)
                         mainHandler.post {
@@ -391,6 +396,7 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         releaseMulticastLock()
         bridgeExecutor.shutdown()
+        initExecutor.shutdown()
         super.onDestroy()
     }
 }

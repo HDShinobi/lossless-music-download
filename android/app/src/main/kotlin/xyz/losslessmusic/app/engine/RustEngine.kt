@@ -259,14 +259,45 @@ class RustEngine(
     private fun addDownloadDir(path: String) {
         if (path.isBlank()) return
         lock.withLock {
-            downloadDirs += File(path).absolutePath
-            core?.takeIf { state == State.READY }?.setAllowedDownloadDirectories(allowList())
+            val dir = File(path).absolutePath
+            val added = downloadDirs.add(dir)
+            val readyCore = core?.takeIf { state == State.READY }
+            try {
+                readyCore?.setAllowedDownloadDirectories(allowList())
+            } catch (e: Exception) {
+                if (added) downloadDirs.remove(dir)
+                readyCore?.let { runCatching { it.setAllowedDownloadDirectories(allowList()) } }
+                throw e
+            }
         }
     }
 
     /** Must be called with [lock] held. */
     private fun applyConfig(c: RustCore) {
-        c.setAllowedDownloadDirectories(allowList())
+        try {
+            c.setAllowedDownloadDirectories(allowList())
+        } catch (e: Exception) {
+            val filesOnly = aliases(filesDir.path)
+            c.setAllowedDownloadDirectories(filesOnly)
+            val surviving = LinkedHashSet<String>()
+            for (dir in downloadDirs) {
+                try {
+                    c.setAllowedDownloadDirectories((filesOnly + aliases(dir)).distinct())
+                    surviving += dir
+                } catch (badDir: Exception) {
+                    log("download directory unavailable: $dir: ${badDir.message}")
+                }
+            }
+            downloadDirs.clear()
+            downloadDirs.addAll(surviving)
+            try {
+                c.setAllowedDownloadDirectories(allowList())
+            } catch (combined: Exception) {
+                log("download directories unavailable together: ${combined.message}")
+                downloadDirs.clear()
+                c.setAllowedDownloadDirectories(filesOnly)
+            }
+        }
         fallbackIdsJson?.let { c.setFallbackProviders(RustJson.idsOrNull(it)) }
         downloadPriorityJson?.let { c.setProviderPriority("download", RustJson.ids(it)) }
         metadataPriorityJson?.let { c.setProviderPriority("metadata", RustJson.ids(it)) }

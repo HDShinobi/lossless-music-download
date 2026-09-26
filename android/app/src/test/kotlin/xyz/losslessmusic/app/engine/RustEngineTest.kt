@@ -118,6 +118,50 @@ class RustEngineTest {
         assertTrue(fake.calls.contains("setFallbackProviders:null"))
     }
 
+    @Test fun failedSetDownloadDirectoryRollsBackAndLaterGoodDirectoryApplies() {
+        init()
+        val bad = File(files, "removed-card")
+        val good = tmp.newFolder("good-download")
+        fake.badDownloadDirs += bad.absolutePath
+
+        assertThrows<IllegalStateException> { engine.setDownloadDirectory(bad.path) }
+        engine.setDownloadDirectory(good.path)
+
+        assertTrue(fake.allowed.contains(files.canonicalPath))
+        assertTrue(fake.allowed.contains(good.canonicalPath))
+        assertFalse(fake.allowed.contains(bad.absolutePath))
+    }
+
+    @Test fun failedAllowDownloadDirIsSwallowedAndDoesNotPoisonLaterUpdates() {
+        init()
+        val bad = File(files, "removed-card")
+        val good = tmp.newFolder("good-allowed")
+        fake.badDownloadDirs += bad.absolutePath
+
+        engine.allowDownloadDir(bad.path)
+        engine.allowDownloadDir(good.path)
+
+        assertTrue(fake.allowed.contains(files.canonicalPath))
+        assertTrue(fake.allowed.contains(good.canonicalPath))
+        assertFalse(fake.allowed.contains(bad.absolutePath))
+    }
+
+    @Test fun badBufferedDownloadDirectoryIsDroppedDuringInit() {
+        val goodBefore = tmp.newFolder("good-before")
+        val bad = File(files, "removed-card")
+        val goodAfter = tmp.newFolder("good-after")
+        fake.badDownloadDirs += bad.absolutePath
+        engine.setDownloadDirectory(goodBefore.path)
+        engine.allowDownloadDir(bad.path)
+        engine.setDownloadDirectory(goodAfter.path)
+
+        init()
+
+        assertEquals(RustEngine.State.READY, engine.state)
+        assertTrue(fake.allowed.containsAll(listOf(files.canonicalPath, goodBefore.canonicalPath, goodAfter.canonicalPath)))
+        assertFalse(fake.allowed.contains(bad.absolutePath))
+    }
+
     @Test fun malformedPriorityJsonThrowsLikeGo() {
         init()
         assertThrows<Exception> { engine.setDownloadPriority("oops") }
