@@ -23,6 +23,7 @@ import xyz.losslessmusic.app.engine.EngineKind
 import xyz.losslessmusic.app.engine.RustEngineProbe
 import xyz.losslessmusic.app.engine.RustProbeStartGate
 import xyz.losslessmusic.app.engine.SessionGrantFailure
+import xyz.losslessmusic.app.engine.ab.AbHarness
 
 class MainActivity : FlutterActivity() {
     companion object {
@@ -56,6 +57,7 @@ class MainActivity : FlutterActivity() {
     override fun shouldHandleDeeplinking(): Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        if (BuildConfig.DEBUG) AbHarness.onProcessStart(applicationContext.filesDir) { Log.i("AbHarness", it) }
         Engines.init(applicationContext)
         super.onCreate(savedInstanceState)
         handleSessionGrantIntent(intent)
@@ -216,6 +218,14 @@ class MainActivity : FlutterActivity() {
                         }
                     }.apply { isDaemon = true }.start()
                 }
+            }
+            if (BuildConfig.DEBUG) {
+                Thread {
+                    runCatching {
+                        val music = File(getExternalFilesDir(null) ?: filesDir, "LosslessMusic")
+                        if (AbHarness.recordIfRequested(filesDir, music, Engines.current)) Log.i("AbHarness", "recorded ${Engines.kind}")
+                    }.onFailure { Log.w("AbHarness", "record failed: ${it.message}") }
+                }.apply { isDaemon = true }.start()
             }
             true to loaded
         }
