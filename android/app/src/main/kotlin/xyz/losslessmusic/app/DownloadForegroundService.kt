@@ -22,7 +22,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
-import xyz.losslessmusic.backend.bridge.Bridge
+import xyz.losslessmusic.app.engine.Engines
 import java.io.File
 import java.io.FileOutputStream
 
@@ -139,6 +139,7 @@ class DownloadForegroundService : Service() {
     @Volatile private var currentItemId = ""
 
     override fun onCreate() {
+        Engines.init(applicationContext)
         super.onCreate()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -156,7 +157,7 @@ class DownloadForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // The OS restarting us with no pending work (e.g. after killing the
         // process under memory pressure) -- bail out cleanly rather than
-        // touching Bridge.* from a process where Dart never initialized
+        // touching Engines.current from a process where Dart never initialized
         // anything (extensions, app version, etc.).
         if (intent == null) {
             stopForegroundService()
@@ -225,7 +226,7 @@ class DownloadForegroundService : Service() {
     @Synchronized
     private fun stopForegroundService() {
         // Stop processing further queued items, but deliberately do NOT call
-        // Bridge.cancelDownload() here. This runs on natural batch completion
+        // Engines.current.cancelDownload() here. This runs on natural batch completion
         // (runWorker's tail) as well as on forced stop, and Go-cancelling the
         // current item leaves a stale "cancelled" entry in the backend's cancel
         // map that poisons any later re-download of the SAME itemId (e.g. a
@@ -233,7 +234,7 @@ class DownloadForegroundService : Service() {
         // bogus "download cancelled" failure. Mirrors SpotiFLAC's DownloadService,
         // which Go-cancels only on an explicit user pause/cancel. Explicit user
         // cancellation still works: it goes through the Dart remove() path, which
-        // calls Bridge.cancelDownload() directly.
+        // calls Engines.current.cancelDownload() directly.
         workerJob?.cancel()
         workerJob = null
         currentItemId = ""
@@ -308,7 +309,7 @@ class DownloadForegroundService : Service() {
 
             val progressJob = serviceScope.launch { pollProgress(request.itemId) }
             val resultJson = try {
-                Bridge.downloadByStrategy(request.requestJson)
+                Engines.current.downloadByStrategy(request.requestJson)
             } catch (e: Exception) {
                 progressJob.cancel()
                 updateItem(request.itemId) { it.status = "failed"; it.error = e.message ?: "download failed" }
@@ -371,7 +372,7 @@ class DownloadForegroundService : Service() {
             val isrc = req.optString("isrc", "")
             val outputDir = req.optString("output_dir", "")
             if (isrc.isEmpty() || outputDir.isEmpty()) return false
-            JSONObject(Bridge.checkDuplicate(outputDir, isrc)).optBoolean("exists", false)
+            JSONObject(Engines.current.checkDuplicate(outputDir, isrc)).optBoolean("exists", false)
         } catch (_: Exception) {
             false
         }
@@ -380,7 +381,7 @@ class DownloadForegroundService : Service() {
     private suspend fun pollProgress(itemId: String) {
         while (serviceScope.isActive) {
             try {
-                val root = JSONObject(Bridge.getAllDownloadProgress())
+                val root = JSONObject(Engines.current.getAllDownloadProgress())
                 val items = root.optJSONObject("items")
                 val progress = items?.optJSONObject(itemId)
                 if (progress != null) {
@@ -500,7 +501,7 @@ class DownloadForegroundService : Service() {
 /**
  * Writes a `.lrc` sidecar beside a downloaded audio file when the request
  * opted in via `write_lrc_sidecar`. Lyrics are fetched ONLINE through the
- * same `Bridge.getLyricsLRC(...)` export `NonFlacMetadataEmbedder.fetchLyrics`
+ * same `Engines.current.getLyricsLRC(...)` method `NonFlacMetadataEmbedder.fetchLyrics`
  * uses -- no local file path is passed, since the Go backend's file-path mode
  * only reads lyrics already embedded in the file (nothing is embedded yet at
  * this point in the pipeline) and would return empty, so the sidecar would
@@ -546,7 +547,7 @@ private object LrcSidecarWriter {
     // that reference call, so none is invented here.
     private fun fetchLyricsOnline(request: JSONObject): String {
         val spotifyId = request.optString("spotify_id", "")
-        return Bridge.getLyricsLRC(
+        return Engines.current.getLyricsLRC(
             spotifyId,
             request.optString("track_name", ""),
             request.optString("artist_name", ""),

@@ -4,7 +4,7 @@ import android.content.Context
 import com.antonkarpenko.ffmpegkit.FFmpegKit
 import com.antonkarpenko.ffmpegkit.ReturnCode
 import org.json.JSONObject
-import xyz.losslessmusic.backend.bridge.Bridge
+import xyz.losslessmusic.app.engine.Engines
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -79,7 +79,7 @@ object NonFlacMetadataEmbedder {
     private fun fetchLyrics(request: JSONObject): String? {
         return try {
             val spotifyId = request.optString("spotify_id", "")
-            val lrc = Bridge.getLyricsLRC(
+            val lrc = Engines.current.getLyricsLRC(
                 spotifyId,
                 request.optString("track_name", ""),
                 request.optString("artist_name", ""),

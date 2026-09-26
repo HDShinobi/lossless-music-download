@@ -18,8 +18,11 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
 import xyz.losslessmusic.backend.bridge.Bridge
+import xyz.losslessmusic.app.engine.Engines
+import xyz.losslessmusic.app.engine.EngineKind
 import xyz.losslessmusic.app.engine.RustEngineProbe
 import xyz.losslessmusic.app.engine.RustProbeStartGate
+import xyz.losslessmusic.app.engine.SessionGrantFailure
 
 class MainActivity : FlutterActivity() {
     companion object {
@@ -52,6 +55,7 @@ class MainActivity : FlutterActivity() {
     override fun shouldHandleDeeplinking(): Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        Engines.init(applicationContext)
         super.onCreate(savedInstanceState)
         handleSessionGrantIntent(intent)
     }
@@ -89,17 +93,15 @@ class MainActivity : FlutterActivity() {
         }
         intent.data = null
         bridgeExecutor.execute {
-            var extensionId = ""
             try {
-                extensionId = Bridge.consumeExtensionCallbackState(callbackState)
-                Bridge.setExtensionSessionGrantByID(extensionId, grant)
-                Bridge.invokeExtensionActionJSON(extensionId, "completeGrant")
+                val extensionId = Engines.current.completeSessionGrant(callbackState, grant)
                 mainHandler.post { notifySessionGrantCompleted(extensionId, true) }
+            } catch (e: SessionGrantFailure) {
+                android.util.Log.w("MainActivity", "session-grant exchange failed: ${e.message}")
+                val id = e.extensionId
+                if (!id.isNullOrEmpty()) mainHandler.post { notifySessionGrantCompleted(id, false) }
             } catch (e: Exception) {
                 android.util.Log.w("MainActivity", "session-grant exchange failed: ${e.message}")
-                if (extensionId.isNotEmpty()) {
-                    mainHandler.post { notifySessionGrantCompleted(extensionId, false) }
-                }
             }
         }
     }
@@ -115,6 +117,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        Engines.init(applicationContext)
         super.configureFlutterEngine(flutterEngine)
         // Set the app version so the Go backend sends the correct User-Agent
         // ("SpotiFLAC-Mobile/<version>") to api.zarz.moe and extension HTTP
@@ -123,7 +126,7 @@ class MainActivity : FlutterActivity() {
         val versionName = try {
             packageManager.getPackageInfo(packageName, 0).versionName ?: ""
         } catch (_: Exception) { "" }
-        Bridge.setAppVersion(versionName)
+        Engines.current.setAppVersion(versionName)
         val methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
         methodChannel.setMethodCallHandler { call, result ->
                 bridgeExecutor.execute {
@@ -156,7 +159,7 @@ class MainActivity : FlutterActivity() {
                     bridgeExecutor.execute {
                         while (active) {
                             try {
-                                val json = Bridge.getAllDownloadProgress()
+                                val json = Engines.current.getAllDownloadProgress()
                                 mainHandler.post { if (active) events.success(json) }
                             } catch (_: Exception) {}
                             Thread.sleep(300)
@@ -174,96 +177,98 @@ class MainActivity : FlutterActivity() {
     // result on the main thread.
     private fun dispatch(call: MethodCall): Pair<Boolean, Any?> = when (call.method) {
         "ping" -> true to Bridge.ping()
-        "getAudioQuality" -> true to Bridge.getAudioQualityJSON(call.argument<String>("path")!!)
+        "getAudioQuality" -> true to Engines.current.getAudioQuality(call.argument<String>("path")!!)
         "setExtensionStorageMasterKey" -> {
             // v4.9.5 gates InitExtensionSystem on this key. Must run before
             // "initExtensionSystem" or extension dirs stay unconfigured and
             // every install/upgrade fails with "extension directory is not
             // configured". Key is a base64 32-byte value held in Keystore.
             val key = call.argument<String>("masterKey")!!
-            Bridge.setExtensionStorageMasterKey(key)
+            Engines.current.setExtensionStorageMasterKey(key)
             probeStartGate.captureKey(key)
             true to null
         }
         "initExtensionSystem" -> {
             val extDir = call.argument<String>("extDir")!!
             val dataDir = call.argument<String>("dataDir")!!
-            Bridge.initExtensionSystem(extDir, dataDir)
+            Engines.current.initExtensionSystem(extDir, dataDir)
             probeStartGate.captureDirs(extDir, dataDir)
             true to null
         }
-        "loadExtensionFromPath" -> true to Bridge.loadExtensionFromPath(call.argument<String>("path")!!)
-        "getInstalledExtensions" -> true to Bridge.getInstalledExtensions()
+        "loadExtensionFromPath" -> true to Engines.current.loadExtensionFromPath(call.argument<String>("path")!!)
+        "getInstalledExtensions" -> true to Engines.current.getInstalledExtensions()
         "loadExtensionsFromDir" -> {
-            val loaded = Bridge.loadExtensionsFromDir(call.argument<String>("dirPath")!!)
-            probeStartGate.afterLoad(BuildConfig.DEBUG) { extDir, dataDir, key ->
-                Thread {
-                    runCatching {
-                        if (RustEngineProbe.runIfRequested(filesDir, File(extDir), File(dataDir), key)) {
-                            Log.i("RustProbe", File(filesDir, RustEngineProbe.RESULT_FILE).readText().replace(key, "[redacted]"))
+            val loaded = Engines.current.loadExtensionsFromDir(call.argument<String>("dirPath")!!)
+            if (Engines.kind == EngineKind.GO) {
+                probeStartGate.afterLoad(BuildConfig.DEBUG) { extDir, dataDir, key ->
+                    Thread {
+                        runCatching {
+                            if (RustEngineProbe.runIfRequested(filesDir, File(extDir), File(dataDir), key)) {
+                                Log.i("RustProbe", File(filesDir, RustEngineProbe.RESULT_FILE).readText().replace(key, "[redacted]"))
+                            }
+                        }.onFailure { error ->
+                            Log.w("RustProbe", "Probe failed: ${error.javaClass.simpleName}: ${error.message?.replace(key, "[redacted]")}")
                         }
-                    }.onFailure { error ->
-                        Log.w("RustProbe", "Probe failed: ${error.javaClass.simpleName}: ${error.message?.replace(key, "[redacted]")}")
-                    }
-                }.apply { isDaemon = true }.start()
+                    }.apply { isDaemon = true }.start()
+                }
             }
             true to loaded
         }
         "setExtensionEnabled" -> {
-            Bridge.setExtensionEnabledByID(
+            Engines.current.setExtensionEnabled(
                 call.argument<String>("id")!!,
                 call.argument<Boolean>("enabled")!!
             )
             true to null
         }
         "removeExtension" -> {
-            Bridge.removeExtensionByID(call.argument<String>("id")!!)
+            Engines.current.removeExtension(call.argument<String>("id")!!)
             true to null
         }
-        "searchTracks" -> true to Bridge.searchTracksWithMetadataProvidersJSON(
+        "searchTracks" -> true to Engines.current.searchTracks(
             call.argument<String>("query")!!,
             (call.argument<Int>("limit") ?: 20).toLong(),
             call.argument<Boolean>("includeExtensions") ?: true
         )
-        "downloadByStrategy" -> true to Bridge.downloadByStrategy(call.argument<String>("requestJson")!!)
-        "getAllProgress" -> true to Bridge.getAllDownloadProgress()
+        "downloadByStrategy" -> true to Engines.current.downloadByStrategy(call.argument<String>("requestJson")!!)
+        "getAllProgress" -> true to Engines.current.getAllDownloadProgress()
         "cancelDownload" -> {
-            Bridge.cancelDownload(call.argument<String>("itemId")!!)
+            Engines.current.cancelDownload(call.argument<String>("itemId")!!)
             true to null
         }
         "setDownloadDirectory" -> {
-            Bridge.setDownloadDirectory(call.argument<String>("path")!!)
+            Engines.current.setDownloadDirectory(call.argument<String>("path")!!)
             true to null
         }
         "allowDownloadDir" -> {
-            Bridge.allowDownloadDir(call.argument<String>("path")!!)
+            Engines.current.allowDownloadDir(call.argument<String>("path")!!)
             true to null
         }
-        "checkDuplicate" -> true to Bridge.checkDuplicate(
+        "checkDuplicate" -> true to Engines.current.checkDuplicate(
             call.argument<String>("outputDir")!!,
             call.argument<String>("isrc")!!
         )
-        "getExtensionSettings" -> true to Bridge.getExtensionSettingsJSON(call.argument<String>("id")!!)
+        "getExtensionSettings" -> true to Engines.current.getExtensionSettings(call.argument<String>("id")!!)
         "setExtensionSettings" -> {
-            Bridge.setExtensionSettingsJSON(
+            Engines.current.setExtensionSettings(
                 call.argument<String>("id")!!,
                 call.argument<String>("settingsJson")!!
             )
             true to null
         }
-        "getDownloadPriority" -> true to Bridge.getProviderPriorityJSON()
+        "getDownloadPriority" -> true to Engines.current.getDownloadPriority()
         "setDownloadPriority" -> {
-            Bridge.setProviderPriorityJSON(call.argument<String>("priorityJson")!!)
+            Engines.current.setDownloadPriority(call.argument<String>("priorityJson")!!)
             true to null
         }
-        "getMetadataPriority" -> true to Bridge.getMetadataProviderPriorityJSON()
+        "getMetadataPriority" -> true to Engines.current.getMetadataPriority()
         "setMetadataPriority" -> {
-            Bridge.setMetadataProviderPriorityJSON(call.argument<String>("priorityJson")!!)
+            Engines.current.setMetadataPriority(call.argument<String>("priorityJson")!!)
             true to null
         }
-        "getExtensionHomeFeed" -> true to Bridge.getExtensionHomeFeedJSON(call.argument<String>("extensionId")!!)
+        "getExtensionHomeFeed" -> true to Engines.current.getExtensionHomeFeed(call.argument<String>("extensionId")!!)
         "setDownloadFallbackProviderIds" -> {
-            Bridge.setExtensionFallbackProviderIDsJSON(call.argument<String>("idsJson")!!)
+            Engines.current.setDownloadFallbackProviderIds(call.argument<String>("idsJson")!!)
             true to null
         }
         "startMediaServer" -> {
@@ -286,38 +291,38 @@ class MainActivity : FlutterActivity() {
             true to null
         }
         "getMediaServerStatus" -> true to Bridge.getMediaServerStatus()
-        "handleUrl" -> true to Bridge.handleURLWithExtensionJSON(call.argument<String>("url")!!)
-        "findUrlHandler" -> true to Bridge.findURLHandlerJSON(call.argument<String>("url")!!)
-        "getProviderMetadata" -> true to Bridge.getProviderMetadataJSON(
+        "handleUrl" -> true to Engines.current.handleUrl(call.argument<String>("url")!!)
+        "findUrlHandler" -> true to Engines.current.findUrlHandler(call.argument<String>("url")!!)
+        "getProviderMetadata" -> true to Engines.current.getProviderMetadata(
             call.argument<String>("providerId")!!,
             call.argument<String>("resourceType")!!,
             call.argument<String>("resourceId")!!,
         )
         "setLibraryCoverCacheDir" -> {
-            Bridge.setLibraryCoverCacheDir(call.argument<String>("cacheDir")!!)
+            Engines.current.setLibraryCoverCacheDir(call.argument<String>("cacheDir")!!)
             true to null
         }
-        "scanLibraryFolder" -> true to Bridge.scanLibraryFolderJSON(
+        "scanLibraryFolder" -> true to Engines.current.scanLibraryFolder(
             call.argument<String>("folderPath")!!
         )
-        "getLyricsLRC" -> true to Bridge.getLyricsLRC(
+        "getLyricsLRC" -> true to Engines.current.getLyricsLRC(
             call.argument<String>("spotifyId") ?: "",
             call.argument<String>("trackName") ?: "",
             call.argument<String>("artistName") ?: "",
             call.argument<String>("filePath") ?: "",
             (call.argument<Number>("durationMs") ?: 0).toLong(),
         )
-        "editFileMetadata" -> true to Bridge.editFileMetadata(
+        "editFileMetadata" -> true to Engines.current.editFileMetadata(
             call.argument<String>("filePath")!!,
             call.argument<String>("metadataJson")!!,
         )
-        "reEnrichFile" -> true to Bridge.reEnrichFile(call.argument<String>("requestJson")!!)
-        "customSearchWithExtension" -> true to Bridge.customSearchWithExtensionJSON(
+        "reEnrichFile" -> true to Engines.current.reEnrichFile(call.argument<String>("requestJson")!!)
+        "customSearchWithExtension" -> true to Engines.current.customSearchWithExtension(
             call.argument<String>("extensionId")!!,
             call.argument<String>("query")!!,
             call.argument<String>("optionsJson") ?: "",
         )
-        "getExtensionPendingAuth" -> true to Bridge.getExtensionPendingAuthJSON(
+        "getExtensionPendingAuth" -> true to Engines.current.getExtensionPendingAuth(
             call.argument<String>("extensionId")!!
         )
         "startNativeDownloadWorker" -> {

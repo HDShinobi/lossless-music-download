@@ -4,7 +4,7 @@ import com.antonkarpenko.ffmpegkit.FFmpegKit
 import com.antonkarpenko.ffmpegkit.FFprobeKit
 import com.antonkarpenko.ffmpegkit.ReturnCode
 import org.json.JSONObject
-import xyz.losslessmusic.backend.bridge.Bridge
+import xyz.losslessmusic.app.engine.Engines
 import java.io.File
 
 /**
@@ -207,7 +207,7 @@ object Mp4FlacUnwrapper {
             if (track > 0) md.put("trackNumber", track.toString())
             if (md.length() == 0) return true
 
-            val res = JSONObject(Bridge.editFileMetadata(flacPath, md.toString()))
+            val res = JSONObject(Engines.current.editFileMetadata(flacPath, md.toString()))
             val err = res.optString("error", "")
             if (err.isNotEmpty()) {
                 android.util.Log.w(TAG, "tagging FLAC failed: $err")
