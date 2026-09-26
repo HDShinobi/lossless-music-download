@@ -38,10 +38,7 @@ object Engines {
 
     private fun build(kind: EngineKind, filesDir: File): NativeEngine = when (kind) {
         EngineKind.GO -> GoEngine
-        EngineKind.RUST -> {
-            Log.w("Engines", "Rust engine not wired yet; using Go")
-            GoEngine
-        }
+        EngineKind.RUST -> RustEngine(UniffiRustCore.FACTORY, filesDir, log = { Log.i("RustEngine", it) })
     }
 
     val current: NativeEngine
