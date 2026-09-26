@@ -49,6 +49,7 @@ class UniffiRustCore private constructor(private val manager: ExtensionManager) 
     override fun customSearchJson(extensionId: String, query: String, optionsJson: String): String =
         withLease { manager.customSearchJson(extensionId, query, optionsJson, it) }
     override fun resolveCallbackState(state: String): String = env { it.resolveCallbackState(state) }
+    override fun consumeCallbackState(state: String): String = env { it.consumeCallbackState(state) }
     override fun setSessionGrant(extensionId: String, grant: String) = env { it.setSessionGrant(extensionId, grant) }
 
     override fun searchMetadataProviders(query: String, limit: Long, includeExtensions: Boolean): String =

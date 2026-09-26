@@ -98,7 +98,13 @@ class RustEngine(
         val c = requireCore()
         val expected = lock.withLock { goExtDir }
         if (canonical(dirPath) != expected) throw IllegalStateException("Extension source directory does not match the initialized owner")
-        return c.loadAll()
+        val result = c.loadAll()
+        lock.withLock {
+            downloadPriorityJson?.let { runCatching { c.setProviderPriority("download", RustJson.ids(it)) }.onFailure { e -> log("download priority after loadAll: ${e.message}") } }
+            metadataPriorityJson?.let { runCatching { c.setProviderPriority("metadata", RustJson.ids(it)) }.onFailure { e -> log("metadata priority after loadAll: ${e.message}") } }
+            fallbackIdsJson?.let { runCatching { c.setFallbackProviders(RustJson.idsOrNull(it)) }.onFailure { e -> log("fallback providers after loadAll: ${e.message}") } }
+        }
+        return result
     }
 
     // ---------------- extensions ----------------
@@ -127,6 +133,7 @@ class RustEngine(
         } catch (e: Exception) {
             throw SessionGrantFailure(id, e.message ?: "session grant failed")
         }
+        try { c.consumeCallbackState(callbackState) } catch (e: Exception) { log("consumeCallbackState: ${e.message}") }
         return id
     }
 
@@ -161,12 +168,24 @@ class RustEngine(
     // ---------------- downloads / files ----------------
 
     override fun downloadByStrategy(requestJson: String): String {
-        val c = requireCore()
-        val request = JSONObject(requestJson)
-        val outputDir = request.optString("output_dir", "")
-        val result = withGrant(c, outputDir) { c.downloadWithPump(requestJson) }
-        indexIfSucceeded(c, outputDir, request, result)
-        return result
+        return try {
+            val c = requireCore()
+            val request = JSONObject(requestJson)
+            val outputDir = request.optString("output_dir", "")
+            val result = withGrant(c, outputDir) { c.downloadWithPump(requestJson) }
+            indexIfSucceeded(c, outputDir, request, result)
+            result
+        } catch (e: Exception) {
+            val message = e.message ?: e.javaClass.simpleName
+            val lower = message.lowercase()
+            val type = when {
+                "cancel" in lower -> "cancelled"
+                lower.startsWith(NOT_READY) -> NOT_READY
+                "permission" in lower || "not allowed" in lower || "denied" in lower -> "permission"
+                else -> "unknown"
+            }
+            JSONObject().put("success", false).put("error", message).put("error_type", type).toString()
+        }
     }
 
     override fun getAllDownloadProgress(): String {
@@ -219,6 +238,7 @@ class RustEngine(
     }
 
     override fun setLibraryCoverCacheDir(cacheDir: String) {
+        if (cacheDir.isBlank()) { log("setLibraryCoverCacheDir: blank directory"); return }
         try {
             lock.withLock {
                 coverCacheDir = cacheDir
@@ -251,7 +271,6 @@ class RustEngine(
 
     private fun allowList(): List<String> {
         val all = LinkedHashSet<String>()
-        all += aliases(filesDir.path)
         downloadDirs.forEach { all += aliases(it) }
         return all.toList()
     }
@@ -277,12 +296,12 @@ class RustEngine(
         try {
             c.setAllowedDownloadDirectories(allowList())
         } catch (e: Exception) {
-            val filesOnly = aliases(filesDir.path)
-            c.setAllowedDownloadDirectories(filesOnly)
+            val empty = emptyList<String>()
+            c.setAllowedDownloadDirectories(empty)
             val surviving = LinkedHashSet<String>()
             for (dir in downloadDirs) {
                 try {
-                    c.setAllowedDownloadDirectories((filesOnly + aliases(dir)).distinct())
+                    c.setAllowedDownloadDirectories(aliases(dir))
                     surviving += dir
                 } catch (badDir: Exception) {
                     log("download directory unavailable: $dir: ${badDir.message}")
@@ -295,7 +314,7 @@ class RustEngine(
             } catch (combined: Exception) {
                 log("download directories unavailable together: ${combined.message}")
                 downloadDirs.clear()
-                c.setAllowedDownloadDirectories(filesOnly)
+                c.setAllowedDownloadDirectories(empty)
             }
         }
         fallbackIdsJson?.let { c.setFallbackProviders(RustJson.idsOrNull(it)) }
@@ -317,7 +336,7 @@ class RustEngine(
     }
 
     private fun <T> withGrant(c: RustCore, dir: String, block: () -> T): T {
-        if (dir.isBlank()) return block()
+        if (dir.isBlank() || canonical(dir) == "/") return block()
         val lease = c.grantDownloadDirectories(aliases(dir))
         try {
             return block()

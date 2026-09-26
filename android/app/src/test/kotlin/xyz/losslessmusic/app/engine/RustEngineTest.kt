@@ -106,14 +106,15 @@ class RustEngineTest {
         assertTrue(fake.calls.contains("setProviderPriority:download:qobuz-web"))
         assertTrue(fake.calls.contains("setProviderPriority:metadata:deezer"))
         assertTrue(fake.allowed.contains(out.canonicalPath))
-        assertTrue(fake.allowed.contains(files.canonicalPath))
+        assertFalse(fake.allowed.contains(files.canonicalPath))
     }
 
     @Test fun settersAfterReadyApplyImmediatelyWithFullAllowList() {
         init()
         val a = tmp.newFolder("a"); val b = tmp.newFolder("b")
         engine.allowDownloadDir(a.path); engine.allowDownloadDir(b.path)
-        assertTrue(fake.allowed.containsAll(listOf(a.canonicalPath, b.canonicalPath, files.canonicalPath)))
+        assertTrue(fake.allowed.containsAll(listOf(a.canonicalPath, b.canonicalPath)))
+        assertFalse(fake.allowed.contains(files.canonicalPath))
         engine.setDownloadFallbackProviderIds("")
         assertTrue(fake.calls.contains("setFallbackProviders:null"))
     }
@@ -127,7 +128,7 @@ class RustEngineTest {
         assertThrows<IllegalStateException> { engine.setDownloadDirectory(bad.path) }
         engine.setDownloadDirectory(good.path)
 
-        assertTrue(fake.allowed.contains(files.canonicalPath))
+        assertFalse(fake.allowed.contains(files.canonicalPath))
         assertTrue(fake.allowed.contains(good.canonicalPath))
         assertFalse(fake.allowed.contains(bad.absolutePath))
     }
@@ -141,7 +142,7 @@ class RustEngineTest {
         engine.allowDownloadDir(bad.path)
         engine.allowDownloadDir(good.path)
 
-        assertTrue(fake.allowed.contains(files.canonicalPath))
+        assertFalse(fake.allowed.contains(files.canonicalPath))
         assertTrue(fake.allowed.contains(good.canonicalPath))
         assertFalse(fake.allowed.contains(bad.absolutePath))
     }
@@ -158,7 +159,8 @@ class RustEngineTest {
         init()
 
         assertEquals(RustEngine.State.READY, engine.state)
-        assertTrue(fake.allowed.containsAll(listOf(files.canonicalPath, goodBefore.canonicalPath, goodAfter.canonicalPath)))
+        assertTrue(fake.allowed.containsAll(listOf(goodBefore.canonicalPath, goodAfter.canonicalPath)))
+        assertFalse(fake.allowed.contains(files.canonicalPath))
         assertFalse(fake.allowed.contains(bad.absolutePath))
     }
 
@@ -180,6 +182,21 @@ class RustEngineTest {
         assertThrows<IllegalStateException> { engine.loadExtensionsFromDir(tmp.newFolder("other").path) }
     }
 
+    @Test fun initWithoutDownloadDirsUsesEmptyAllowList() {
+        init()
+        assertEquals(emptyList<String>(), fake.allowed)
+    }
+
+    @Test fun loadReappliesBufferedPrioritiesAndFallbacksAfterLoadAll() {
+        engine.setDownloadPriority("[\"qobuz-web\"]")
+        engine.setMetadataPriority("[\"deezer\"]")
+        engine.setDownloadFallbackProviderIds("[\"amazon\"]")
+        init()
+        fake.calls.clear()
+        engine.loadExtensionsFromDir(ext.path)
+        assertEquals(listOf("loadAll", "setProviderPriority:download:qobuz-web", "setProviderPriority:metadata:deezer", "setFallbackProviders:amazon"), fake.calls)
+    }
+
     @Test fun setAppVersionIsIgnored() { engine.setAppVersion("0.10.0"); init(); assertEquals("5.0.0", createArgs[3]) }
 
     // --- methods ---
@@ -187,7 +204,7 @@ class RustEngineTest {
         init()
         val res = engine.downloadByStrategy("{\"item_id\":\"1\",\"output_dir\":\"/out\",\"isrc\":\"REQ\"}")
         assertTrue(JSONObject(res).getBoolean("success"))
-        assertTrue(fake.calls.contains("grant:/out") || fake.calls.any { it.startsWith("grant:") })
+        assertTrue(fake.calls.contains("grant:${File("/out").canonicalPath}"))
         assertTrue(fake.calls.contains("addIsrc:/out:ISRC1:/out/a.flac"))
         assertEquals(0, fake.openLeases)
     }
@@ -204,10 +221,42 @@ class RustEngineTest {
         engine.downloadByStrategy("{\"output_dir\":\"/out\"}")
         fake.downloadResult = "{\"success\":false}"; engine.downloadByStrategy("{\"output_dir\":\"/out\"}")
         fake.downloadThrows = IllegalStateException("structural")
-        assertThrows<IllegalStateException> { engine.downloadByStrategy("{\"output_dir\":\"/out\"}") }
+        val failed = JSONObject(engine.downloadByStrategy("{\"output_dir\":\"/out\"}"))
+        assertFalse(failed.getBoolean("success"))
+        assertEquals("unknown", failed.getString("error_type"))
         engine.scanLibraryFolder("/lib"); engine.checkDuplicate("/out", "I")
         assertEquals(0, fake.openLeases)
         assertTrue(fake.leasesOpened >= 5)
+    }
+
+    @Test fun thrownDownloadErrorReturnsUnknownFailure() {
+        init(); fake.downloadThrows = IllegalStateException("network broke")
+        val result = JSONObject(engine.downloadByStrategy("{\"output_dir\":\"/out\"}"))
+        assertFalse(result.getBoolean("success"))
+        assertEquals("network broke", result.getString("error"))
+        assertEquals("unknown", result.getString("error_type"))
+        assertEquals(0, fake.openLeases)
+    }
+
+    @Test fun cancelledDownloadErrorReturnsCancelledFailure() {
+        init(); fake.downloadThrows = IllegalStateException("Download Cancelled")
+        val result = JSONObject(engine.downloadByStrategy("{\"output_dir\":\"/out\"}"))
+        assertFalse(result.getBoolean("success"))
+        assertEquals("cancelled", result.getString("error_type"))
+    }
+
+    @Test fun downloadBeforeInitReturnsEngineNotReadyFailure() {
+        val result = JSONObject(engine.downloadByStrategy("{}"))
+        assertFalse(result.getBoolean("success"))
+        assertTrue(result.getString("error").startsWith(RustEngine.NOT_READY))
+        assertEquals("engine_not_ready", result.getString("error_type"))
+    }
+
+    @Test fun malformedDownloadRequestReturnsInBandFailure() {
+        init()
+        val result = JSONObject(engine.downloadByStrategy("not json"))
+        assertFalse(result.getBoolean("success"))
+        assertEquals("unknown", result.getString("error_type"))
     }
 
     @Test fun checkDuplicateUsesGoShape() {
@@ -237,7 +286,8 @@ class RustEngineTest {
         init()
         val f = File(tmp.root, "d/../song.flac")
         engine.reEnrichFile(JSONObject().put("file_path", f.path).toString())
-        assertTrue(fake.calls.any { it.startsWith("reenrich:") && it.contains(File(tmp.root, "song.flac").canonicalPath.replace("/", "\\/")) || it.contains(File(tmp.root, "song.flac").canonicalPath) })
+        val recorded = fake.calls.single { it.startsWith("reenrich:") }.removePrefix("reenrich:")
+        assertEquals(File(tmp.root, "song.flac").canonicalPath, JSONObject(recorded).getString("file_path"))
     }
 
     @Test fun coverCacheKeepsOneLease() {
@@ -247,11 +297,27 @@ class RustEngineTest {
         assertEquals(1, fake.openLeases)
     }
 
+    @Test fun blankCoverCacheDirDoesNotOpenLease() {
+        init()
+        engine.setLibraryCoverCacheDir("  ")
+        assertEquals(0, fake.openLeases)
+        assertFalse(fake.calls.any { it.startsWith("grant:") || it.startsWith("coverCache:") })
+    }
+
+    @Test fun rootAndBlankPathsDoNotOpenScopedLeases() {
+        init()
+        engine.scanLibraryFolder("/")
+        engine.checkDuplicate("", "I")
+        engine.getAudioQuality("/song.flac")
+        assertEquals(0, fake.leasesOpened)
+        assertFalse(fake.calls.any { it.startsWith("grant:") })
+    }
+
     // --- session grant (R-P2) ---
     @Test fun sessionGrantSuccessPeeksGrantsAndCompletes() {
         init()
         assertEquals("qobuz-web", engine.completeSessionGrant("nonce", "grant"))
-        assertTrue(fake.calls.containsAll(listOf("resolve:nonce", "setSessionGrant:qobuz-web", "invokeAction:qobuz-web:completeGrant")))
+        assertEquals(listOf("resolve:nonce", "setSessionGrant:qobuz-web", "invokeAction:qobuz-web:completeGrant", "consume:nonce"), fake.calls.takeLast(4))
     }
 
     @Test fun sessionGrantUnknownStateFailsWithoutExtensionId() {
@@ -264,5 +330,12 @@ class RustEngineTest {
         init(); fake.actionResult = "{\"success\":false,\"error\":\"denied\"}"
         val e = assertThrows<SessionGrantFailure> { engine.completeSessionGrant("nonce", "g") }
         assertEquals("qobuz-web", e.extensionId)
+        assertFalse(fake.calls.any { it.startsWith("consume:") })
+    }
+
+    @Test fun sessionGrantConsumeFailureDoesNotFailGrant() {
+        init(); fake.consumeThrows = IllegalStateException("consume failed")
+        assertEquals("qobuz-web", engine.completeSessionGrant("nonce", "g"))
+        assertTrue(fake.calls.contains("consume:nonce"))
     }
 }

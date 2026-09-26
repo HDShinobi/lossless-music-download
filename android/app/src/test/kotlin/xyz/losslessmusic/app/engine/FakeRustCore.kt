@@ -14,6 +14,7 @@ class FakeRustCore : RustCore {
     var isrcPath = ""
     var audioMetadata = "{\"bitDepth\":16,\"sampleRate\":44100,\"duration\":10,\"format\":\"flac\"}"
     var resolveResult: () -> String = { "qobuz-web" }
+    var consumeThrows: Exception? = null
     var actionResult = "{\"success\":true}"
     var findResult: String? = "qobuz-web"
     var closed = false
@@ -32,6 +33,11 @@ class FakeRustCore : RustCore {
     override fun homeFeedJson(extensionId: String) = "{}".also { rec("homeFeed:$extensionId") }
     override fun customSearchJson(extensionId: String, query: String, optionsJson: String) = "[]".also { rec("customSearch:$extensionId:$query") }
     override fun resolveCallbackState(state: String) = resolveResult().also { rec("resolve:$state") }
+    override fun consumeCallbackState(state: String): String {
+        rec("consume:$state")
+        consumeThrows?.let { throw it }
+        return resolveResult()
+    }
     override fun setSessionGrant(extensionId: String, grant: String) = rec("setSessionGrant:$extensionId")
     override fun searchMetadataProviders(query: String, limit: Long, includeExtensions: Boolean) = "[]".also { rec("search:$query:$limit:$includeExtensions") }
     override fun handleUrlJson(url: String) = "{}".also { rec("handleUrl:$url") }

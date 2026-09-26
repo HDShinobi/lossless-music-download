@@ -15,7 +15,9 @@ wait_for() { # $1 = file under files/, $2 = timeout seconds
     if "${RUNAS[@]}" test -f "files/$1" 2>/dev/null || "${RUNAS[@]}" ls "files/$1" >/dev/null 2>&1; then return 0; fi
     sleep 1
   done
-  echo "timeout waiting for files/$1" >&2; return 1
+  echo "timeout waiting for files/$1" >&2
+  adb logcat -d -s RustEngine:* Engines:* AbHarness:* AndroidRuntime:E | tail -80 >&2 || true
+  return 1
 }
 
 touch_flag() { "${RUNAS[@]}" touch "files/$1"; }

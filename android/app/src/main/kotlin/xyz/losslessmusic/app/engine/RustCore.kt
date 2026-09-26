@@ -18,6 +18,7 @@ interface RustCore : AutoCloseable {
     fun homeFeedJson(extensionId: String): String
     fun customSearchJson(extensionId: String, query: String, optionsJson: String): String
     fun resolveCallbackState(state: String): String
+    fun consumeCallbackState(state: String): String
     fun setSessionGrant(extensionId: String, grant: String)
 
     // search / metadata / priorities
