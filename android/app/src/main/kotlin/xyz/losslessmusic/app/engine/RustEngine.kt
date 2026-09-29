@@ -172,7 +172,9 @@ class RustEngine(
             val c = requireCore()
             val request = JSONObject(requestJson)
             val outputDir = request.optString("output_dir", "")
-            val result = withGrant(c, outputDir) { c.downloadWithPump(requestJson) }
+            val result = withGrant(c, outputDir) {
+                PostDownload.apply(c, request, c.downloadWithPump(requestJson), log)
+            }
             indexIfSucceeded(c, outputDir, request, result)
             result
         } catch (e: Exception) {

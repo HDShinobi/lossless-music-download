@@ -43,6 +43,7 @@ interface RustCore : AutoCloseable {
     fun editFileMetadata(path: String, metadataJson: String): String
     fun reenrichFile(requestJson: String): String
     fun getLyricsLrc(spotifyId: String, track: String, artist: String, filePath: String, durationMs: Long): String
+    fun embedLyricsToFile(path: String, lyrics: String): String
     fun setLibraryCoverCacheDirectory(directory: String)
     fun scanLibraryFolder(folder: String): String
 }

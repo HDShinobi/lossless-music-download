@@ -95,6 +95,7 @@ class UniffiRustCore private constructor(private val manager: ExtensionManager) 
     override fun reenrichFile(requestJson: String): String = manager.reenrichFile(requestJson, null)
     override fun getLyricsLrc(spotifyId: String, track: String, artist: String, filePath: String, durationMs: Long): String =
         manager.getLyricsLrc(LyricsRequest(spotifyId, track, artist, filePath, durationMs), null)
+    override fun embedLyricsToFile(path: String, lyrics: String): String = manager.embedLyricsToFile(path, lyrics, null)
     override fun setLibraryCoverCacheDirectory(directory: String) = manager.setLibraryCoverCacheDirectory(directory)
     override fun scanLibraryFolder(folder: String): String = manager.scanLibraryFolder(folder, null)
 

@@ -11,6 +11,10 @@ class FakeRustCore : RustCore {
     var progress = "{\"items\":{\"a\":{\"item_id\":\"a\",\"progress\":0.5}}}"
     var downloadResult = "{\"success\":true,\"file_path\":\"/out/a.flac\",\"isrc\":\"ISRC1\"}"
     var downloadThrows: Exception? = null
+    var lyricsLrc = "[00:00.00]x"
+    var lyricsThrows: Exception? = null
+    var embedThrows: Exception? = null
+    val embeds = mutableListOf<Pair<String, String>>()
     var isrcPath = ""
     var audioMetadata = "{\"bitDepth\":16,\"sampleRate\":44100,\"duration\":10,\"format\":\"flac\"}"
     var resolveResult: () -> String = { "qobuz-web" }
@@ -63,7 +67,13 @@ class FakeRustCore : RustCore {
     override fun readAudioMetadata(path: String) = audioMetadata.also { rec("readAudio:$path") }
     override fun editFileMetadata(path: String, metadataJson: String) = "{\"success\":true,\"method\":\"native\"}".also { rec("edit:$path") }
     override fun reenrichFile(requestJson: String) = "{}".also { rec("reenrich:$requestJson") }
-    override fun getLyricsLrc(spotifyId: String, track: String, artist: String, filePath: String, durationMs: Long) = "[00:00.00]x".also { rec("lyrics:$track") }
+    override fun getLyricsLrc(spotifyId: String, track: String, artist: String, filePath: String, durationMs: Long): String {
+        rec("lyrics:$track"); lyricsThrows?.let { throw it }; return lyricsLrc
+    }
+    override fun embedLyricsToFile(path: String, lyrics: String): String {
+        rec("embedLyrics:$path"); embedThrows?.let { throw it }; embeds += path to lyrics
+        return "{\"success\":true}"
+    }
     override fun setLibraryCoverCacheDirectory(directory: String) = rec("coverCache:$directory")
     override fun scanLibraryFolder(folder: String) = "[]".also { rec("scan:$folder") }
     override fun close() { closed = true; rec("close") }
