@@ -118,6 +118,10 @@ dependencies {
     implementation("com.antonkarpenko:ffmpeg-kit-full:2.1.0")
     // UniFFI Kotlin bindings call the Rust engine through JNA.
     implementation("net.java.dev.jna:jna:5.19.1@aar")
+    val ktorVersion = "3.6.0"
+    implementation("io.ktor:ktor-server-cio:$ktorVersion")
+    implementation("io.ktor:ktor-server-partial-content:$ktorVersion")
+    implementation("io.ktor:ktor-server-auto-head-response:$ktorVersion")
 
     testImplementation("junit:junit:4.13.2")
     // Android's org.json is a stub on the JVM; unit tests need the real one.
