@@ -64,6 +64,11 @@ impl Backend {
                 ],
             );
             info.insert("audio_traits".into(), value["audio_traits"].clone());
+            for key in ["editorial_notes", "description"] {
+                if let Some(notes) = value.get(key) {
+                    info.insert(key.into(), notes.clone());
+                }
+            }
             info.insert(
                 "total_tracks".into(),
                 json!(value["total_tracks"].as_i64().unwrap_or_default()),
@@ -88,6 +93,7 @@ impl Backend {
                 "listeners".into(),
                 json!(value["listeners"].as_i64().unwrap_or_default()),
             );
+            info.insert("concerts".into(), array(value, "concerts").into());
             for key in ["albums", "releases"] {
                 let values = array(value, key);
                 if !values.is_empty() {
@@ -184,6 +190,7 @@ impl Backend {
                 "album" => "getAlbum",
                 "playlist" => "getPlaylist",
                 "artist" => "getArtist",
+                "concert" => "getConcert",
                 _ => {
                     return Err(ResolverError::Failed(format!(
                         "unsupported provider resource type: {kind}"
@@ -384,6 +391,11 @@ fn album(value: &Value, full: bool) -> Value {
             &["artist_id", "header_image", "header_video"],
         ));
         result.insert("audio_traits".into(), json!(array(value, "audio_traits")));
+        for key in ["editorial_notes", "description"] {
+            if let Some(notes) = value.get(key) {
+                result.insert(key.into(), notes.clone());
+            }
+        }
     }
     result.into()
 }
@@ -392,6 +404,7 @@ fn response(kind: &str, value: &Value, check: &Check<'_>) -> Result<Value, Resol
     check().map_err(ResolverError::Cancelled)?;
     let cover = text(value, "cover_url");
     Ok(match kind {
+        "concert" => json!({"concert": value}),
         // Move normalized values into the envelope. json! serializes borrowed
         // expressions, duplicating every field of an already-built track list.
         "track" => Map::from_iter([("track".into(), track(value, "", 0))]).into(),
@@ -450,6 +463,7 @@ fn response(kind: &str, value: &Value, check: &Check<'_>) -> Result<Value, Resol
             );
             info.insert("images".into(), json!(image));
             info.insert("cover_url".into(), json!(cover));
+            info.insert("concerts".into(), array(value, "concerts").into());
             if value["listeners"].as_i64().unwrap_or_default() > 0 {
                 info.insert("listeners".into(), value["listeners"].clone());
             }

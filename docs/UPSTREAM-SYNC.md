@@ -16,10 +16,11 @@ source of truth for *what we inherit, what we changed, and how to sync*.
 | | |
 | --- | --- |
 | Baseline tag | `vendor/spotiflac-base` |
-| Synced to | **v5.0.0** (commit `1e3414b3`) — Rust engine (`rust_backend/`) |
+| Synced to | **v5.0.6** (commit `e025abee`) — Rust engine (`rust_backend/`) |
 | Go engine | Frozen at **v4.9.6** (`vendor/spotiflac-go-final` → `c0f6a607`); still active in the app until migration phase 5 removes it. No longer synced. |
 | Upstream remote | `upstream` → `https://github.com/spotiflacapp/SpotiFLAC-Mobile.git` |
-| Last sync | 2026-09-25 — vendored v5.0.0 Rust engine alongside Go (migration phase 1; spec `docs/superpowers/specs/2026-09-25-rust-engine-migration-design.md`). |
+| Last sync | 2026-09-29 (v5.0.0 → v5.0.6, 369 files in inherited paths, mostly the newly vendored `rustix-1.1.4` crate). Engine: Hi-Res authenticity check (`core/media/hires`, `mobile/hires.rs`), USB audio transport (`mobile/usb_audio`), lyrics payload/eLRC fixes, tag-writer and ReplayGain-removal work, provider-metadata fixes, and `1d53609b` (avoid blocked `statx` probes on legacy ARM32 devices via vendored rustix). `CoreBackend.kt` gained one interface method (`checkHiResAuthenticity`); nothing of ours implements that interface. **3-way apply clean, no conflicts; both Rust forks (`publish-noreplace-fallback`, `signed-session-mint`) untouched upstream.** `SPOTIFLAC_ENGINE_VERSION` 5.0.0 → 5.0.6. WATCHED, not ported: upstream's own `NativeDownloadFinalizer` fixes (`4c2c3567` mislabeled-MP4 detection, `e61e54f9` metadata prep) — our finalizer path is our own; player features (USB bit-perfect, DSD, AAudio hi-res, home-screen widget), Discord removal, `platform_bridge.dart` additions. Verified: cargo test 68/68, Gradle buildRustBackend + unit tests + assembleDebug, Flutter 433/433. |
+| Prior sync | 2026-09-25 — vendored v5.0.0 Rust engine alongside Go (migration phase 1; spec `docs/superpowers/specs/2026-09-25-rust-engine-migration-design.md`). |
 
 ### History (Go engine)
 

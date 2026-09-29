@@ -56,7 +56,7 @@ class RustEngineTest {
         assertEquals(RustEngine.State.READY, engine.state)
         assertTrue(createArgs[0].endsWith("engine-rust/extensions"))
         assertTrue(createArgs[1].endsWith("engine-rust/ext_data"))
-        assertEquals("KEY", createArgs[2]); assertEquals("5.0.0", createArgs[3])
+        assertEquals("KEY", createArgs[2]); assertEquals(EngineVersion.SPOTIFLAC_ENGINE_VERSION, createArgs[3])
     }
 
     @Test fun conflictingValuesAreRejectedInEveryState() {
@@ -197,7 +197,7 @@ class RustEngineTest {
         assertEquals(listOf("loadAll", "setProviderPriority:download:qobuz-web", "setProviderPriority:metadata:deezer", "setFallbackProviders:amazon"), fake.calls)
     }
 
-    @Test fun setAppVersionIsIgnored() { engine.setAppVersion("0.10.0"); init(); assertEquals("5.0.0", createArgs[3]) }
+    @Test fun setAppVersionIsIgnored() { engine.setAppVersion("0.10.0"); init(); assertEquals(EngineVersion.SPOTIFLAC_ENGINE_VERSION, createArgs[3]) }
 
     // --- methods ---
     @Test fun downloadGrantsOutputDirAndIndexesTheFile() {

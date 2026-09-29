@@ -160,7 +160,8 @@
             ["cover_url","s","coverUrl","images"],["header_image","s","headerImage"],
             ["header_video","s","headerVideo"],["release_date","s","releaseDate"],
             ["total_tracks","i","totalTracks"],["album_type","s","albumType"],
-            ["audio_traits","a","audioTraits"],["provider_id","s","providerId"]
+            ["audio_traits","a","audioTraits"],["provider_id","s","providerId"],
+            ["editorial_notes","M","editorialNotes"],["description","s"]
         ], ["id","name","artists","total_tracks","provider_id"]);
         result.tracks = tracks;
         if (!trim(result.artists)) {
@@ -200,6 +201,25 @@
         if (albums.length) result.albums = albums;
         if (releases.length) result.releases = releases;
         if (tracks.length) result.top_tracks = tracks;
+        const concertItems = first(object(value), ["concerts"]);
+        const concerts = isArray(concertItems) ? array(concertItems.slice(0, 500), concert) : [];
+        if (concerts.length) result.concerts = concerts;
+        return result;
+    }
+    function concert(value) {
+        return fields(value, [["id","s"],["location","s"],["venue","s"],
+            ["start_at","s","startAt"],["time_zone","s","timeZone"],
+            ["url","s"],["detail_id","s","detailId"]], ["id","location","start_at"]);
+    }
+    function concertDetail(value) {
+        const result = fields(value, [["id","s"],["artist_name","s","artistName"],
+            ["title","s"],["cover_url","s","coverUrl"],["venue","s"],["address","s"],
+            ["start_at","s","startAt"],["end_at","s","endAt"],["time_zone","s","timeZone"],
+            ["ticket_url","s","ticketUrl"],["map_url","s","mapUrl"],["url","s"],
+            ["attribution","s"]], ["id"]);
+        const setList = first(object(value), ["set_list","setList"]);
+        if (!empty(setList)) result.set_list = fields(setList, [["id","s"],["name","s"],
+            ["cover_url","s","coverUrl"],["url","s"]], ["id","name"]);
         return result;
     }
     function decryption(value) {
@@ -266,6 +286,7 @@
     }
     const parsers = {
         getTrack: track, enrichTrack: track, getAlbum: album, getPlaylist: album, getArtist: artist,
+        getConcert: concertDetail,
         searchTracks: search, customSearch: value => array(value, track), handleUrl: url,
         checkAvailability: value => fields(value, [["available","b"],["reason","s"],["track_id","s","trackId"],
             ["skip_fallback","b","skipFallback"],["prepared_context","m","preparedContext"]], ["available"]),

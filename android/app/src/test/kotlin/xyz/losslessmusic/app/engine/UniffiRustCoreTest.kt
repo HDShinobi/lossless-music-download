@@ -23,7 +23,7 @@ class UniffiRustCoreTest {
         val src = tmp.newFolder("extensions")
         val data = tmp.newFolder("ext_data")
         out = tmp.newFolder("downloads")
-        core = UniffiRustCore.FACTORY.create(src.canonicalPath, data.canonicalPath, key, "5.0.0")
+        core = UniffiRustCore.FACTORY.create(src.canonicalPath, data.canonicalPath, key, EngineVersion.SPOTIFLAC_ENGINE_VERSION)
         core.setAllowedDownloadDirectories(listOf(out.canonicalPath, out.absolutePath))
     }
 

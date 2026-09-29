@@ -1,6 +1,12 @@
 [workspace]
 members = ["crates/core", "crates/network", "crates/providers", "crates/extensions", "crates/mobile", "crates/bindgen"]
+exclude = ["vendor/rustix-1.1.4"]
 resolver = "3"
+
+[patch.crates-io]
+# Android < 30 may kill processes that probe statx directly (SIGSYS).
+# Keep all direct and transitive users on the same compatibility fix.
+rustix = { path = "vendor/rustix-1.1.4" }
 
 [workspace.package]
 version = "0.1.0"
@@ -15,7 +21,7 @@ spotiflac-core = { path = "crates/core" }
 spotiflac-extensions = { path = "crates/extensions" }
 spotiflac-network = { path = "crates/network" }
 spotiflac-providers = { path = "crates/providers" }
-rquickjs = { version = "=0.13.0", features = ["bindgen"] }
+rquickjs = { version = "=0.14.0", features = ["bindgen"] }
 base64 = "0.23"
 sha2 = "0.11"
 sha1 = "0.11"
@@ -31,14 +37,14 @@ zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["float_roundtrip", "raw_value"] }
 thiserror = "2.0"
-uniffi = { version = "=0.32.1", default-features = false }
+uniffi = { version = "=0.32.2", default-features = false }
 tokio = { version = "=1.53.1", features = ["rt-multi-thread", "net", "time", "sync", "io-util", "macros"] }
 hyper = { version = "=1.11.1", features = ["client", "http1", "http2"] }
-hyper-util = { version = "=0.1.20", features = ["client-legacy", "http1", "http2", "tokio"] }
-hyper-rustls = { version = "=0.27.9", default-features = false, features = ["http1", "http2", "ring", "tls12"] }
+hyper-util = { version = "=0.1.21", features = ["client-legacy", "http1", "http2", "tokio"] }
+hyper-rustls = { version = "=0.27.10", default-features = false, features = ["http1", "http2", "ring", "tls12"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "=0.8.4"
-rustls-platform-verifier = "=0.7.0"
+rustls-platform-verifier = "=0.7.1"
 rustls-pemfile = "2.2"
 http = "1.4"
 http-body-util = "0.1"
@@ -58,6 +64,8 @@ html5ever = "=0.39.0"
 unicode-normalization = "=0.1.22"
 unicode-general-category = "=0.6.0"
 time = { version = "=0.3.55", features = ["parsing"] }
+# Pure-Rust FLAC decoder for the Hi-Res authenticity check.
+claxon = "=0.4.3"
 chrono = { version = "=0.4.45", default-features = false, features = ["clock"] }
 tz-rs = "=0.7.3"
 httpdate = "=1.0.3"

@@ -106,6 +106,6 @@ class EngineDataIsolationTest {
     }
 
     @Test fun engineVersionIsTheVendoredBaseline() {
-        assertEquals("5.0.0", EngineVersion.SPOTIFLAC_ENGINE_VERSION)
+        assertEquals("5.0.6", EngineVersion.SPOTIFLAC_ENGINE_VERSION)
     }
 }

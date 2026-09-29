@@ -4,6 +4,7 @@ mod cancellation;
 mod extensions;
 mod ffmpeg;
 mod filename;
+mod hires;
 mod index;
 mod logging;
 mod lyrics;
@@ -12,6 +13,7 @@ mod metadata;
 mod progress;
 mod repository;
 mod tags;
+mod usb_audio;
 
 uniffi::setup_scaffolding!();
 

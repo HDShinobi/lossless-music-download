@@ -12,6 +12,8 @@ function collection(id) {
     const count = Number(id);
     return {id, name: "Album 音楽 🎵", artists: "Artist Café", provider_id: "supplied",
         cover_url: "https://example.invalid/cover.jpg", total_tracks: count,
+        editorialNotes: {standard: "<p>A <i>new</i> direction &amp; sound.</p>", short: "A new direction."},
+        description: "Collection notes",
         tracks: Array.from({length: count}, (_, i) => ({id: "track-" + i,
             name: "歌 🎵 " + i, artists: "Artist Café", album_name: "Album 音楽 🎵",
             provider_id: "supplied-track", duration_ms: 123456, track_number: i + 1,
@@ -19,9 +21,24 @@ function collection(id) {
 }
 function getArtist(id) {
     return {id, name: "Example Artist", image_url: "https://example.invalid/portrait.jpg",
+        concerts: id === "bad-concerts" ? {} : [{id: "event-1", location: "Example City",
+            venue: "Example Hall", startAt: "2026-10-07T01:00:00Z", timeZone: "America/New_York",
+            url: "https://example.invalid/events/1", detailId: "event-1"}],
         headerLogo: "https://example.invalid/logo.png", albumsNext: "artist-page-2", albums: []};
 }
-registerExtension({getAlbum: collection, getPlaylist: collection, getArtist});
+function handleUrl(url) {
+    if (url.includes("/album/")) return {type: "album", album: collection("1"), tracks: collection("1").tracks};
+    return {type: "artist", artist: getArtist("artist-1")};
+}
+function getConcert(id) {
+    return {id, artistName: "Example Artist", title: "Example Show", venue: "Example Hall",
+        address: "123 Example Street", startAt: "2026-10-07T01:00:00Z",
+        endAt: "2026-10-07T04:00:00Z", timeZone: "America/New_York",
+        ticketUrl: "https://example.invalid/tickets/1", mapUrl: "https://example.invalid/maps/1",
+        coverUrl: "https://example.invalid/artist.jpg", attribution: "Example Events",
+        setList: {id: "list-1", name: "Concert Set List", coverUrl: "https://example.invalid/list.jpg"}};
+}
+registerExtension({getAlbum: collection, getPlaylist: collection, getArtist, getConcert, handleUrl});
 "#;
 
 fn fixture() -> (tempfile::TempDir, Backend) {
@@ -31,7 +48,8 @@ fn fixture() -> (tempfile::TempDir, Backend) {
     std::fs::write(
         source.join("manifest.json"),
         json!({"name":ID,"displayName":"Example Metadata","version":"1",
-            "description":"Generic metadata fixture","type":["metadata_provider"]})
+            "description":"Generic metadata fixture","type":["metadata_provider"],
+            "urlHandler":{"enabled":true,"patterns":["example.invalid"]}})
         .to_string(),
     )
     .unwrap();
@@ -47,6 +65,55 @@ fn fixture() -> (tempfile::TempDir, Backend) {
     backend.load_all().unwrap();
     backend.set_enabled(ID, true).unwrap();
     (root, backend)
+}
+
+#[test]
+fn concert_details_preserve_generic_actions_and_set_list() {
+    let (_root, backend) = fixture();
+    let result: Value = serde_json::from_str(
+        &backend
+            .get_provider_metadata_json(ID, "concert", "event-1", &|| Ok(()))
+            .unwrap(),
+    )
+    .unwrap();
+    let detail = &result["concert"];
+    assert_eq!(detail["id"], "event-1");
+    assert_eq!(detail["artist_name"], "Example Artist");
+    assert_eq!(detail["start_at"], "2026-10-07T01:00:00Z");
+    assert_eq!(detail["end_at"], "2026-10-07T04:00:00Z");
+    assert_eq!(detail["ticket_url"], "https://example.invalid/tickets/1");
+    assert_eq!(detail["map_url"], "https://example.invalid/maps/1");
+    assert_eq!(detail["set_list"]["id"], "list-1");
+    assert_eq!(
+        detail["set_list"]["cover_url"],
+        "https://example.invalid/list.jpg"
+    );
+    assert_eq!(detail["attribution"], "Example Events");
+}
+
+#[test]
+fn album_editorial_notes_survive_metadata_and_url_routes() {
+    let (_root, backend) = fixture();
+    let direct: Value = serde_json::from_str(
+        &backend
+            .get_provider_metadata_json(ID, "album", "1", &|| Ok(()))
+            .unwrap(),
+    )
+    .unwrap();
+    let linked: Value = serde_json::from_str(
+        &backend
+            .handle_url_json("https://example.invalid/album/1")
+            .unwrap(),
+    )
+    .unwrap();
+    for album in [&direct["album_info"], &linked["album"]] {
+        assert_eq!(
+            album["editorial_notes"]["standard"],
+            "<p>A <i>new</i> direction &amp; sound.</p>"
+        );
+        assert_eq!(album["editorial_notes"]["short"], "A new direction.");
+        assert_eq!(album["description"], "Collection notes");
+    }
 }
 
 #[test]
@@ -101,6 +168,37 @@ fn artist_metadata_preserves_logo_separately_from_portrait() {
     );
     assert_eq!(value["artist_info"]["name"], "Example Artist");
     assert_eq!(value["artist_info"]["albums_next"], "artist-page-2");
+    backend.shutdown();
+}
+
+#[test]
+fn artist_concerts_survive_metadata_and_url_routes_without_provider_special_cases() {
+    let (_root, backend) = fixture();
+    let metadata: Value = serde_json::from_str(
+        &backend
+            .get_provider_metadata_json(ID, "artist", "artist-1", &|| Ok(()))
+            .unwrap(),
+    )
+    .unwrap();
+    let concerts = &metadata["artist_info"]["concerts"];
+    assert_eq!(concerts[0]["start_at"], "2026-10-07T01:00:00Z");
+    assert_eq!(concerts[0]["time_zone"], "America/New_York");
+    assert_eq!(concerts[0]["venue"], "Example Hall");
+    let handled: Value = serde_json::from_str(
+        &backend
+            .handle_url_json("https://example.invalid/artist/1")
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(&handled["artist"]["concerts"], concerts);
+    let malformed: Value = serde_json::from_str(
+        &backend
+            .get_provider_metadata_json(ID, "artist", "bad-concerts", &|| Ok(()))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(malformed["artist_info"]["concerts"], json!([]));
+    assert_eq!(malformed["artist_info"]["name"], "Example Artist");
     backend.shutdown();
 }
 

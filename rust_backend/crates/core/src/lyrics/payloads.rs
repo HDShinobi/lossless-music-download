@@ -1,7 +1,9 @@
 use super::{LyricsResponse, LyricsWord, json, lrc};
+use regex::Regex;
 use serde::Serialize;
 use serde_json::value::RawValue;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::LazyLock;
 
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct PaxDetail {
@@ -23,11 +25,27 @@ pub struct PaxLine {
     pub background: bool,
     pub background_text: Option<Vec<PaxDetail>>,
     pub endtime: isize,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub agent: String,
 }
 json::go_deserialize!(PaxLine {
     "text" => text, "timestamp" => timestamp, "oppositeturn" => opposite_turn,
     "background" => background, "backgroundtext" => background_text, "endtime" => endtime,
+    "agent" => agent,
 });
+
+#[derive(Default)]
+struct AppleAgent {
+    id: String,
+    kind: String,
+}
+json::go_deserialize!(AppleAgent { "id" => id, "type" => kind, });
+
+#[derive(Default)]
+struct AppleMetadata {
+    agents: Option<Vec<AppleAgent>>,
+}
+json::go_deserialize!(AppleMetadata { "agents" => agents, });
 
 #[derive(Default)]
 struct ApplePayload {
@@ -37,11 +55,104 @@ struct ApplePayload {
     elrc_multi_person: String,
     plain: String,
     ttml_content: String,
+    metadata: Option<AppleMetadata>,
 }
 json::go_deserialize!(ApplePayload {
     "type" => kind, "content" => content, "elrc" => elrc,
     "elrcmultiperson" => elrc_multi_person, "plain" => plain, "ttmlcontent" => ttml_content,
+    "metadata" => metadata,
 });
+
+static APPLE_VOCAL_LINE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^\[([0-9]{1,3}):([0-9]{1,2})(?:[.:]([0-9]{1,3}))?\]\s*(v[1-9][0-9]*):")
+        .unwrap()
+});
+
+/// The proxy's oppositeTurn flag can turn a group agent into the second
+/// singer. Recover the original roles while retaining every eLRC word time,
+/// space and backing part. Group vocals use the primary side, as in TTML.
+fn apple_vocal_sides(text: &str, payload: &ApplePayload) -> String {
+    let agents = payload
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.agents.as_deref())
+        .unwrap_or_default();
+    let mut voices = BTreeMap::new();
+    let mut person = 0;
+    for agent in agents {
+        let voice = match (agent.id.to_ascii_lowercase().as_str(), agent.kind.as_str()) {
+            ("v1", _) | ("v3", _) | (_, "group") => 1,
+            ("v2", _) => {
+                person = person.max(2);
+                2
+            }
+            (_, "person") => {
+                person += 1;
+                person
+            }
+            _ => continue,
+        };
+        if agent.id.eq_ignore_ascii_case("v1") {
+            person = person.max(1);
+        }
+        voices.insert(agent.id.as_str(), format!("v{voice}"));
+    }
+    let lines = payload.content.as_deref().unwrap_or_default();
+    // A proxy may omit agent declarations but retain standard IDs on lines.
+    // Correct oppositeTurn before it turns a V3 collaboration into V2.
+    for line in lines {
+        let voice = match line.agent.to_ascii_lowercase().as_str() {
+            "v1" | "v3" => "v1",
+            "v2" => "v2",
+            _ => continue,
+        };
+        voices
+            .entry(line.agent.as_str())
+            .or_insert_with(|| voice.into());
+    }
+    if voices.is_empty() || lines.is_empty() {
+        return text.into();
+    }
+    text.lines()
+        .map(|line| {
+            let Some(captures) = APPLE_VOCAL_LINE.captures(line) else {
+                return line.to_owned();
+            };
+            let fraction = captures.get(3).map_or(0, |value| {
+                value.as_str().parse::<i64>().unwrap() * 10_i64.pow(3 - value.as_str().len() as u32)
+            });
+            let start = captures[1].parse::<i64>().unwrap() * 60_000
+                + captures[2].parse::<i64>().unwrap() * 1000
+                + fraction;
+            // Proxy eLRC may round to centiseconds; prefer an exact match.
+            let source = lines
+                .iter()
+                .filter(|source| !source.agent.is_empty())
+                .min_by_key(|source| (source.timestamp as i64 - start).abs())
+                .filter(|source| (source.timestamp as i64 - start).abs() <= 10);
+            let Some(source) = source else {
+                return line.to_owned();
+            };
+            let Some(voice) = voices.get(source.agent.as_str()) else {
+                return line.to_owned();
+            };
+            let distance = (source.timestamp as i64 - start).abs();
+            if lines.iter().any(|other| {
+                (other.timestamp as i64 - start).abs() == distance
+                    && voices.get(other.agent.as_str()) != Some(voice)
+            }) {
+                // Simultaneous independent lines cannot be identified by time
+                // alone. Retain their supplied labels rather than swapping them.
+                return line.to_owned();
+            }
+            let prefix = captures.get(4).unwrap();
+            let mut corrected = line.to_owned();
+            corrected.replace_range(prefix.range(), voice);
+            corrected
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 #[derive(Default)]
 struct ProxyPayload {
@@ -134,10 +245,14 @@ pub fn format_apple(raw: &str, multi_person: bool, word_timing: bool) -> Result<
             .any(|value| !value.trim().is_empty()))
     {
         if word_timing && multi_person && !value.elrc_multi_person.trim().is_empty() {
-            return Ok(value.elrc_multi_person.trim().into());
+            return Ok(apple_vocal_sides(value.elrc_multi_person.trim(), &value));
         }
         if word_timing && !value.elrc.trim().is_empty() {
-            return Ok(value.elrc.trim().into());
+            return Ok(if multi_person {
+                apple_vocal_sides(value.elrc.trim(), &value)
+            } else {
+                value.elrc.trim().into()
+            });
         }
         let content = value.content.as_deref().unwrap_or_default();
         if !value.plain.trim().is_empty() && content.is_empty() {
@@ -146,12 +261,12 @@ pub fn format_apple(raw: &str, multi_person: bool, word_timing: bool) -> Result<
         if content.is_empty() {
             return Err("unsupported apple music lyrics payload".into());
         }
-        return Ok(format_pax_content(
-            &value.kind,
-            content,
-            multi_person,
-            word_timing,
-        ));
+        let text = format_pax_content(&value.kind, content, multi_person, word_timing);
+        return Ok(if multi_person {
+            apple_vocal_sides(&text, &value)
+        } else {
+            text
+        });
     }
     if let Ok(Some(lines)) = json::decode::<Option<Vec<PaxLine>>>(raw)
         && !lines.is_empty()
@@ -461,6 +576,115 @@ pub fn format_kpoe(response: &KpoeResponse, multi_person: bool, word_timing: boo
 #[cfg(test)]
 mod supplement_tests {
     use super::*;
+
+    #[test]
+    fn apple_agents_restore_vocal_sides_without_reformatting_word_times() {
+        let mut raw = serde_json::json!({
+            "type": "Syllable",
+            "elrcMultiPerson": "[00:01.01]v1: <00:01.009>Lead<00:02.00>\n[bg:<00:01.50>Echo<00:02.50>]\n[00:03.00]v2: <00:03.00>Guest<00:04.00>\n[00:05.00]v2: <00:05.00>Together<00:06.00>\n[00:07.00]v2: Third",
+            "content": [
+                {"timestamp": 1009, "agent": "lead"},
+                {"timestamp": 3000, "agent": "guest"},
+                {"timestamp": 5000, "agent": "all"},
+                {"timestamp": 7000, "agent": "third"}
+            ],
+            "metadata": {"agents": [
+                {"id": "lead", "type": "person"},
+                {"id": "guest", "type": "person"},
+                {"id": "all", "type": "group"},
+                {"id": "third", "type": "person"}
+            ]}
+        });
+        let text = format_apple(&raw.to_string(), true, true).unwrap();
+        assert_eq!(
+            text,
+            "[00:01.01]v1: <00:01.009>Lead<00:02.00>\n[bg:<00:01.50>Echo<00:02.50>]\n[00:03.00]v2: <00:03.00>Guest<00:04.00>\n[00:05.00]v1: <00:05.00>Together<00:06.00>\n[00:07.00]v3: Third"
+        );
+        let lyrics = LyricsResponse::from_text(&text, "Apple Music", "Apple Music");
+        let stored = lrc::with_metadata(&lyrics, "Track", "Artist");
+        assert!(stored.contains("[00:05.00]v1: <00:05.00>Together<00:06.00>"));
+        assert!(stored.contains("[bg:<00:01.50>Echo<00:02.50>]"));
+
+        // Some responses carry vocal labels only in the regular eLRC field.
+        // It must use the same agent correction as the multi-person field.
+        raw["elrc"] = raw
+            .as_object_mut()
+            .unwrap()
+            .remove("elrcMultiPerson")
+            .unwrap();
+        assert_eq!(format_apple(&raw.to_string(), true, true).unwrap(), text);
+        assert_eq!(
+            format_apple(&raw.to_string(), false, true).unwrap(),
+            raw["elrc"].as_str().unwrap()
+        );
+    }
+
+    #[test]
+    fn apple_v3_does_not_depend_on_agent_order_or_group_metadata() {
+        for agents in [
+            serde_json::Value::Null,
+            serde_json::json!([
+                {"id": "v1", "type": "person"},
+                {"id": "v3", "type": "person"},
+                {"id": "v2", "type": "person"}
+            ]),
+        ] {
+            let raw = serde_json::json!({
+                "type": "Syllable",
+                "elrcMultiPerson": "[00:01.00]v2:Together\n[00:02.00]v1:Guest",
+                "content": [{"timestamp": 1000, "agent": "v3"}, {"timestamp": 2000, "agent": "v2"}],
+                "metadata": {"agents": agents}
+            });
+            assert_eq!(
+                format_apple(&raw.to_string(), true, true).unwrap(),
+                "[00:01.00]v1:Together\n[00:02.00]v2:Guest"
+            );
+        }
+    }
+
+    #[test]
+    fn apple_content_fallback_honors_agents_only_when_multi_person_is_enabled() {
+        let raw = serde_json::json!({
+            "type": "Syllable",
+            "content": [{"timestamp": 1000, "oppositeTurn": true, "agent": "group", "text": [
+                {"text": "Together", "timestamp": 1000, "endtime": 2000}
+            ]}],
+            "metadata": {"agents": [{"id": "group", "type": "group"}]}
+        })
+        .to_string();
+        for timing in [false, true] {
+            assert!(
+                format_apple(&raw, true, timing)
+                    .unwrap()
+                    .starts_with("[00:01.00]v1:")
+            );
+            assert!(!format_apple(&raw, false, timing).unwrap().contains("v1:"));
+            assert!(!format_apple(&raw, false, timing).unwrap().contains("v2:"));
+        }
+    }
+
+    #[test]
+    fn apple_voice_correction_preserves_unknown_or_ambiguous_lines() {
+        let text = "[00:01.00]v2: Unknown\n[00:02.00]v2: Too far\n[00:03.00]v2: Ambiguous\n[00:04.00]v2: Exact";
+        let mut raw = serde_json::json!({"elrcMultiPerson": text});
+        assert_eq!(format_apple(&raw.to_string(), true, true).unwrap(), text);
+        raw["metadata"] = serde_json::json!({"agents": [
+            {"id": "v1", "type": "person"}, {"id": "v2", "type": "person"},
+            {"id": "v3", "type": "group"}
+        ]});
+        raw["content"] = serde_json::json!([
+            {"timestamp": 1000, "agent": "unknown"},
+            {"timestamp": 2011, "agent": "v3"},
+            {"timestamp": 3000, "agent": "v3"},
+            {"timestamp": 3000, "agent": "v2"},
+            {"timestamp": 3999, "agent": "v2"},
+            {"timestamp": 4000, "agent": "v3"}
+        ]);
+        assert_eq!(
+            format_apple(&raw.to_string(), true, true).unwrap(),
+            text.replace("[00:04.00]v2:", "[00:04.00]v1:")
+        );
+    }
 
     fn payload(lang: &str) -> serde_json::Value {
         serde_json::json!({

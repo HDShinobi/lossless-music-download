@@ -24,7 +24,7 @@ class RustEngineProbeTest {
         val (ext, data) = support()
         val result = RustEngineProbe.run(ext, data, key)
         assertTrue(result.toString(), result.getBoolean("ok"))
-        assertEquals("5.0.0", result.getString("engine_version"))
+        assertEquals(EngineVersion.SPOTIFLAC_ENGINE_VERSION, result.getString("engine_version"))
         assertEquals(0, JSONArray(result.getString("installed")).length())
         assertFalse("Go dir must not be created", ext.exists())
     }
