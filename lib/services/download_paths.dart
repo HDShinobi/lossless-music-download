@@ -80,7 +80,7 @@ String sanitizeFolderSegment(String name) {
 
 /// Strips featured artists so "A feat. B" and "A" land in the same folder.
 final _featuredArtist = RegExp(
-  r'\s*(?:feat\.?|ft\.?|featuring|with)\s+.*$',
+  r'(?:\s+|\s*[\[(]\s*)(?:feat\.?|ft\.?|featuring|with)\s+.*$',
   caseSensitive: false,
 );
 

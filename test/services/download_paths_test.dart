@@ -90,6 +90,32 @@ void main() {
       );
     });
 
+    test('keeps artist names containing feature keyword fragments', () {
+      for (final artist in ['Daft Punk', 'Taylor Swift', 'Draft Theory']) {
+        expect(
+          buildRelativeFolder(FolderOrganization.artist, FolderMetadata(artist: artist)),
+          artist,
+          reason: artist,
+        );
+      }
+    });
+
+    test('drops whole featured artist keywords after separators', () {
+      for (final artist in [
+        'A feat. B',
+        'A ft. B',
+        'A (feat. B)',
+        'A featuring B',
+        'A with B',
+      ]) {
+        expect(
+          buildRelativeFolder(FolderOrganization.artist, FolderMetadata(artist: artist)),
+          'A',
+          reason: artist,
+        );
+      }
+    });
+
     test('sanitizes each segment separately, keeping the hierarchy', () {
       const slashes = FolderMetadata(artist: 'AC/DC', album: 'Back/Black');
       expect(
