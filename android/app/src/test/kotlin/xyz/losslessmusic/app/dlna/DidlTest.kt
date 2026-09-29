@@ -93,4 +93,13 @@ class DidlTest {
         val xml = Didl.lite(listOf(CdObject("aWQ", "0", "Sơn Tùng & \"Friends\" 🎵", 2)), emptyList())
         assertTrue(xml.contains("<dc:title>Sơn Tùng &amp; &#34;Friends&#34; 🎵</dc:title>"))
     }
+
+    @Test fun xmlEscapeReplacesInvalidXmlCharacters() {
+        assertEquals("a\uFFFDb\uFFFDc", Xml.escape("a\u0001b\uFFFEc"))
+        assertEquals("\uFFFD", Xml.escape("\u0000"))
+        assertEquals("\uFFFD", Xml.escape("\uFFFF"))
+        assertEquals("\uFFFD", Xml.escape("\uD83D"))
+        assertEquals("\uFFFD", Xml.escape("\uDC00"))
+        assertEquals("🎵", Xml.escape("🎵"))
+    }
 }

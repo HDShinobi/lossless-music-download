@@ -1,9 +1,17 @@
 package xyz.losslessmusic.app.dlna
 
 internal object Xml {
-    /** Matches Go encoding/xml.EscapeText for the characters used by DIDL. */
+    /** Matches Go encoding/xml.EscapeText, including replacement of invalid XML 1.0 characters. */
     fun escape(s: String): String = buildString {
-        for (char in s) append(when (char) {
+        var index = 0
+        while (index < s.length) {
+            val char = s[index]
+            if (Character.isHighSurrogate(char) && index + 1 < s.length && Character.isLowSurrogate(s[index + 1])) {
+                append(char).append(s[index + 1])
+                index += 2
+                continue
+            }
+            append(when (char) {
             '&' -> "&amp;"
             '<' -> "&lt;"
             '>' -> "&gt;"
@@ -12,8 +20,10 @@ internal object Xml {
             '\t' -> "&#x9;"
             '\n' -> "&#xA;"
             '\r' -> "&#xD;"
-            else -> char.toString()
-        })
+            else -> if (char < ' ' || Character.isSurrogate(char) || char == '\uFFFE' || char == '\uFFFF') "\uFFFD" else char.toString()
+            })
+            index++
+        }
     }
 
     fun attr(s: String): String = "\"${escape(s)}\""
