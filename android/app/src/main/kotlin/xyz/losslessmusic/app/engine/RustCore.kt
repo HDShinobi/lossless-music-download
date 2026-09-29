@@ -40,6 +40,7 @@ interface RustCore : AutoCloseable {
     fun checkIsrcExists(directory: String, isrc: String): String
     fun addToIsrcIndex(directory: String, isrc: String, path: String)
     fun readAudioMetadata(path: String): String
+    fun extractCoverToFile(audioPath: String, outputPath: String)
     fun editFileMetadata(path: String, metadataJson: String): String
     fun reenrichFile(requestJson: String): String
     fun getLyricsLrc(spotifyId: String, track: String, artist: String, filePath: String, durationMs: Long): String

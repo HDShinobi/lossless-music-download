@@ -3,7 +3,10 @@ package xyz.losslessmusic.app
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
+import android.net.LinkProperties
+import android.net.Network
 import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.util.Log
@@ -22,12 +25,68 @@ import xyz.losslessmusic.app.engine.Engines
 import xyz.losslessmusic.app.engine.EngineKind
 import xyz.losslessmusic.app.engine.RustEngineProbe
 import xyz.losslessmusic.app.engine.RustProbeStartGate
+import xyz.losslessmusic.app.engine.RustEngine
 import xyz.losslessmusic.app.engine.SessionGrantFailure
 import xyz.losslessmusic.app.engine.ab.AbHarness
+import xyz.losslessmusic.app.dlna.EngineMetadataProvider
+import xyz.losslessmusic.app.dlna.MediaServerController
+import xyz.losslessmusic.app.dlna.RealDlnaRuntime
 
 class MainActivity : FlutterActivity() {
     companion object {
         private val probeStartGate = RustProbeStartGate()
+        @Volatile private var dlnaController: MediaServerController? = null
+        private var dlnaMulticastLock: WifiManager.MulticastLock? = null
+        private var dlnaNetworkCallback: ConnectivityManager.NetworkCallback? = null
+        private val dlnaNetworkExecutor = Executors.newSingleThreadExecutor()
+
+        private fun rustDlna(context: Context): MediaServerController = synchronized(this) {
+            dlnaController ?: MediaServerController(
+                { root, name, ip ->
+                    val rust = Engines.current as RustEngine
+                    RealDlnaRuntime(root, name, ip, EngineMetadataProvider(
+                        rust::readTrackMetadata, rust::extractCoverToFile,
+                        File(context.applicationContext.cacheDir, "dlna-art"),
+                    ))
+                },
+                {
+                    val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                    if (dlnaMulticastLock == null) {
+                        dlnaMulticastLock = wifi.createMulticastLock("lossless-dlna").apply {
+                            setReferenceCounted(false)
+                            acquire()
+                        }
+                    }
+                },
+                {
+                    dlnaMulticastLock?.let { if (it.isHeld) it.release() }
+                    dlnaMulticastLock = null
+                },
+            ).also { dlnaController = it }
+        }
+
+        private fun lanIpv4(context: Context): String? {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE)
+                as? ConnectivityManager ?: return null
+            val networks = cm.allNetworks.toMutableList()
+            cm.activeNetwork?.let { active ->
+                if (!networks.contains(active)) networks.add(active)
+            }
+            val ranked = networks.sortedByDescending { n ->
+                val caps = cm.getNetworkCapabilities(n)
+                if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) 1 else 0
+            }
+            for (n in ranked) {
+                val lp = cm.getLinkProperties(n) ?: continue
+                for (la in lp.linkAddresses) {
+                    val addr = la.address
+                    if (addr is Inet4Address && !addr.isLoopbackAddress && addr.isSiteLocalAddress) {
+                        return addr.hostAddress
+                    }
+                }
+            }
+            return null
+        }
     }
 
     private val channel = "xyz.losslessmusic/native"
@@ -287,25 +346,38 @@ class MainActivity : FlutterActivity() {
             true to null
         }
         "startMediaServer" -> {
-            // Acquire the lock BEFORE the server opens its SSDP socket so the
-            // initial NOTIFY burst and M-SEARCH receive are covered from t=0.
-            acquireMulticastLock()
-            // Resolve the Wi-Fi IPv4 here: Go's net.Interfaces() is SELinux-
-            // blocked on Android 11+, so the server would otherwise fall back to
-            // 127.0.0.1 and be invisible on the LAN.
-            val status = Bridge.startMediaServer(
-                call.argument<String>("rootDir")!!,
-                call.argument<String>("name")!!,
-                wifiLanIpv4() ?: ""
-            )
-            true to status
+            if (Engines.current.kind == EngineKind.RUST) {
+                val status = rustDlna(applicationContext).start(
+                    call.argument<String>("rootDir")!!, call.argument<String>("name")!!, wifiLanIpv4() ?: "")
+                registerDlnaNetworkCallback()
+                true to status
+            } else {
+                // Acquire the lock BEFORE the server opens its SSDP socket so the
+                // initial NOTIFY burst and M-SEARCH receive are covered from t=0.
+                acquireMulticastLock()
+                // Resolve the Wi-Fi IPv4 here: Go's net.Interfaces() is SELinux-
+                // blocked on Android 11+, so the server would otherwise fall back to
+                // 127.0.0.1 and be invisible on the LAN.
+                val status = Bridge.startMediaServer(
+                    call.argument<String>("rootDir")!!,
+                    call.argument<String>("name")!!,
+                    wifiLanIpv4() ?: ""
+                )
+                true to status
+            }
         }
         "stopMediaServer" -> {
-            Bridge.stopMediaServer()
-            releaseMulticastLock()
+            if (Engines.current.kind == EngineKind.RUST) {
+                unregisterDlnaNetworkCallback()
+                rustDlna(applicationContext).stop()
+            } else {
+                Bridge.stopMediaServer()
+                releaseMulticastLock()
+            }
             true to null
         }
-        "getMediaServerStatus" -> true to Bridge.getMediaServerStatus()
+        "getMediaServerStatus" -> true to (if (Engines.current.kind == EngineKind.RUST)
+            rustDlna(applicationContext).statusJson() else Bridge.getMediaServerStatus())
         "handleUrl" -> true to Engines.current.handleUrl(call.argument<String>("url")!!)
         "findUrlHandler" -> true to Engines.current.findUrlHandler(call.argument<String>("url")!!)
         "getProviderMetadata" -> true to Engines.current.getProviderMetadata(
@@ -361,31 +433,7 @@ class MainActivity : FlutterActivity() {
     // Android. Prefers a network with the Wi-Fi transport; returns null if none
     // has a usable private IPv4.
     private fun wifiLanIpv4(): String? {
-        val cm = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE)
-            as? ConnectivityManager ?: return null
-
-        val networks = cm.allNetworks.toMutableList()
-        cm.activeNetwork?.let { active ->
-            if (!networks.contains(active)) networks.add(active)
-        }
-        // Wi-Fi transport first, then everything else.
-        val ranked = networks.sortedByDescending { n ->
-            val caps = cm.getNetworkCapabilities(n)
-            if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) 1 else 0
-        }
-        for (n in ranked) {
-            val lp = cm.getLinkProperties(n) ?: continue
-            for (la in lp.linkAddresses) {
-                val addr = la.address
-                if (addr is Inet4Address &&
-                    !addr.isLoopbackAddress &&
-                    addr.isSiteLocalAddress
-                ) {
-                    return addr.hostAddress
-                }
-            }
-        }
-        return null
+        return lanIpv4(applicationContext)
     }
 
     private fun acquireMulticastLock() {
@@ -403,8 +451,36 @@ class MainActivity : FlutterActivity() {
         multicastLock = null
     }
 
+    private fun registerDlnaNetworkCallback() = synchronized(MainActivity) {
+        if (dlnaNetworkCallback != null) return@synchronized
+        val cm = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val app = applicationContext
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onLost(network: Network) {
+                dlnaNetworkExecutor.execute { dlnaController?.onNetworkChanged(lanIpv4(app)) }
+            }
+            override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
+                dlnaNetworkExecutor.execute { dlnaController?.onNetworkChanged(lanIpv4(app)) }
+            }
+        }
+        cm.registerNetworkCallback(
+            NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), callback)
+        dlnaNetworkCallback = callback
+    }
+
+    private fun unregisterDlnaNetworkCallback() = synchronized(MainActivity) {
+        val callback = dlnaNetworkCallback ?: return@synchronized
+        dlnaNetworkCallback = null
+        val cm = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        cm.unregisterNetworkCallback(callback)
+    }
+
     override fun onDestroy() {
-        releaseMulticastLock()
+        if (Engines.current.kind == EngineKind.RUST) {
+            if (isFinishing) unregisterDlnaNetworkCallback()
+        } else {
+            releaseMulticastLock()
+        }
         bridgeExecutor.shutdown()
         initExecutor.shutdown()
         super.onDestroy()

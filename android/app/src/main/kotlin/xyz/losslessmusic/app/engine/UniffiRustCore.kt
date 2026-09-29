@@ -91,6 +91,7 @@ class UniffiRustCore private constructor(private val manager: ExtensionManager) 
     override fun checkIsrcExists(directory: String, isrc: String): String = env { it.checkIsrcExists(directory, isrc, null) }
     override fun addToIsrcIndex(directory: String, isrc: String, path: String) = env { it.addToIsrcIndex(directory, isrc, path, null) }
     override fun readAudioMetadata(path: String): String = manager.readAudioMetadata(path, "", "", null)
+    override fun extractCoverToFile(audioPath: String, outputPath: String) = manager.extractCoverToFile(audioPath, outputPath, null)
     override fun editFileMetadata(path: String, metadataJson: String): String = manager.editFileMetadata(path, metadataJson, null)
     override fun reenrichFile(requestJson: String): String = manager.reenrichFile(requestJson, null)
     override fun getLyricsLrc(spotifyId: String, track: String, artist: String, filePath: String, durationMs: Long): String =

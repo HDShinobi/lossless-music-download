@@ -217,6 +217,21 @@ class RustEngine(
         return RustJson.audioQuality(withGrant(c, parentOf(p)) { c.readAudioMetadata(p) })
     }
 
+    fun readTrackMetadata(path: String): String {
+        val c = requireCore()
+        val p = canonical(path)
+        return withGrant(c, parentOf(p)) { c.readAudioMetadata(p) }
+    }
+
+    fun extractCoverToFile(audioPath: String, outputPath: String) {
+        val c = requireCore()
+        val audio = canonical(audioPath)
+        val output = canonical(outputPath)
+        withGrant(c, parentOf(audio)) {
+            withGrant(c, parentOf(output)) { c.extractCoverToFile(audio, output) }
+        }
+    }
+
     override fun editFileMetadata(filePath: String, metadataJson: String): String {
         val c = requireCore()
         val p = canonical(filePath)

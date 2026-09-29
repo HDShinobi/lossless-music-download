@@ -66,6 +66,7 @@ class FakeRustCore : RustCore {
     override fun checkIsrcExists(directory: String, isrc: String) = isrcPath.also { rec("checkIsrc:$directory:$isrc") }
     override fun addToIsrcIndex(directory: String, isrc: String, path: String) = rec("addIsrc:$directory:$isrc:$path")
     override fun readAudioMetadata(path: String) = audioMetadata.also { rec("readAudio:$path") }
+    override fun extractCoverToFile(audioPath: String, outputPath: String) = rec("extractCover:$audioPath:$outputPath")
     override fun editFileMetadata(path: String, metadataJson: String) = "{\"success\":true,\"method\":\"native\"}".also { rec("edit:$path") }
     override fun reenrichFile(requestJson: String) = "{}".also { rec("reenrich:$requestJson") }
     override fun getLyricsLrc(spotifyId: String, track: String, artist: String, filePath: String, durationMs: Long): String {
