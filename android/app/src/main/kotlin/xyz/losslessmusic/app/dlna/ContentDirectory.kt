@@ -79,9 +79,11 @@ internal class ContentDirectory(
             fun number(field: String): Int {
                 val nodes = doc.getElementsByTagNameNS("*", field)
                 if (nodes.length == 0) return 0
-                val value = nodes.item(0).textContent.trim().toIntOrNull()
+                val text = nodes.item(0).textContent.trim()
+                if (text.isEmpty()) return 0
+                val value = text.toLongOrNull()
                 require(value != null && value >= 0) { "invalid $field" }
-                return value
+                return value.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             }
             return BrowseRequest(id.item(0).textContent, flag.item(0).textContent,
                 number("StartingIndex"), number("RequestedCount"))

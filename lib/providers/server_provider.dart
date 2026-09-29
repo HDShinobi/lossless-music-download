@@ -3,6 +3,17 @@ import '../models/server_status.dart';
 import '../providers/extensions_provider.dart';
 import '../providers/download_dir_provider.dart';
 
+class ServerStartError extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String? error) => state = error;
+}
+
+final serverStartErrorProvider = NotifierProvider<ServerStartError, String?>(
+  ServerStartError.new,
+);
+
 class ServerController extends AsyncNotifier<ServerStatus> {
   bool _refreshing = false;
   int _revision = 0;
@@ -35,15 +46,21 @@ class ServerController extends AsyncNotifier<ServerStatus> {
       final result = await ref
           .read(backendBridgeProvider)
           .startMediaServer(dir, 'Lossless Music');
+      _revision++;
+      ref.read(serverStartErrorProvider.notifier).set(null);
       state = AsyncData(result);
     } catch (e, st) {
+      _revision++;
+      ref.read(serverStartErrorProvider.notifier).set(e.toString());
       state = AsyncError(e, st);
     }
   }
 
   Future<void> stop() async {
     _revision++;
+    ref.read(serverStartErrorProvider.notifier).set(null);
     await ref.read(backendBridgeProvider).stopMediaServer();
+    _revision++;
     state = const AsyncData(ServerStatus.stopped);
   }
 }

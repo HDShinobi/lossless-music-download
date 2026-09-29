@@ -37,28 +37,31 @@ class _ServerScreenState extends ConsumerState<ServerScreen> {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
     final serverAsync = ref.watch(serverProvider);
+    final startError = ref.watch(serverStartErrorProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(t.tabServer)),
       body: serverAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Card(
-              color: Theme.of(context).colorScheme.errorContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  error.toString(),
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onErrorContainer,
+        error: (error, _) => startError != null
+            ? const _ServerBody(status: ServerStatus.stopped)
+            : Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Card(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        error.toString(),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
-        ),
         data: (status) => _ServerBody(status: status),
       ),
     );
@@ -75,6 +78,7 @@ class _ServerBody extends ConsumerWidget {
     final t = AppLocalizations.of(context);
     final tokens = context.tokens;
     final serverAsync = ref.watch(serverProvider);
+    final startError = ref.watch(serverStartErrorProvider);
     final bool running = status.running;
     final String? url = status.url;
 
@@ -172,6 +176,22 @@ class _ServerBody extends ConsumerWidget {
           ],
 
           const Spacer(),
+
+          if (!running && startError != null) ...[
+            Card(
+              color: Theme.of(context).colorScheme.errorContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  startError,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
 
           // Start / Stop button
           FilledButton(
