@@ -116,6 +116,16 @@ void main() {
       }
     });
 
+    test('drops bracketed featured artist credits', () {
+      for (final artist in ['A [feat. B]', 'A (with B)']) {
+        expect(
+          buildRelativeFolder(FolderOrganization.artist, FolderMetadata(artist: artist)),
+          'A',
+          reason: artist,
+        );
+      }
+    });
+
     test('sanitizes each segment separately, keeping the hierarchy', () {
       const slashes = FolderMetadata(artist: 'AC/DC', album: 'Back/Black');
       expect(

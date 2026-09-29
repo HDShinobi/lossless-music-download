@@ -20,8 +20,8 @@ object EngineSelection {
 
 /** Process-scoped engine holder: chosen on the first init() and never changed for the process lifetime. */
 object Engines {
-    /** Debug-build default. Phase-2 exit flips this to RUST; release builds are always GO until phase 5. */
-    val DEBUG_DEFAULT = EngineKind.GO
+    /** Debug builds default to Rust since phase-2 exit; release builds stay Go until phase 5. Override per device with files/engine_go or files/engine_rust. */
+    val DEBUG_DEFAULT = EngineKind.RUST
 
     @Volatile private var engine: NativeEngine? = null
 

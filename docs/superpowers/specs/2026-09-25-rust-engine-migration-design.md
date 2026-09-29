@@ -417,14 +417,14 @@ both builds, reported in the release notes, no threshold).
 ## 10. Success criteria
 
 1. APK ships only the Rust engine; no Go code or runtime.
-2. 430+ Dart tests pass.
+2. 430+ existing Dart tests pass with existing tests unmodified; new tests may be added.
 3. E2E matrix passes on device.
 4. `scripts/sync-upstream.sh v5.0.0` on the migrated tree reports no changes and verify passes.
-5. The active Rust LM-FORK ids are a subset of `publish-noreplace-fallback` (older Android
-   kernels/sdcardfs do not support `renameat2` `NOREPLACE`) and `signed-session-mint` (planned for
-   phase 3). Each active id has one registry row and an upstream PR sent after review. Retire an
-   id when the synced upstream target contains its fix, verified by the retained LM-FORK test on
-   unmodified upstream code or a named upstream test in the retired registry row.
+5. `signed-session-mint` is either active with its upstream PR sent after review, or retired because
+   the synced upstream target contains its fix, verified by the retained LM-FORK test on unmodified
+   upstream code or a named upstream test in the retired registry row. `publish-noreplace-fallback`
+   (older Android kernels/sdcardfs do not support `renameat2` `NOREPLACE`) is the other allowed
+   active Rust LM-FORK. Each active id has one registry row and an upstream PR sent after review.
 
 ## Deferred to plan
 - Readiness-gate timeout value and the list of manager-independent methods (§3.1).
