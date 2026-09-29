@@ -30,7 +30,17 @@ impl SignedSessionClient {
             };
             if let Some(error) = error {
                 drop(state);
-                let url = self.bootstrap(&check)?;
+                // LM-FORK(signed-session-mint): bootstrap failure → needsVerification (see helper at EOF)
+                let url = match self.bootstrap(&check) {
+                    Ok(url) => url,
+                    Err(_) => {
+                        return lm_on_mint_failure(
+                            || self.check(&check),
+                            || self.verification_required(String::new()),
+                        );
+                    }
+                };
+                // END LM-FORK
                 return if url.is_empty() {
                     Err(error.into())
                 } else {
@@ -39,16 +49,29 @@ impl SignedSessionClient {
             }
             if state.blocked(&record) {
                 drop(state);
-                let url = self.bootstrap(&check)?;
+                // LM-FORK(signed-session-mint): bootstrap failure → needsVerification (see helper at EOF)
+                let url = match self.bootstrap(&check) {
+                    Ok(url) => url,
+                    Err(_) => {
+                        return lm_on_mint_failure(
+                            || self.check(&check),
+                            || self.verification_required(String::new()),
+                        );
+                    }
+                };
+                // END LM-FORK
                 if !url.is_empty() {
                     return Ok(self.verification_required(url));
                 }
                 let state = self.scope.lock().expect("signed session coordinator lock");
                 record = self.load()?;
                 if !record.usable(self.registry.auth.now()) || state.blocked(&record) {
-                    return Err(
-                        "verification_required: signed-session generation is blocked".into(),
+                    // LM-FORK(signed-session-mint): text-only error → needsVerification (see helper at EOF)
+                    return lm_on_mint_failure(
+                        || self.check(&check),
+                        || self.verification_required(String::new()),
                     );
+                    // END LM-FORK
                 }
             }
             record
@@ -139,3 +162,35 @@ impl SignedSessionClient {
         }
     }
 }
+
+// LM-FORK(signed-session-mint): minting a verification challenge can fail (network blip / 5xx on the
+// bootstrap call) right after we detect the session needs re-auth. Upstream returns a bare Err (or a
+// text-only "verification_required:" Err) which session_host serialises to {"ok":false,"error":…}
+// without needsVerification, so extensions that gate on that flag never reopen the verification
+// browser and the download dies with an opaque provider error. Tag it as verification-required
+// (no URL yet) so the next attempt retries the challenge. Cancellation is never masked.
+fn lm_on_mint_failure<T>(
+    recheck: impl FnOnce() -> Result<(), String>,
+    verification: impl FnOnce() -> T,
+) -> Result<T, String> {
+    recheck()?;
+    Ok(verification())
+}
+
+#[cfg(test)]
+mod lm_signed_session_mint_tests {
+    use super::lm_on_mint_failure;
+
+    #[test]
+    fn mint_failure_becomes_verification_required() {
+        let out = lm_on_mint_failure(|| Ok(()), || serde_json::json!({"needsVerification": true}));
+        assert_eq!(out.unwrap()["needsVerification"], true);
+    }
+
+    #[test]
+    fn mint_failure_propagates_cancellation() {
+        let out = lm_on_mint_failure(|| Err("download cancelled".to_string()), || 1);
+        assert_eq!(out.unwrap_err(), "download cancelled");
+    }
+}
+// END LM-FORK
