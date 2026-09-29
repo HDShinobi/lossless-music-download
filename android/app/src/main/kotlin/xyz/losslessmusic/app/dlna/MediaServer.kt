@@ -7,11 +7,12 @@ import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
+import io.ktor.server.engine.EngineConnectorBuilder
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.http.content.LocalFileContent
 import io.ktor.server.plugins.autohead.AutoHeadResponse
 import io.ktor.server.plugins.partialcontent.PartialContent
-import io.ktor.server.request.receiveText
+import io.ktor.server.request.receiveStream
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
@@ -20,7 +21,9 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import java.io.File
+import java.io.ByteArrayOutputStream
 import java.net.BindException
+import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.runBlocking
 
 /** HTTP portion of one DLNA MediaServer. The controller owns SSDP. */
@@ -92,7 +95,10 @@ class MediaServer(
         return candidate
     }
 
-    private fun createEngine(port: Int) = embeddedServer(CIO, host = lanIp, port = port) {
+    private fun createEngine(port: Int) = embeddedServer(CIO, configure = {
+        connectors.add(EngineConnectorBuilder().apply { host = lanIp; this.port = port })
+        reuseAddress = true
+    }) {
         install(PartialContent)
         install(AutoHeadResponse)
         monitor.subscribe(ApplicationStopped) {
@@ -107,16 +113,32 @@ class MediaServer(
             }
             route("/cd/control") {
                 post {
-                    val body = try { call.receiveText() } catch (error: Exception) {
+                    val body = try {
+                        val bytes = ByteArrayOutputStream()
+                        call.receiveStream().use { input ->
+                            val buffer = ByteArray(8192)
+                            while (bytes.size() <= 65536) {
+                                val read = input.read(buffer, 0, minOf(buffer.size, 65537 - bytes.size()))
+                                if (read < 0) break
+                                bytes.write(buffer, 0, read)
+                            }
+                        }
+                        if (bytes.size() > 65536) {
+                            call.respondText("Payload Too Large", status = HttpStatusCode.PayloadTooLarge)
+                            return@post
+                        }
+                        bytes.toString(StandardCharsets.UTF_8.name())
+                    } catch (error: Exception) {
                         call.respondText("Bad Request", status = HttpStatusCode.BadRequest)
                         return@post
                     }
-                    val (id, flag) = try { ContentDirectory.parseBrowse(body) } catch (error: Exception) {
+                    val request = try { ContentDirectory.parseBrowseRequest(body) } catch (error: Exception) {
                         call.respondText("Bad Request: ${error.message}", status = HttpStatusCode.BadRequest)
                         return@post
                     }
                     val result = try {
-                        if (flag == "BrowseMetadata") directory.browseMetadata(id) else directory.browse(id)
+                        if (request.flag == "BrowseMetadata") directory.browseMetadata(request.objectId)
+                        else directory.browse(request.objectId, request.startingIndex, request.requestedCount)
                     } catch (error: Exception) {
                         call.respondText("Internal Server Error: ${error.message}", status = HttpStatusCode.InternalServerError)
                         return@post

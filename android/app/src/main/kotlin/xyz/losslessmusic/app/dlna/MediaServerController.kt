@@ -18,16 +18,53 @@ interface DlnaRuntime {
     var onFailure: ((String) -> Unit)?
 }
 
-class RealDlnaRuntime(rootDir: String, name: String, private val lanIp: String, meta: MetadataProvider?) : DlnaRuntime {
-    private val http = MediaServer(rootDir, name, lanIp, meta)
-    private var ssdp: SsdpResponder? = null
+internal interface DlnaHttpTransport {
+    val udn: String
+    var onUnexpectedStop: ((String) -> Unit)?
+    fun start(): String
+    fun stop()
+}
+
+internal interface DlnaSsdpTransport {
+    var onFailure: ((String) -> Unit)?
+    fun start()
+    fun stop()
+}
+
+class RealDlnaRuntime internal constructor(
+    private val http: DlnaHttpTransport,
+    private val ssdpFactory: (String, String) -> DlnaSsdpTransport,
+) : DlnaRuntime {
+    constructor(rootDir: String, name: String, lanIp: String, meta: MetadataProvider?) : this(
+        object : DlnaHttpTransport {
+            private val server = MediaServer(rootDir, name, lanIp, meta)
+            override val udn get() = server.udn
+            override var onUnexpectedStop: ((String) -> Unit)?
+                get() = server.onUnexpectedStop
+                set(value) { server.onUnexpectedStop = value }
+            override fun start() = server.start()
+            override fun stop() = server.stop()
+        },
+        { url, udn ->
+            object : DlnaSsdpTransport {
+                private val responder = SsdpResponder(lanIp, url, udn)
+                override var onFailure: ((String) -> Unit)?
+                    get() = responder.onFailure
+                    set(value) { responder.onFailure = value }
+                override fun start() = responder.start()
+                override fun stop() = responder.stop()
+            }
+        },
+    )
+
+    private var ssdp: DlnaSsdpTransport? = null
     override var onFailure: ((String) -> Unit)? = null
 
     override fun start(): String {
         http.onUnexpectedStop = { onFailure?.invoke(it) }
         val url = http.start()
         try {
-            val responder = SsdpResponder(lanIp, "$url/description.xml", http.udn)
+            val responder = ssdpFactory("$url/description.xml", http.udn)
             ssdp = responder
             responder.onFailure = { onFailure?.invoke(it) }
             responder.start()
@@ -63,6 +100,7 @@ class MediaServerController(
     private var serverName = ""
     private var pendingFailure: String? = null
     private var cancelStart = false
+    internal var beforeFailureShutdownForTest: (() -> Unit)? = null
 
     val state: ServerState get() = lock.withLock { current }
 
@@ -164,6 +202,7 @@ class MediaServerController(
             }
             if (runtime !== source || current != ServerState.Running) return
         }
+        beforeFailureShutdownForTest?.invoke()
         shutDown(reason, expectedRuntime = source)
     }
 
@@ -171,6 +210,7 @@ class MediaServerController(
         val active: DlnaRuntime?
         val release: Boolean
         lock.withLock {
+            if (expectedRuntime != null && (current == ServerState.Stopping || runtime !== expectedRuntime)) return
             while (current == ServerState.Stopping) changed.await()
             if (expectedRuntime != null && runtime !== expectedRuntime) return
             if (current == ServerState.Starting) {

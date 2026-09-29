@@ -9,6 +9,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 import org.xml.sax.InputSource
 
 internal class BrowseResult(val didl: String, val numberReturned: Int, val totalMatches: Int)
+internal data class BrowseRequest(val objectId: String, val flag: String, val startingIndex: Int, val requestedCount: Int)
 
 internal class ContentDirectory(
     private val rootDir: String, private val friendlyName: String,
@@ -54,6 +55,14 @@ internal class ContentDirectory(
             parseBrowse(soapBody, DocumentBuilderFactory.newInstance())
 
         internal fun parseBrowse(soapBody: String, factory: DocumentBuilderFactory): Pair<String, String> {
+            val request = parseBrowseRequest(soapBody, factory)
+            return request.objectId to request.flag
+        }
+
+        fun parseBrowseRequest(soapBody: String): BrowseRequest =
+            parseBrowseRequest(soapBody, DocumentBuilderFactory.newInstance())
+
+        internal fun parseBrowseRequest(soapBody: String, factory: DocumentBuilderFactory): BrowseRequest {
             require(!soapBody.contains("<!DOCTYPE", ignoreCase = true) &&
                 !soapBody.contains("<!ENTITY", ignoreCase = true)) { "DTD declarations are forbidden" }
             factory.isNamespaceAware = true
@@ -67,7 +76,15 @@ internal class ContentDirectory(
             val id = doc.getElementsByTagNameNS("*", "ObjectID")
             val flag = doc.getElementsByTagNameNS("*", "BrowseFlag")
             require(id.length > 0 && flag.length > 0) { "missing Browse fields" }
-            return id.item(0).textContent to flag.item(0).textContent
+            fun number(field: String): Int {
+                val nodes = doc.getElementsByTagNameNS("*", field)
+                if (nodes.length == 0) return 0
+                val value = nodes.item(0).textContent.trim().toIntOrNull()
+                require(value != null && value >= 0) { "invalid $field" }
+                return value
+            }
+            return BrowseRequest(id.item(0).textContent, flag.item(0).textContent,
+                number("StartingIndex"), number("RequestedCount"))
         }
 
         fun validateRelPath(relPath: String) {
@@ -87,14 +104,22 @@ internal class ContentDirectory(
 
     fun resolveFile(encodedId: String): File? = resolve(encodedId).takeIf { it.isFile }
 
-    fun browse(objectId: String): BrowseResult {
+    fun browse(objectId: String, startingIndex: Int = 0, requestedCount: Int = 0): BrowseResult {
+        require(startingIndex >= 0 && requestedCount >= 0) { "invalid pagination" }
         val rel = if (objectId == "0") "" else decodeObjectId(objectId)
         val target = if (objectId == "0") root.toFile() else resolve(objectId)
         if (!target.isDirectory) throw IllegalArgumentException("directory not found: $objectId")
+        val entries = (target.listFiles() ?: emptyArray()).asSequence()
+            .filter { !it.name.startsWith('.') && (it.isDirectory ||
+                (it.isFile && AUDIO_MIME.containsKey(".${it.name.substringAfterLast('.', "").lowercase(Locale.ROOT)}"))) }
+            .sortedWith(nameOrder).toList()
+        val ordered = entries.filter { it.isDirectory } + entries.filter { it.isFile }
+        val total = ordered.size
+        val selected = if (startingIndex >= total) emptyList() else ordered.drop(startingIndex)
+            .let { if (requestedCount == 0) it else it.take(requestedCount) }
         val containers = mutableListOf<CdObject>()
         val items = mutableListOf<CdItem>()
-        for (entry in (target.listFiles() ?: emptyArray()).sortedWith(nameOrder)) {
-            if (entry.name.startsWith('.')) continue
+        for (entry in selected) {
             val childRel = if (rel.isEmpty()) entry.name else "$rel/${entry.name}"
             val id = encodeObjectId(childRel)
             if (entry.isDirectory) {
@@ -113,8 +138,7 @@ internal class ContentDirectory(
                     size = entry.length(), mime = mime, url = "${baseUrl()}/media/$id")
             }
         }
-        val total = containers.size + items.size
-        return BrowseResult(Didl.lite(containers, items), total, total)
+        return BrowseResult(Didl.lite(containers, items), selected.size, total)
     }
 
     fun browseMetadata(objectId: String): BrowseResult {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,11 +9,32 @@ import 'package:lossless_music_download/providers/download_dir_provider.dart';
 import 'package:lossless_music_download/providers/server_provider.dart';
 import 'package:lossless_music_download/theme/app_tokens.dart';
 
-class ServerScreen extends ConsumerWidget {
+class ServerScreen extends ConsumerStatefulWidget {
   const ServerScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ServerScreen> createState() => _ServerScreenState();
+}
+
+class _ServerScreenState extends ConsumerState<ServerScreen> {
+  Timer? _statusTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _statusTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      ref.read(serverProvider.notifier).refreshStatus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _statusTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
     final serverAsync = ref.watch(serverProvider);
 
@@ -120,9 +143,9 @@ class _ServerBody extends ConsumerWidget {
                   icon: const Icon(Icons.copy, size: 18),
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: url));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(t.serverCopied)),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(t.serverCopied)));
                   },
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
@@ -142,10 +165,7 @@ class _ServerBody extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    folderPath,
-                    style: const TextStyle(fontSize: 13),
-                  ),
+                  child: Text(folderPath, style: const TextStyle(fontSize: 13)),
                 ),
               ],
             ),
@@ -179,10 +199,7 @@ class _ServerBody extends ConsumerWidget {
           Text(
             t.serverHint,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              color: tokens.muted2,
-            ),
+            style: TextStyle(fontSize: 12, color: tokens.muted2),
           ),
 
           const SizedBox(height: 8),

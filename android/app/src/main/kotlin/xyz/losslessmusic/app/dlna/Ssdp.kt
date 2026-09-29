@@ -232,8 +232,9 @@ class SsdpResponder internal constructor(
         }
     }
 
-    @Synchronized private fun fail(error: Exception, runGeneration: Long) {
-        if (isCurrent(runGeneration)) onFailure?.invoke("ssdp_failed: ${error.message ?: error.javaClass.simpleName}")
+    private fun fail(error: Exception, runGeneration: Long) {
+        val callback = synchronized(this) { if (isCurrent(runGeneration)) onFailure else null }
+        callback?.invoke("ssdp_failed: ${error.message ?: error.javaClass.simpleName}")
     }
 
     private fun sendSearchResponses(destination: InetSocketAddress, matches: List<String>, runGeneration: Long) {

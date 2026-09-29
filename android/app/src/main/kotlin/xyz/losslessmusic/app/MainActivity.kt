@@ -20,6 +20,7 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
+import org.json.JSONObject
 import xyz.losslessmusic.backend.bridge.Bridge
 import xyz.losslessmusic.app.engine.Engines
 import xyz.losslessmusic.app.engine.EngineKind
@@ -65,7 +66,7 @@ class MainActivity : FlutterActivity() {
             ).also { dlnaController = it }
         }
 
-        private fun lanIpv4(context: Context): String? {
+        private fun lanIpv4(context: Context, requireLanTransport: Boolean = false): String? {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE)
                 as? ConnectivityManager ?: return null
             val networks = cm.allNetworks.toMutableList()
@@ -77,6 +78,9 @@ class MainActivity : FlutterActivity() {
                 if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) 1 else 0
             }
             for (n in ranked) {
+                val caps = cm.getNetworkCapabilities(n)
+                if (requireLanTransport && caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) != true &&
+                    caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) != true) continue
                 val lp = cm.getLinkProperties(n) ?: continue
                 for (la in lp.linkAddresses) {
                     val addr = la.address
@@ -348,7 +352,12 @@ class MainActivity : FlutterActivity() {
         "startMediaServer" -> {
             if (Engines.current.kind == EngineKind.RUST) {
                 val status = rustDlna(applicationContext).start(
-                    call.argument<String>("rootDir")!!, call.argument<String>("name")!!, wifiLanIpv4() ?: "")
+                    call.argument<String>("rootDir")!!, call.argument<String>("name")!!,
+                    lanIpv4(applicationContext, requireLanTransport = true) ?: "")
+                val statusJson = JSONObject(status)
+                if (statusJson.optString("state") == "FAILED") {
+                    throw IllegalStateException(statusJson.optString("error").ifEmpty { "DLNA start failed" })
+                }
                 registerDlnaNetworkCallback()
                 true to status
             } else {
@@ -457,14 +466,17 @@ class MainActivity : FlutterActivity() {
         val app = applicationContext
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onLost(network: Network) {
-                dlnaNetworkExecutor.execute { dlnaController?.onNetworkChanged(lanIpv4(app)) }
+                dlnaNetworkExecutor.execute { dlnaController?.onNetworkChanged(lanIpv4(app, requireLanTransport = true)) }
             }
             override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
-                dlnaNetworkExecutor.execute { dlnaController?.onNetworkChanged(lanIpv4(app)) }
+                dlnaNetworkExecutor.execute { dlnaController?.onNetworkChanged(lanIpv4(app, requireLanTransport = true)) }
             }
         }
         cm.registerNetworkCallback(
-            NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), callback)
+            NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
+                .build(), callback)
         dlnaNetworkCallback = callback
     }
 
@@ -476,9 +488,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
-        if (Engines.current.kind == EngineKind.RUST) {
-            if (isFinishing) unregisterDlnaNetworkCallback()
-        } else {
+        if (Engines.current.kind != EngineKind.RUST) {
             releaseMulticastLock()
         }
         bridgeExecutor.shutdown()

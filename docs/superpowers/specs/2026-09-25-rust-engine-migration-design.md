@@ -216,7 +216,7 @@ Port of `native/server` (~1,450 lines code + ~1,430 lines tests) into
 
 | Go | Kotlin | Notes |
 |---|---|---|
-| `ssdp.go`, `ssdp_mcast_*.go` | `Ssdp.kt` | `MulticastSocket` 239.255.255.250:1900; NOTIFY alive/byebye; M-SEARCH replies; bound to the LAN IP passed in (never enumerate interfaces — Android 11+ restriction) |
+| `ssdp.go`, `ssdp_mcast_*.go` | `Ssdp.kt` | `MulticastSocket` 239.255.255.250:1900; NOTIFY alive/byebye; M-SEARCH replies; binds via `NetworkInterface.getByInetAddress(lanIp)` + `joinGroup(group, nif)` (`getifaddrs` still returns addressed interfaces on Android 11+; Go's `RTM_GETLINK` path is blocked), falling back to `setInterface` + default join if no interface is found |
 | `device.go` | `DeviceDescription.kt` | Device XML; **UDN uses the exact `StableUDN` algorithm** so renderers keep recognising the server |
 | `contentdirectory.go`, `didl.go` | `ContentDirectory.kt`, `Didl.kt` | SOAP Browse parse, ObjectID encode/decode, **path-traversal rejection**, XML escaping |
 | `server.go` | `MediaServer.kt` | Ktor server-cio; routes `/description.xml`, `/cd/scpd`, `/cd/control`, `/media/`, `/art/`; PartialContent (Range/206), AutoHeadResponse, keep-alive |
