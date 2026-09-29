@@ -14,6 +14,7 @@ class FakeRustCore : RustCore {
     var lyricsLrc = "[00:00.00]x"
     var lyricsThrows: Exception? = null
     var embedThrows: Exception? = null
+    var embedResult = "{\"success\":true}"
     val embeds = mutableListOf<Pair<String, String>>()
     var isrcPath = ""
     var audioMetadata = "{\"bitDepth\":16,\"sampleRate\":44100,\"duration\":10,\"format\":\"flac\"}"
@@ -72,7 +73,7 @@ class FakeRustCore : RustCore {
     }
     override fun embedLyricsToFile(path: String, lyrics: String): String {
         rec("embedLyrics:$path"); embedThrows?.let { throw it }; embeds += path to lyrics
-        return "{\"success\":true}"
+        return embedResult
     }
     override fun setLibraryCoverCacheDirectory(directory: String) = rec("coverCache:$directory")
     override fun scanLibraryFolder(folder: String) = "[]".also { rec("scan:$folder") }

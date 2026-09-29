@@ -209,6 +209,27 @@ class RustEngineTest {
         assertEquals(0, fake.openLeases)
     }
 
+    @Test fun postDownloadRunsInsideGrantAndReclassifiesPreflightFailure() {
+        init()
+        fake.calls.clear()
+        val request = JSONObject().put("output_dir", "/out")
+            .put("track_name", "One More Time").put("embed_lyrics", true)
+            .put("embed_metadata", true).toString()
+        fake.downloadResult = "{\"success\":true,\"file_path\":\"/out/new.flac\"}"
+
+        assertTrue(JSONObject(engine.downloadByStrategy(request)).getBoolean("success"))
+        assertEquals(
+            listOf("grant:${File("/out").canonicalPath}", "download", "lyrics:One More Time", "embedLyrics:/out/new.flac", "release"),
+            fake.calls.take(5),
+        )
+        assertEquals(0, fake.openLeases)
+
+        fake.downloadResult = "{\"success\":false,\"error\":\"Could not start verification for amazon: network down\",\"error_type\":\"network\"}"
+        val failed = JSONObject(engine.downloadByStrategy(request))
+        assertEquals("Verification required for amazon but could not start it: network down", failed.getString("error"))
+        assertEquals("verification_required", failed.getString("error_type"))
+    }
+
     @Test fun inBandDownloadFailureIsReturnedUnchangedAndNotIndexed() {
         init(); fake.downloadResult = "{\"success\":false,\"error\":\"x\",\"error_type\":\"network\"}"
         val res = JSONObject(engine.downloadByStrategy("{\"output_dir\":\"/out\"}"))

@@ -10,7 +10,7 @@ When a signed session needs re-authentication and challenge minting fails, e.g. 
 
 ## Root cause
 
-In upstream `v5.0.0`, `rust_backend/crates/extensions/src/signed_session/fetch.rs:31-50`, two `bootstrap(&check)?` calls propagate mint failure as a plain error, and the blocked-generation path returns a text-only error. Neither gives the extension a structured `needsVerification` result.
+In upstream `v5.0.0`, `rust_backend/crates/extensions/src/signed_session/fetch.rs:33-51`, two `bootstrap(&check)?` calls propagate mint failure as a plain error, and the blocked-generation path returns a text-only error. Neither gives the extension a structured `needsVerification` result.
 
 ## Fix
 

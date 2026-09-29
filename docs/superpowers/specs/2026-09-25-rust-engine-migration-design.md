@@ -261,9 +261,10 @@ Failures are logged, never fail the download. Dart `.lrc` sidecar logic unchange
 ### Fix 4 — preflight error type (was `exports_extensions.go`) → `PostDownload`
 v5 returns `failure(provider, "Could not start verification for X: err", "", 0)`
 (`backend/downloads.rs:190-196`); `failure()` (`:1737`) derives `error_type` by keyword
-(`download/mod.rs:37-52`), usually `network`/`unknown`. If `message` starts with
-`"Could not start verification for"`, set `error_type = "verification_required"` so
-`extension_auth_launcher.dart` reopens verification. A Kotlin unit test pins the exact upstream
+(`download/mod.rs:37-52`), usually `network`/`unknown`. The app's verification launcher pattern-matches
+the `error` text, so when `message` starts with `"Could not start verification for"`, Kotlin
+`PostDownload` rewrites it to the Go fork's `"Verification required for <provider> but could not start it: <cause>"`
+and sets `error_type = "verification_required"`. A Kotlin unit test pins the exact upstream
 string; if upstream rewords it, the test fails during sync verify.
 
 ### Fix 3 — signed-session `needsVerification` → planned Rust LM-FORK

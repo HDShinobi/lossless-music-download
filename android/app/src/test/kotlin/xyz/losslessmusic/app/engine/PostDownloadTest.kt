@@ -48,9 +48,17 @@ class PostDownloadTest {
     @Test fun postDownloadFailureNeverFailsTheDownload() {
         fake.lyricsThrows = IllegalStateException("lyrics down")
         assertEquals(ok(), apply(req(), ok()))
+        assertTrue(logs.any { it.contains("lyrics down") })
+        logs.clear()
         fake.lyricsThrows = null; fake.embedThrows = IllegalStateException("embed failed")
         assertEquals(ok(), apply(req(), ok()))
-        assertTrue(logs.any { it.contains("lyrics") })
+        assertTrue(logs.any { it.contains("embed failed") })
+    }
+
+    @Test fun embedFailureInReturnedJsonIsLoggedWithoutFailingDownload() {
+        fake.embedResult = "{\"success\":false,\"error\":\"Failed to embed lyrics: disk full\"}"
+        assertEquals(ok(), apply(req(), ok()))
+        assertTrue(logs.any { it.contains("Failed to embed lyrics: disk full") })
     }
 
     @Test fun preflightFailureIsReclassifiedAsVerificationRequired() {
@@ -58,7 +66,19 @@ class PostDownloadTest {
             .put("error", "Could not start verification for amazon: network down").put("error_type", "network").toString()
         val out = JSONObject(apply(req(), failed))
         assertEquals("verification_required", out.getString("error_type"))
-        assertEquals("Could not start verification for amazon: network down", out.getString("error"))
+        assertEquals("Verification required for amazon but could not start it: network down", out.getString("error"))
+        // lib/utils/extension_auth_launcher.dart matches the error text, not error_type.
+        assertTrue(out.getString("error").lowercase().contains("verification required"))
+    }
+
+    @Test fun preflightFailureWithoutProviderSeparatorUsesFallbackMessage() {
+        val failed = JSONObject().put("success", false)
+            .put("error", "Could not start verification for amazon").put("error_type", "unknown")
+            .put("service", "amazon").toString()
+        val out = JSONObject(apply(req(), failed))
+        assertEquals("verification_required", out.getString("error_type"))
+        assertEquals("Verification required but could not start it: Could not start verification for amazon", out.getString("error"))
+        assertEquals("amazon", out.getString("service"))
     }
 
     @Test fun otherFailuresKeepTheirType() {
