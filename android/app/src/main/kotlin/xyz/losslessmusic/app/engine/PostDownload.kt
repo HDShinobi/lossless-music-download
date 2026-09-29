@@ -14,8 +14,10 @@ object PostDownload {
     fun apply(core: RustCore, request: JSONObject, result: String, log: (String) -> Unit): String {
         val r = try { JSONObject(result) } catch (e: Exception) { return result }
         if (!r.optBoolean("success", false)) return reclassify(r, result)
+        val originalPath = r.optString("file_path", "")
+        ContainerExtensionFix.apply(r, log)
         embedLyricsIfNeeded(core, request, r, log)
-        return result
+        return if (r.optString("file_path", "") == originalPath) result else r.toString()
     }
 
     private fun reclassify(r: JSONObject, original: String): String {
