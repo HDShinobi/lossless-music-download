@@ -1,6 +1,6 @@
 # Rust engine migration — phase 2 findings (2026-09-29)
 
-Branch: `feat/rust-engine-phase2`. Device evidence below was recorded by the controller in the phase-2 SDD ledger; this document does not claim a new device run. The per-method mapping is reconstructed from `NativeEngine.kt`, `GoEngine.kt`, `RustEngine.kt`, `RustCore.kt`, and `UniffiRustCore.kt`; the two temporary research notes named in the task were unavailable at this path when this document was written.
+Branch: `feat/rust-engine-phase2`. Device evidence below was recorded by the controller in the phase-2 SDD ledger; this document does not claim a new device run. The per-method mapping is reconstructed from `NativeEngine.kt`, `GoEngine.kt`, `RustEngine.kt`, `RustCore.kt`, and `UniffiRustCore.kt`.
 
 ## Device and profile
 
@@ -85,13 +85,13 @@ Each row represents one `NativeEngine` method. `RustCore` names below map to Uni
 | `setDownloadFallbackProviderIds` | `setExtensionFallbackProviderIDsJSON` | `setFallbackProviders` → `manager.setFallbackProviders` | Parses JSON IDs or null; buffers before init/load. |
 | `downloadByStrategy` | `downloadByStrategy` | `downloadWithPump` → `manager.downloadByStrategy` + `runPostProcessing` | Scoped output-dir grant; FFmpeg command pump; successful ISRC indexing; exceptions become in-band error JSON. |
 | `getAllDownloadProgress` | `getAllDownloadProgress` | `allProgress` → `environment.downloadState().allProgress` | Unready/error returns `{\"items\":{}}`. |
-| `cancelDownload` | `cancelDownload` | `cancelDownload` → `environment.downloadState().cancelDownload` | Unready/error is logged and ignored. |
+| `cancelDownload` | `cancelDownload` | `cancelDownload` → `environment.downloadState().cancelDownload` | Returns silently when the engine is not READY; engine exceptions are logged and swallowed. |
 | `setDownloadDirectory` | `setDownloadDirectory` | `setAllowedDownloadDirectories` → `environment.setAllowedDownloadDirectories` | Records canonical dir in allow-list. |
 | `allowDownloadDir` | `allowDownloadDir` | `setAllowedDownloadDirectories` → `environment.setAllowedDownloadDirectories` | Same allow-list, but errors logged. |
 | `checkDuplicate` | `checkDuplicate` | `checkIsrcExists` → `environment.checkIsrcExists` | Scoped grant; path becomes `{exists, filepath}`. |
 | `getAudioQuality` | `getAudioQualityJSON` | `readAudioMetadata` → `manager.readAudioMetadata` | Scoped grant; camelCase to Go keys, `total_samples=0`; optional Rust `bitrate`. |
 | `editFileMetadata` | `editFileMetadata` | `editFileMetadata` → `manager.editFileMetadata` | Canonical file path and scoped grant. |
-| `reEnrichFile` | `reEnrichFile` | `reenrichFile` → `manager.reenrichFile` | Canonical path and grant unless preview-only; preserves empty path. |
+| `reEnrichFile` | `reEnrichFile` | `reenrichFile` → `manager.reenrichFile` | Canonical path unless preview-only; scoped grant on the parent dir; empty path passed through unchanged. |
 | `getLyricsLRC` | `getLyricsLRC` | `getLyricsLrc` → `manager.getLyricsLrc` | Builds `LyricsRequest`; grants nonblank file path. |
 | `setLibraryCoverCacheDir` | `setLibraryCoverCacheDir` | `setLibraryCoverCacheDirectory` → `manager.setLibraryCoverCacheDirectory` | Blank ignored; keeps a cover-directory lease. |
 | `scanLibraryFolder` | `scanLibraryFolderJSON` | `scanLibraryFolder` → `manager.scanLibraryFolder` | Scoped folder grant; JSON passed through. |

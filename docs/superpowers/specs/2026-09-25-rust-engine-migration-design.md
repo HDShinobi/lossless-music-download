@@ -428,7 +428,7 @@ both builds, reported in the release notes, no threshold).
 
 ## Deferred to plan
 - Readiness-gate timeout value and the list of manager-independent methods (§3.1).
-- Exhaustive 41-method legacy→Rust table (args, success/error shape, state effects, cancellation) — phase-2 plan, from the grouping in §3.1.
+- Exhaustive 41-method legacy→Rust table (args, success/error shape, state effects, cancellation) — phase-2 plan, from the grouping in §3.1 — delivered in docs/migration/phase2-findings.md (per-method table).
 
 ## Out of scope
 Upstream Mornye UI/player/AutoMix/profiles; porting upstream `lib/` features (tracked separately
