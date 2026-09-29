@@ -1,5 +1,7 @@
 # PR draft: Preserve verification signaling when signed-session challenge minting fails
 
+> Sent upstream as https://github.com/spotiflacapp/SpotiFLAC-Mobile/pull/610 on 2026-09-29.
+
 ## Title
 
 Return verification-required after signed-session challenge mint failure

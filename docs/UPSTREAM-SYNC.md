@@ -64,8 +64,8 @@ active rows here.
 
 | Fork id | File(s) | What & why | Upstream PR |
 | --- | --- | --- | --- |
-| `LM-FORK(publish-noreplace-fallback)` | `rust_backend/crates/extensions/src/files.rs` | Android 9 sdcardfs can reject `renameat2` `NOREPLACE` with `EINVAL`; on unsupported errors, check the destination without following symlinks and use plain rename only when absent under the caller's destination lock. | Upstream PR: to be sent after review |
-| `LM-FORK(signed-session-mint)` | `rust_backend/crates/extensions/src/signed_session/fetch.rs` | 3 sites + helper, mirroring the Go fork: when challenge minting fails after the session needs re-auth, return `needsVerification` with no URL so the next attempt retries the challenge and extensions reopen verification; preserve cancellation. | Upstream PR: draft in docs/migration/upstream-pr-signed-session-mint.md (not sent) |
+| `LM-FORK(publish-noreplace-fallback)` | `rust_backend/crates/extensions/src/files.rs` | Android 9 sdcardfs can reject `renameat2` `NOREPLACE` with `EINVAL`; on unsupported errors, check the destination without following symlinks and use plain rename only when absent under the caller's destination lock. | Upstream PR: [#609](https://github.com/spotiflacapp/SpotiFLAC-Mobile/pull/609) (open, sent 2026-09-29); retire this fork when a synced release contains it |
+| `LM-FORK(signed-session-mint)` | `rust_backend/crates/extensions/src/signed_session/fetch.rs` | 3 sites + helper, mirroring the Go fork: when challenge minting fails after the session needs re-auth, return `needsVerification` with no URL so the next attempt retries the challenge and extensions reopen verification; preserve cancellation. | Upstream PR: [#610](https://github.com/spotiflacapp/SpotiFLAC-Mobile/pull/610) (open, sent 2026-09-29); retire this fork when a synced release contains it |
 
 ### Our shims for inherited files (not forks)
 

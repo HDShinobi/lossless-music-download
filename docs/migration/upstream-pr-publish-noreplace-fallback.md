@@ -1,5 +1,7 @@
 # PR draft: Fall back when `RENAME_NOREPLACE` is unsupported while publishing a new file
 
+> Sent upstream as https://github.com/spotiflacapp/SpotiFLAC-Mobile/pull/609 on 2026-09-29.
+
 ## Title
 
 Fall back to a destination check and rename when `RENAME_NOREPLACE` is unsupported
