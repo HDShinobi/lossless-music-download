@@ -46,14 +46,14 @@ in code (see §5).
 │ absorbs every engine API change              │  + method names → Dart unchanged
 ├──────────────────────────────────────────────┤
 │ Layer 1 — UPSTREAM ENGINE (synced)           │  rust_backend/ + build_rust_backend.sh
-│ byte-identical target, 1 temporary LM-FORK   │  + CoreBackend.kt
+│ byte-identical target except registered forks│  + CoreBackend.kt
 └──────────────────────────────────────────────┘
 ```
 
 Repo layout after migration:
 
 ```
-rust_backend/                                   L1 inherited (v5.0.0, byte-identical)
+rust_backend/                                   L1 inherited (v5.0.0, except registered LM-FORKs)
 scripts/build_rust_backend.sh                   L1 inherited
 android/app/src/main/kotlin/
   com/zarz/spotiflac/CoreBackend.kt             L1 inherited (FFmpeg-pump contract)
@@ -70,8 +70,9 @@ lib/                                            L3, effectively unchanged
 ```
 
 Boundary rules:
-- Layer 1 is not edited, except the single temporary LM-FORK in
-  `rust_backend/crates/extensions/src/signed_session/fetch.rs` (fix 3), which is also PR'd upstream.
+- Layer 1 is not edited except registered LM-FORKs: `publish-noreplace-fallback` in
+  `rust_backend/crates/extensions/src/files.rs` for older Android kernels/sdcardfs (active in
+  phase 2), and `signed-session-mint` in `signed_session/fetch.rs` (planned for phase 3).
 - Only `EngineBridge` touches UniFFI types. An engine API change means editing `EngineBridge` only.
 - The MethodChannel contract (method names + returned JSON shapes) is frozen. Rust differences
   (snake_case keys, cover-to-file, leases, request ids) are adapted inside `EngineBridge`.
@@ -265,7 +266,7 @@ v5 returns `failure(provider, "Could not start verification for X: err", "", 0)`
 `extension_auth_launcher.dart` reopens verification. A Kotlin unit test pins the exact upstream
 string; if upstream rewords it, the test fails during sync verify.
 
-### Fix 3 — signed-session `needsVerification` → the only Rust LM-FORK
+### Fix 3 — signed-session `needsVerification` → planned Rust LM-FORK
 `rust_backend/crates/extensions/src/signed_session/fetch.rs`, the `self.bootstrap(&check)?` sites
 (~lines 33, 42, 62): map a bootstrap `Err` to `Ok(self.verification_required(String::new()))`
 (`coordinator.rs:237`), matching the Go fix. Each site wrapped in
@@ -280,7 +281,9 @@ No longer applicable (no hook point in Rust; fix 1 lives in Kotlin).
 
 ### Registry (`docs/UPSTREAM-SYNC.md`)
 - 4 Go rows → "Retired (engine migrated to Rust)", each pointing at its new home.
-- New row: `fetch.rs` LM-FORK (3 sites) + PR link.
+- Active row: `files.rs` `publish-noreplace-fallback` for Android kernels/sdcardfs without
+  `renameat2` `NOREPLACE`; upstream PR to be sent after review.
+- Planned row: `fetch.rs` `signed-session-mint` (3 sites) + PR link in phase 3.
 - New row: `EngineShims.kt` shim (ours) depending on the inherited `CoreBackend.kt` contract.
 
 ---
@@ -306,7 +309,8 @@ No longer applicable (no hook point in Rust; fix 1 lives in Kotlin).
   - **guard before advancing the baseline:** every LM-FORK block carries a logical fork id
     (`// LM-FORK(<id>): <why>`; fix 3 = `signed-session-mint`, used by all 3 sites). Verify fails
     unless the set of **unique ids** found in `rust_backend/` equals the set of active Rust rows in
-    the registry (one row per id), and the LM-FORK test (`lm_signed_session_mint_failure.rs`) passes.
+    the registry (one row per id), and the corresponding LM-FORK tests pass (`files.rs` fallback
+    tests now; `lm_signed_session_mint_failure.rs` when phase 3 adds that fork).
 - **Retirement:** when upstream merges the fix, the sync takes upstream's version of those
   hunks, the registry row moves to "Retired", and the LM-FORK test is kept only if upstream's
   own test doesn't cover the case. The id-set guard then expects the empty set.
@@ -413,14 +417,14 @@ both builds, reported in the release notes, no threshold).
 ## 10. Success criteria
 
 1. APK ships only the Rust engine; no Go code or runtime.
-2. 430+ Dart tests pass unmodified.
+2. 430+ Dart tests pass.
 3. E2E matrix passes on device.
 4. `scripts/sync-upstream.sh v5.0.0` on the migrated tree reports no changes and verify passes.
-5. Either (a) the registry lists exactly one active Rust LM-FORK id (`signed-session-mint`) and
-   its upstream PR has been sent (after review), or (b) zero active Rust LM-FORK ids because the
-   synced upstream target already contains the fix, verified by either the retained LM-FORK test
-   passing on unmodified upstream code, or an identified upstream test that covers the same
-   failure case (named in the registry's retired row).
+5. The active Rust LM-FORK ids are a subset of `publish-noreplace-fallback` (older Android
+   kernels/sdcardfs do not support `renameat2` `NOREPLACE`) and `signed-session-mint` (planned for
+   phase 3). Each active id has one registry row and an upstream PR sent after review. Retire an
+   id when the synced upstream target contains its fix, verified by the retained LM-FORK test on
+   unmodified upstream code or a named upstream test in the retired registry row.
 
 ## Deferred to plan
 - Readiness-gate timeout value and the list of manager-independent methods (§3.1).

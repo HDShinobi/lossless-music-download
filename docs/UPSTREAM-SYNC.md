@@ -63,7 +63,7 @@ active rows here.
 
 | Fork id | File(s) | What & why | Upstream PR |
 | --- | --- | --- | --- |
-| _(none yet — phase 3 adds `signed-session-mint`)_ | | | |
+| `LM-FORK(publish-noreplace-fallback)` | `rust_backend/crates/extensions/src/files.rs` | Android 9 sdcardfs can reject `renameat2` `NOREPLACE` with `EINVAL`; on unsupported errors, check the destination without following symlinks and use plain rename only when absent under the caller's destination lock. | Upstream PR: to be sent after review |
 
 ### Our shims for inherited files (not forks)
 
