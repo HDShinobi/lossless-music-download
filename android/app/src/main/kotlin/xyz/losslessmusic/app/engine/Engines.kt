@@ -2,27 +2,10 @@ package xyz.losslessmusic.app.engine
 
 import android.content.Context
 import android.util.Log
-import xyz.losslessmusic.app.BuildConfig
 import java.io.File
 
-/** Pure selection rule (spec §3.4, ruling R-P6). Read once per process. */
-object EngineSelection {
-    const val RUST_FLAG_FILE = "engine_rust"
-    const val GO_FLAG_FILE = "engine_go"
-
-    fun select(isDebug: Boolean, filesDir: File, debugDefault: EngineKind): EngineKind {
-        if (!isDebug) return EngineKind.GO
-        if (File(filesDir, GO_FLAG_FILE).exists()) return EngineKind.GO
-        if (File(filesDir, RUST_FLAG_FILE).exists()) return EngineKind.RUST
-        return debugDefault
-    }
-}
-
-/** Process-scoped engine holder: chosen on the first init() and never changed for the process lifetime. */
+/** Process-scoped Rust engine holder: initialized once for the process lifetime. */
 object Engines {
-    /** Debug builds default to Rust since phase-2 exit; release builds stay Go until phase 5. Override per device with files/engine_go or files/engine_rust. */
-    val DEBUG_DEFAULT = EngineKind.RUST
-
     @Volatile private var engine: NativeEngine? = null
 
     fun init(context: Context) {
@@ -30,19 +13,14 @@ object Engines {
         synchronized(this) {
             if (engine != null) return
             val files = context.applicationContext.filesDir
-            val selected = EngineSelection.select(BuildConfig.DEBUG, files, DEBUG_DEFAULT)
-            engine = build(selected, files)
-            Log.i("Engines", "engine=${engine!!.kind} (selected=$selected)")
+            engine = build(files) { Log.i("RustEngine", it) }
+            Log.i("Engines", "engine=RUST")
         }
     }
 
-    private fun build(kind: EngineKind, filesDir: File): NativeEngine = when (kind) {
-        EngineKind.GO -> GoEngine
-        EngineKind.RUST -> RustEngine(UniffiRustCore.FACTORY, filesDir, log = { Log.i("RustEngine", it) })
-    }
+    internal fun build(filesDir: File, log: (String) -> Unit): NativeEngine =
+        RustEngine(UniffiRustCore.FACTORY, filesDir, log = log)
 
     val current: NativeEngine
         get() = engine ?: error("Engines.init(context) must run before the engine is used")
-
-    val kind: EngineKind get() = current.kind
 }

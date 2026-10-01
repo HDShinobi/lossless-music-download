@@ -21,21 +21,15 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
 import org.json.JSONObject
-import xyz.losslessmusic.backend.bridge.Bridge
 import xyz.losslessmusic.app.engine.Engines
-import xyz.losslessmusic.app.engine.EngineKind
-import xyz.losslessmusic.app.engine.RustEngineProbe
-import xyz.losslessmusic.app.engine.RustProbeStartGate
 import xyz.losslessmusic.app.engine.RustEngine
 import xyz.losslessmusic.app.engine.SessionGrantFailure
-import xyz.losslessmusic.app.engine.ab.AbHarness
 import xyz.losslessmusic.app.dlna.EngineMetadataProvider
 import xyz.losslessmusic.app.dlna.MediaServerController
 import xyz.losslessmusic.app.dlna.RealDlnaRuntime
 
 class MainActivity : FlutterActivity() {
     companion object {
-        private val probeStartGate = RustProbeStartGate()
         @Volatile private var dlnaController: MediaServerController? = null
         private var dlnaMulticastLock: WifiManager.MulticastLock? = null
         private var dlnaNetworkCallback: ConnectivityManager.NetworkCallback? = null
@@ -95,9 +89,6 @@ class MainActivity : FlutterActivity() {
 
     private val channel = "xyz.losslessmusic/native"
 
-    // Held while the DLNA MediaServer runs so SSDP multicast can be received.
-    private var multicastLock: WifiManager.MulticastLock? = null
-
     // Bridge calls do blocking I/O (network search/download, file probing, server
     // start). Running them on the platform main thread blocks the UI and causes
     // ANRs, so they run on this pool and reply on the main thread. A pool (not a
@@ -120,7 +111,6 @@ class MainActivity : FlutterActivity() {
     override fun shouldHandleDeeplinking(): Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (BuildConfig.DEBUG) AbHarness.onProcessStart(applicationContext.filesDir) { Log.i("AbHarness", it) }
         Engines.init(applicationContext)
         super.onCreate(savedInstanceState)
         handleSessionGrantIntent(intent)
@@ -246,7 +236,7 @@ class MainActivity : FlutterActivity() {
     // Runs on a background thread. Returns (handled, value); the caller posts the
     // result on the main thread.
     private fun dispatch(call: MethodCall): Pair<Boolean, Any?> = when (call.method) {
-        "ping" -> true to Bridge.ping()
+        "ping" -> true to "pong"
         "getAudioQuality" -> true to Engines.current.getAudioQuality(call.argument<String>("path")!!)
         "setExtensionStorageMasterKey" -> {
             // v4.9.5 gates InitExtensionSystem on this key. Must run before
@@ -255,41 +245,18 @@ class MainActivity : FlutterActivity() {
             // configured". Key is a base64 32-byte value held in Keystore.
             val key = call.argument<String>("masterKey")!!
             Engines.current.setExtensionStorageMasterKey(key)
-            probeStartGate.captureKey(key)
             true to null
         }
         "initExtensionSystem" -> {
             val extDir = call.argument<String>("extDir")!!
             val dataDir = call.argument<String>("dataDir")!!
             Engines.current.initExtensionSystem(extDir, dataDir)
-            probeStartGate.captureDirs(extDir, dataDir)
             true to null
         }
         "loadExtensionFromPath" -> true to Engines.current.loadExtensionFromPath(call.argument<String>("path")!!)
         "getInstalledExtensions" -> true to Engines.current.getInstalledExtensions()
         "loadExtensionsFromDir" -> {
             val loaded = Engines.current.loadExtensionsFromDir(call.argument<String>("dirPath")!!)
-            if (Engines.kind == EngineKind.GO) {
-                probeStartGate.afterLoad(BuildConfig.DEBUG) { extDir, dataDir, key ->
-                    Thread {
-                        runCatching {
-                            if (RustEngineProbe.runIfRequested(filesDir, File(extDir), File(dataDir), key)) {
-                                Log.i("RustProbe", File(filesDir, RustEngineProbe.RESULT_FILE).readText().replace(key, "[redacted]"))
-                            }
-                        }.onFailure { error ->
-                            Log.w("RustProbe", "Probe failed: ${error.javaClass.simpleName}: ${error.message?.replace(key, "[redacted]")}")
-                        }
-                    }.apply { isDaemon = true }.start()
-                }
-            }
-            if (BuildConfig.DEBUG) {
-                Thread {
-                    runCatching {
-                        val music = File(getExternalFilesDir(null) ?: filesDir, "LosslessMusic")
-                        if (AbHarness.recordIfRequested(filesDir, music, Engines.current)) Log.i("AbHarness", "recorded ${Engines.kind}")
-                    }.onFailure { Log.w("AbHarness", "record failed: ${it.message}") }
-                }.apply { isDaemon = true }.start()
-            }
             true to loaded
         }
         "setExtensionEnabled" -> {
@@ -350,43 +317,22 @@ class MainActivity : FlutterActivity() {
             true to null
         }
         "startMediaServer" -> {
-            if (Engines.current.kind == EngineKind.RUST) {
-                val status = rustDlna(applicationContext).start(
-                    call.argument<String>("rootDir")!!, call.argument<String>("name")!!,
-                    lanIpv4(applicationContext, requireLanTransport = true) ?: "")
-                val statusJson = JSONObject(status)
-                if (statusJson.optString("state") == "FAILED") {
-                    throw IllegalStateException(statusJson.optString("error").ifEmpty { "DLNA start failed" })
-                }
-                registerDlnaNetworkCallback()
-                true to status
-            } else {
-                // Acquire the lock BEFORE the server opens its SSDP socket so the
-                // initial NOTIFY burst and M-SEARCH receive are covered from t=0.
-                acquireMulticastLock()
-                // Resolve the Wi-Fi IPv4 here: Go's net.Interfaces() is SELinux-
-                // blocked on Android 11+, so the server would otherwise fall back to
-                // 127.0.0.1 and be invisible on the LAN.
-                val status = Bridge.startMediaServer(
-                    call.argument<String>("rootDir")!!,
-                    call.argument<String>("name")!!,
-                    wifiLanIpv4() ?: ""
-                )
-                true to status
+            val status = rustDlna(applicationContext).start(
+                call.argument<String>("rootDir")!!, call.argument<String>("name")!!,
+                lanIpv4(applicationContext, requireLanTransport = true) ?: "")
+            val statusJson = JSONObject(status)
+            if (statusJson.optString("state") == "FAILED") {
+                throw IllegalStateException(statusJson.optString("error").ifEmpty { "DLNA start failed" })
             }
+            registerDlnaNetworkCallback()
+            true to status
         }
         "stopMediaServer" -> {
-            if (Engines.current.kind == EngineKind.RUST) {
-                unregisterDlnaNetworkCallback()
-                rustDlna(applicationContext).stop()
-            } else {
-                Bridge.stopMediaServer()
-                releaseMulticastLock()
-            }
+            unregisterDlnaNetworkCallback()
+            rustDlna(applicationContext).stop()
             true to null
         }
-        "getMediaServerStatus" -> true to (if (Engines.current.kind == EngineKind.RUST)
-            rustDlna(applicationContext).statusJson() else Bridge.getMediaServerStatus())
+        "getMediaServerStatus" -> true to rustDlna(applicationContext).statusJson()
         "handleUrl" -> true to Engines.current.handleUrl(call.argument<String>("url")!!)
         "findUrlHandler" -> true to Engines.current.findUrlHandler(call.argument<String>("url")!!)
         "getProviderMetadata" -> true to Engines.current.getProviderMetadata(
@@ -437,29 +383,6 @@ class MainActivity : FlutterActivity() {
         else -> false to null
     }
 
-    // Resolves the device's Wi-Fi IPv4 via the framework (ConnectivityManager),
-    // which — unlike Go's net.Interfaces() — is not blocked by SELinux on modern
-    // Android. Prefers a network with the Wi-Fi transport; returns null if none
-    // has a usable private IPv4.
-    private fun wifiLanIpv4(): String? {
-        return lanIpv4(applicationContext)
-    }
-
-    private fun acquireMulticastLock() {
-        if (multicastLock == null) {
-            val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            multicastLock = wifi.createMulticastLock("lossless-dlna").apply {
-                setReferenceCounted(false)
-                acquire()
-            }
-        }
-    }
-
-    private fun releaseMulticastLock() {
-        multicastLock?.let { if (it.isHeld) it.release() }
-        multicastLock = null
-    }
-
     private fun registerDlnaNetworkCallback() = synchronized(MainActivity) {
         if (dlnaNetworkCallback != null) return@synchronized
         val cm = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -488,9 +411,6 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
-        if (Engines.current.kind != EngineKind.RUST) {
-            releaseMulticastLock()
-        }
         bridgeExecutor.shutdown()
         initExecutor.shutdown()
         super.onDestroy()

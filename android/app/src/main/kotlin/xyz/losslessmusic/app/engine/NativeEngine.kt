@@ -1,7 +1,5 @@
 package xyz.losslessmusic.app.engine
 
-enum class EngineKind { GO, RUST }
-
 /** A session-grant exchange failed; [extensionId] is null when the callback state itself was rejected. */
 class SessionGrantFailure(val extensionId: String?, message: String) : Exception(message)
 
@@ -13,8 +11,6 @@ class SessionGrantFailure(val extensionId: String?, message: String) : Exception
  * All methods block; call them off the main thread.
  */
 interface NativeEngine {
-    val kind: EngineKind
-
     // init (group 1) — call order today: setAppVersion (Kotlin), setExtensionStorageMasterKey, initExtensionSystem
     fun setAppVersion(version: String)
     fun setExtensionStorageMasterKey(masterKey: String)

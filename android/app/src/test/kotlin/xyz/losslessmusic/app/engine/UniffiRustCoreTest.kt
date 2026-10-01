@@ -42,7 +42,7 @@ class UniffiRustCoreTest {
 
     @Test fun readAudioMetadataReportsQuality() {
         val flac = File(out, "silence.flac")
-        File("../../go_backend/testdata/silence.flac").copyTo(flac)
+        File("src/test/resources/silence.flac").copyTo(flac)
         val scope = core.grantDownloadDirectories(listOf(out.canonicalPath))
         try {
             val m = JSONObject(core.readAudioMetadata(flac.canonicalPath))

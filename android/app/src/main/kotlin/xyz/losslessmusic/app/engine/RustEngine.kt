@@ -26,8 +26,6 @@ class RustEngine(
 
     enum class State { UNINITIALIZED, INITIALIZING, READY, FAILED }
 
-    override val kind = EngineKind.RUST
-
     private val lock = ReentrantLock()
     private val stateChanged = lock.newCondition()
     @Volatile var state = State.UNINITIALIZED
