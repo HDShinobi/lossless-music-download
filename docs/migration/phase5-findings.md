@@ -27,7 +27,11 @@ Branch `feat/rust-engine-phase5` (from `main` 4b9e6d4f). Plan: `docs/superpowers
 - `assembleDebug` and release arm64 builds pass.
 - `scripts/sync-upstream.sh --check-vendored` is clean: LM-FORK ids `[publish-noreplace-fallback, signed-session-mint]`, engine 5.0.6.
 - `sync-upstream.sh v5.0.6` reports "Already in sync". The contract check is clean.
-- Device smoke (LG V30): **pending — device not connected at close of phase 5 work.** To run before release: `engine=RUST` in logcat, extensions load, search, one Qobuz FLAC download (`flac -t`, tags, lyrics), and DLNA start + Mac probe (Range 206).
+- Device smoke (LG V30, debug APK from 5461dd4f, 2026-10-01 10:54–11:01): **PASS**.
+  - Launch: logcat `engine=RUST`, with no crash, `UnsatisfiedLinkError` or `MissingPluginException`. Search uses 9 sources and returns results.
+  - Qobuz only (fallback sources temporarily limited to Qobuz, then restored): "Fragments of Time (Drumless Edition)", snapshot `done`, `resolved_service=qobuz-web`, 24-bit/88.2 kHz, `flac -t` ok, LYRICS + UNSYNCEDLYRICS.
+  - With normal fallback: "Fragments of Time" resolved to Deezer (not on Qobuz in that edition), 16/44.1, `flac -t` ok, lyrics, 1500 px cover.
+  - DLNA from the Mac on the same office Wi-Fi (172.21.0.0/16, a different LAN from the earlier 192.168.1.x tests): SSDP found UDN `uuid:c82df54b-…` (unchanged), browse returned 17 root containers, art 200, Range 206, HEAD 200 with Accept-Ranges.
 
 ## Follow-ups
 
