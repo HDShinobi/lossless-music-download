@@ -6,16 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
 
-// The synthetic extension manifest satisfies every field validated by
-// go_backend/extension_manifest.go:
-//   - name, version, description (all non-empty)
-//   - type: at least one of the three valid ExtensionType values
-//   - no settings/serviceHealth, so no further required sub-fields
-//
-// The synthetic index.js calls registerExtension({}) so that
-// go_backend/extension_manager.go:initializeVMLocked() passes the
-// "extension did not call registerExtension()" guard used by
-// validateExtensionLoad().
+// The synthetic manifest satisfies Rust ExtensionManifest::validate:
+// rust_backend/crates/extensions/src/manifest.rs:357 (ID, required fields, types).
+// registerExtension({}) uses the Rust JS prelude registration hook:
+// rust_backend/crates/extensions/src/prelude.js:181.
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -36,10 +30,8 @@ void main() {
 
     await bridge.initExtensionSystem(extDir.path, dataDir.path);
 
-    // Manifest fields required by ParseManifest/Validate in extension_manifest.go:
-    //   name, version, description (all non-empty strings)
-    //   type: non-empty list of valid ExtensionType values
-    //   permissions: present (empty network list is fine)
+    // Rust validates the manifest before staging the extension package.
+    // rust_backend/crates/extensions/src/manifest.rs:351.
     final manifest = jsonEncode({
       'name': 'dummy-synthetic',
       'displayName': 'Dummy Synthetic',
@@ -53,8 +45,8 @@ void main() {
       },
     });
 
-    // index.js must call registerExtension() — the Go runtime sets up a
-    // 'registerExtension' global and checks that it was invoked.
+    // Rust validates index.js during install, with extensions initially disabled.
+    // rust_backend/crates/extensions/src/manager.rs:266 and :323.
     const indexJs = 'registerExtension({});';
 
     final manifestBytes = utf8.encode(manifest);

@@ -9,7 +9,6 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.wifi.WifiManager
 import android.os.Bundle
-import android.util.Log
 import java.io.File
 import java.net.Inet4Address
 import android.os.Handler

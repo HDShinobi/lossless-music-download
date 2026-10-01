@@ -53,7 +53,6 @@ android {
         // version — required for the in-app update check to compare correctly.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // Phase 0: gomobile .aar is arm64-only (see scripts/build_android.sh). Add x86_64/armeabi-v7a here AND to the gomobile -target before any release build.
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
@@ -79,6 +78,8 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
+            // Engine is arm64-only; abiFilters doesn't strip prebuilt AAR libs here.
+            excludes += listOf("lib/armeabi-v7a/**", "lib/x86_64/**", "lib/x86/**")
         }
     }
 }
@@ -110,7 +111,6 @@ flutter {
 }
 
 dependencies {
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
     // ffmpeg_kit_flutter_new_full declares this with `implementation` (not `api`),
     // so its classes aren't on app's compile classpath transitively. We declare it
     // directly as `implementation` here to guarantee runtime presence, matching
