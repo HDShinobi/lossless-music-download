@@ -4,9 +4,10 @@ import java.io.File
 import java.util.UUID
 
 /**
- * Spec §3.4: until the phase-5 cutover the Rust engine never writes the Go engine's data dirs.
- * It works on a one-time copy under `<support>/engine-rust/`, published by atomic rename so an
- * interrupted copy is never mistaken for a complete one.
+ * Spec §3.4 / phase-5 R-P2: the Rust-only release keeps the Go engine's data dirs untouched
+ * for the release/0.9.x-go rollback window. It works on a one-time copy under
+ * `filesDir/engine-rust/`, published by atomic rename so an interrupted copy is never
+ * mistaken for a complete one. A later release deletes the Go-era dirs after that window.
  */
 object EngineDataIsolation {
     const val ROOT_NAME = "engine-rust"

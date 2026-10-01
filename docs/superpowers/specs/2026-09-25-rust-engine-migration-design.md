@@ -187,15 +187,21 @@ before cutover. On the first `engine=rust` start, `EngineBridge` copies the Go-e
 (extensions dir + extension data/storage dir) into an engine-specific `engine-rust/` dir and
 points the Rust engine there; later Rust starts reuse that copy (for day-to-day development). The Go dirs stay canonical and
 untouched, so `engine=go` runs and the rollback path remain valid throughout phases 1–4.
-**Cutover (one-way) happens in phase 5:** the shipped Rust-only build uses the original dirs
-in place (the §3.5 upgrade path), and the `engine-rust/` copy is deleted on first launch.
+**Cutover happens in phase 5:** the shipped Rust-only build keeps `EngineDataIsolation`'s
+one-time copy into `filesDir/engine-rust/` as the release upgrade path (R-P2, §3.5), reusing it
+on later starts. The Go-era `extensions/` and `ext_data/` stay untouched for the
+`release/0.9.x-go` rollback window; after the rollback window closes, a later release deletes
+the Go-era `extensions/` and `ext_data/`.
 
 ### 3.5 Persisted data across the engine switch
 Engine-private state lives under the app's extension/data dirs: installed extensions, encrypted
 extension storage (credentials, session grants), extension settings, provider priorities.
-- **Upgrade (Go → Rust):** we rely on upstream's own in-place upgrade path — their users moved
-  from v4.9.x Go to v5.0.0 Rust on the same on-disk data (e.g. `storage.rs:258` decrypts the
-  legacy credentials key). Phase 1 verifies this on a **populated v0.9.1 profile** (via the `engine-rust/` copy, §3.4; re-checked in place on the release build in phase 6) (extensions
+- **Upgrade (Go → Rust):** we rely on upstream's legacy-data compatibility through
+  `EngineDataIsolation`'s one-time copy into `filesDir/engine-rust/`, preserving the Go-era
+  dirs for rollback (§3.4, R-P2). Upstream users moved from v4.9.x Go to v5.0.0 Rust on the same
+  on-disk data (e.g. `storage.rs:258` decrypts the legacy credentials key). Phase 1 verifies
+  this on a **populated v0.9.1 profile** (via the `engine-rust/` copy, §3.4; re-checked via the
+  same copy path on the release build in phase 6) (extensions
   installed, signed-in Qobuz/Amazon sessions, custom priorities): after upgrading to the Rust
   build, all extensions load, sessions still work or cleanly request re-verification, settings
   are preserved. If any item fails, `EngineBridge` performs a one-time migration for that item

@@ -72,8 +72,10 @@ active rows here.
 The Go divergence registry and bridge-contract snapshot are historical: phase 5
 removed `go_backend/`, `native/`, and the Go snapshot tooling. Their final source
 and registry remain on rollback branch `release/0.9.x-go` (from `bee1943e`), kept
-buildable for one release cycle for hotfix APKs. The branch currently exists
-locally and has not been pushed. Current upstream syncs cover the Rust engine.
+buildable for one release cycle for hotfix APKs. The branch can be recreated
+from `bee1943e`, which is on `main`. A hotfix APK built from `release/0.9.x-go`
+must use a build number higher than the installed Rust release; otherwise Android
+blocks the install as a downgrade. Current upstream syncs cover the Rust engine.
 
 ---
 

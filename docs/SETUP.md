@@ -14,5 +14,5 @@ flutter build apk --release --target-platform android-arm64
 ```
 
 Gradle tự build Rust backend và UniFFI bindings qua `buildRustBackend` trước
-`preBuild`; Cargo dùng `--locked`. Không cần build archive riêng.
+`preBuild`; Cargo dùng `--locked`. Build Rust thủ công: `bash scripts/build_rust_backend.sh android`.
 APK debug và release chỉ hỗ trợ thiết bị **arm64-v8a**, Android 8.0+.

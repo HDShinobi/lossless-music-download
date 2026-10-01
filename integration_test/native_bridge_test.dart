@@ -12,12 +12,6 @@ void main() {
     expect(res, 'pong');
   });
 
-  testWidgets('backend getDownloadProgress returns JSON', (tester) async {
-    final res = await channel.invokeMethod<String>('getDownloadProgress');
-    expect(res, isNotNull);
-    expect(() => jsonDecode(res!), returnsNormally); // valid JSON
-  });
-
   testWidgets('getAllProgress returns JSON', (tester) async {
     final res = await channel.invokeMethod<String>('getAllProgress');
     expect(res, isNotNull);

@@ -2,6 +2,7 @@
 
 The Android build compiles upstream's Rust-only engine (`rust_backend/`) and generates
 UniFFI bindings automatically via Gradle's `buildRustBackend` task before `preBuild`.
+Manual Rust build: `bash scripts/build_rust_backend.sh android`.
 
 | Tool | Version | Install |
 |---|---|---|

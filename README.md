@@ -47,7 +47,7 @@ up-front. Nothing activates on its own — and no music sources are bundled.
 | 🧩 | **Bring-your-own sources** | Downloads run through sandboxed JS extensions **you** install. The app declares no built-in sources and grants each extension only the domains it needs. |
 | 🔁 | **Multi-source + auto-fallback** | When one source fails or rate-limits (HTTP 429), it honors the server's `Retry-After` and falls back to the next source — batch and full-album downloads recover cleanly. |
 | 🏷️ | **Rich metadata, done right** | Embeds tags, cover art, synced lyrics (`.lrc` sidecar) and ReplayGain so your player behaves consistently across the whole library. |
-| 📡 | **Serve your library** | Broadcasts the verified library over **DLNA/UPnP** and **WebDAV** to any renderer on your LAN. |
+| 📡 | **Serve your library** | Broadcasts the verified library over **DLNA/UPnP** to any renderer on your LAN. |
 | 🔐 | **Safe self-updates** | Distributed as a direct APK. Every release publishes a **SHA-256** hash, and the app verifies each new build before installing. |
 
 ---
@@ -71,18 +71,20 @@ https://github.com/HDShinobi/lossless-music-releases/releases/download/v0.5.7/lo
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │ Flutter UI (lib/)          search · queue · library · UI     │
+│ Dart + FFmpeg              spectral analysis                 │
 ├──────────────────────────────────────────────────────────────┤
 │ Kotlin glue + UniFFI       Dart ⇄ Kotlin ⇄ Rust              │
+│ Kotlin + Ktor              DLNA/UPnP server                  │
 ├──────────────────────────────────────────────────────────────┤
 │ Rust (rust_backend/)       downloads · FFmpeg metadata       │
-│                            sandboxed JS extensions (QuickJS) │
-│ Library services           DLNA/UPnP · WebDAV · spectral     │
+│                           sandboxed JS extensions (QuickJS)  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
 - **UI** — a fresh Flutter rebuild (our own screens & widgets).
 - **Engine** — the Rust download/file-management core vendored from [SpotiFLAC](https://github.com/spotiflacapp/SpotiFLAC-Mobile) (MIT), kept close to upstream and connected to Flutter through app-owned Kotlin glue and UniFFI bindings.
 - **Extensions** — JavaScript, executed in a locked-down QuickJS (via rquickjs) sandbox with an explicit domain/file allow-list.
+- **Library services** — DLNA/UPnP runs in Kotlin (`xyz.losslessmusic.app.dlna`, Ktor); spectral analysis runs in Dart + FFmpeg.
 
 ---
 
@@ -101,7 +103,7 @@ flutter build apk --release --target-platform android-arm64
 
 Gradle builds the Rust backend automatically via `buildRustBackend` before
 `preBuild`, including UniFFI bindings. Cargo uses `--locked`. Debug and release
-APKs support **arm64-v8a only**.
+APKs support **arm64-v8a only**. Manual Rust build: `bash scripts/build_rust_backend.sh android`.
 
 The signed APK lands in `build/app/outputs/flutter-apk/`.
 
