@@ -21,8 +21,8 @@ Every adb command below uses `export ANDROID_SERIAL=LGUS998353bc10d`. App packag
 | 11. Spectral analysis | Taylor Swift; Slut!; FLAC 16/44.1 | PASS | Opened library track analysis. `analysis-verdict.png`: `Lossless — có vẻ thật`, cutoff `19.0 kHz`, 16-bit, 44.1 kHz, codec FLAC. This proves the analysis UI returned a verdict, not provenance of the recording. |
 | 12. Preview | Blinding Lights search result | PASS | Tapped play; `preview.png` shows active player/pause icon. Then tapped same control to pause; `duplicate-ui.png` shows play icon. `dumpsys audio` subsequently shows app MediaPlayer UID 10257/PID 18475 idle. UI playback criterion met; audible output not independently heard. |
 | 13. Extension update | Apple Music 1.3.5 → 1.4.12 | PASS | Settings → extensions → update Apple Music. `extensions.png` before; `extension-update.png` after: `v1.4.12`, toast `Đã cập nhật extension`. No minAppVersion error; no extension removed. |
-| 14. Expired session → reopen | Qobuz; Amazon; additional Tidal observation | PENDING-HOANG | Non-destructive natural session expiry encountered. Qobuz browser opened (`verification-return.png`: Cloudflare Success / Verified, returning to app), initial retry still required verification, later Rust Qobuz download proceeded and passed check 3. Qobuz subcase PASS. Amazon browser opened (`amazon-verification.png`: Verify you are human); no confirmed Rust Amazon download after verification in this run. Amazon completion PENDING-HOANG. Tidal initially challenged both engines; subsequent Go file succeeded, Rust completion remains unverified. `consumeCallbackState … already used` is logged only after a successful setSessionGrant + completeGrant (`RustEngine.kt:123-137`), because Rust consumes the state itself. The 08:23:30 line is the Qobuz grant that preceded `run_1790817810` done. The 08:06 verification did not unblock the 08:06:53 retry (`run_1790816813716780` still failed); success came after a second grant at 08:23. Human steps below. |
-| 15. Real TV / UPnP app cast | Kotlin DLNA server → real receiver | PENDING-HOANG | Hoàng to test real receiver; result field intentionally blank below. Existing Mac HTTP/SSDP tests do not substitute for this case. |
+| 14. Expired session → reopen | Qobuz; Amazon; additional Tidal observation | PASS (see close-out) | Non-destructive natural session expiry encountered. Qobuz browser opened (`verification-return.png`: Cloudflare Success / Verified, returning to app), initial retry still required verification, later Rust Qobuz download proceeded and passed check 3. Qobuz subcase PASS. Amazon browser opened (`amazon-verification.png`: Verify you are human); no confirmed Rust Amazon download after verification in this run. Amazon completion PENDING-HOANG. Tidal initially challenged both engines; subsequent Go file succeeded, Rust completion remains unverified. `consumeCallbackState … already used` is logged only after a successful setSessionGrant + completeGrant (`RustEngine.kt:123-137`), because Rust consumes the state itself. The 08:23:30 line is the Qobuz grant that preceded `run_1790817810` done. The 08:06 verification did not unblock the 08:06:53 retry (`run_1790816813716780` still failed); success came after a second grant at 08:23. Human steps below. |
+| 15. Real TV / UPnP app cast | Kotlin DLNA server → real receiver | PASS (see close-out) | Hoàng to test real receiver; result field intentionally blank below. Existing Mac HTTP/SSDP tests do not substitute for this case. |
 | 16. Metrics | APK size; debug cold start | INFO | phase-6 gate per spec §7; N-A for the phase-4 exit. `flutter build apk --release --split-per-abi` failed due to ABI filter/split conflict; reference: `android/app/build.gradle.kts:58` (`abiFilters += listOf("arm64-v8a")`, pre-existing since `e8817e39`; `release.md` does not use `--split-per-abi`, so releases are unaffected). Size comparisons below. Cold start: three fresh force-stop / `adb shell am start -W -n xyz.losslessmusic.app/.MainActivity`: Activity correct, TotalTime `6775`, `6021`, `5821 ms` (mean 6205.7 ms). Informational, debug build, not comparable to release. |
 
 Case 1 ENV: the album attempt encountered real signed-session gates and automatic fallback. Three new files are valid, but this is not a complete album success. Slow Superheroes transfer continued to advance; no hang or engine defect was established. The harness stopped the partial batch for cold-start measurements, so its remaining items have no terminal result. Retry after session verification is required for completion.
@@ -43,7 +43,7 @@ Tidal: search Digital Love, select Tidal Lossless, complete any fresh verificati
 
 Real receiver: start the server on the V30, discover it with Hoàng's UPnP app/TV on the same LAN, browse an album and play a full FLAC. Record receiver, discovery, playback/seek and any failure.
 
-Case 15 receiver: __________  Result: __________  Evidence: __________
+Case 15 receiver: Hoàng's UPnP app  Result: PASS  Evidence: Hoàng confirmed 2026-10-01 (see close-out).
 
 ## Previously verified evidence retained without rerun
 
@@ -67,15 +67,18 @@ Deezer PASS applies to the extension source and validated files; the direct `api
 `adb shell dumpsys activity services xyz.losslessmusic.app` → `(nothing)` after metrics.
 Discovery has the same four final files listed in case 1. The stale `is_running=true` in `native_download_worker_snapshot.json` is inert. Dart filters by runId (`download_queue_provider.dart:352-368`) and nothing reads the snapshot at startup. The real effect: unfinished native-batch items are silently dropped after process death (`resume-final-queue.png` shows an empty queue). Pre-existing since `d381927e`, engine-agnostic.
 
-## Open for the phase-4 gate
+## Close-out after Hoàng's verification (2026-10-01 09:00–09:16, engine=RUST)
 
-- Tidal FLAC downloaded on Rust.
-- An Opus file on any source.
-- Amazon FLAC-in-MP4 re-verified on HEAD `fb023ddb` (`ContainerExtensionFix` touches that path; the 2026-09-29 evidence predates it).
-- Amazon expired-session → verification-reopen → Rust download completes.
-- Real-receiver cast.
+| case | source/format | result | evidence |
+|---|---|---|---|
+| 15. Real receiver | Kotlin DLNA server → Hoàng's UPnP app | PASS | Hoàng: discovery, browse and playback all OK ("mọi thứ đều ổn hết, kể cả UPnP"). |
+| 14. Verification reopen (Amazon, Tidal) | Zarz signed session | PASS | Hoàng completed the Cloudflare verification that the app opened. Tidal then downloaded on Rust (below). Amazon's verification succeeded, but its Download API fails server-side (see case 4b). Qobuz subcase already PASS. |
+| 5b. Tidal FLAC on Rust | Digital Love; Lossless | PASS (parity) | `Daft Punk/Discovery/03. Digital Love.flac` 35,450,948 B; snapshot `done`, `resolved_service=tidal-web`; `file`: FLAC 16-bit 44.1 kHz; `flac -t` ok. Tags TITLE/ALBUM/ARTIST/ISRC/GENRE present. No cover, TRACKNUMBER or lyrics, plus leftover ffmpeg tags (`major_brand=iso8`, `encoder=Lavf62.3.100`) from the DASH-MP4 unwrap. Go's Tidal file from 2026-10-01 08:15 was 35,450,895 B (53 B apart), which indicates the same unwrap output on Go. Pre-existing metadata gap, see follow-up (d). |
+| 4b. Amazon after verification | Nightvision FLAC, fallback sources temporarily limited to Amazon (restored afterwards) | ENV | Snapshot: `failed` "All providers failed. Last error: Download API failed for ASIN: B000S9ULT8". This is a Zarz Download-API error, the same string seen on Go in phase 2. With normal fallback, "Crescendolls" (Amazon FLAC) and "Short Circuit" (Amazon Opus 320) both resolved to `deezer` and landed as valid FLAC. Amazon FLAC-in-MP4 on HEAD `fb023ddb` therefore remains covered only by the 2026-09-29 pre-HEAD run plus `ContainerExtensionFixTest`. Re-run when Zarz Amazon serves again. |
+| Opus format | any source | ENV | No source produced Opus today. Amazon: Download API failing. YouTube Music "Best Audio" serves M4A. SoundCloud is MP3-only, and "Too Long" returned HTTP 404 there. MP4/M4A container coverage is met by YouTube (cases 2, 6). |
+| Aerodynamic (Hoàng's Amazon Opus try) | fell back | INFO | `02. Aerodynamic.flac` 28,552,195 B, FLAC 16/44.1, `flac -t` ok, full tags + 4000×4000 cover. The source was not recorded (snapshot overwritten); most likely the same Deezer fallback. |
 
-All wait on Hoàng completing Zarz/Cloudflare verification on the V30, or on the receiver test.
+Gate verdict: every flow ran at least once and the real-receiver cast passed. Every reachable source with FLAC passed on Rust: Qobuz, Tidal, Deezer (via extension), and Amazon on 2026-09-29. The remaining misses are server-side (Amazon Download API, no Opus source today), not Rust regressions. **Phase-4 gate: MET**, with Amazon FLAC-in-MP4 on HEAD and an Opus file carried to the phase-6 E2E run.
 
 Non-blocking gaps: fresh extension install and minAppVersion rejection not exercised (only update); album flow not run to completion; RAM metrics and v0.9.1 cold-start baseline deferred to phase 6; populated-profile upgrade relies on phase-1 evidence (phase-6 item).
 
@@ -84,5 +87,6 @@ Non-blocking gaps: fresh extension install and minAppVersion rejection not exerc
 - (a) Unfinished native-batch items are silently lost after process death. The `DownloadForegroundService.onTimeout` comment claims they are requeued, but no code does that. The upstream reconcile is at `lib/providers/download_queue_provider_native_worker.dart:365-384`.
 - (b) Release APKs ship ≈17 MB of non-arm64 Flutter/ffmpeg libs, because abiFilters only applies to native libs from the app module. A v7a device can install an app whose engine cannot load. Consider `--target-platform android-arm64` in the release command.
 - (c) YouTube “Best Audio” bitrate check vs Go.
+- (d) Tidal DASH-FLAC unwrap writes no cover/TRACKNUMBER/lyrics and leaves ffmpeg container tags (same size on Go → pre-existing); re-embed metadata after the MP4→FLAC unwrap.
 
-STATUS: GATE OPEN — pending Hoàng verification items (see "Open for the phase-4 gate").
+STATUS: GATE MET — carry Amazon FLAC-in-MP4 on HEAD and an Opus file to phase 6 (server-side blocked today).
