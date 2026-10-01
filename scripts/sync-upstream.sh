@@ -30,7 +30,6 @@ APPLY=false
 
 # Paths we INHERIT from upstream (Layer 1, byte-identical except registered
 # LM-FORK(<id>) blocks). lib/ and our Kotlin glue are ours — never synced.
-# go_backend/ is frozen at vendor/spotiflac-go-final until it is removed.
 INHERIT_PATHS=(
   rust_backend
   scripts/build_rust_backend.sh
@@ -189,6 +188,7 @@ cat <<EOF
        (cd rust_backend && cargo test --locked -p spotiflac-extensions)
        (cd android && ./gradlew :app:buildRustBackend :app:testDebugUnitTest :app:assembleDebug)
        flutter test
+       scripts/snapshot-engine-contract.sh --check
   4. Review the WATCHED diff-stat above and port relevant glue changes by hand.
   5. Advance the baseline, then prove Layer 1 is clean:
        git tag -f $BASE_TAG $TARGET_SHA
