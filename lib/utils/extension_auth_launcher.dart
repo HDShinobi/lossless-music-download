@@ -9,7 +9,7 @@ import '../services/backend_bridge.dart';
 
 /// Detects the "needs browser verification" family of errors extensions
 /// raise when a signed-session challenge hasn't been completed yet (see
-/// go_backend/extension_signed_session.go).
+/// rust_backend/crates/extensions/src/signed_session/exchange.rs).
 bool isExtensionVerificationRequired(Object error) {
   final message = error.toString().toLowerCase();
   return message.contains('verify_required') ||

@@ -3,8 +3,8 @@ package xyz.losslessmusic.app.engine
 import org.json.JSONObject
 
 /**
- * Our post-download step on the Rust path (spec §5): fix 1 (lyrics fallback embed, parity with
- * go_backend/embed_after_download.go) and fix 4 (preflight verification failure reclassified).
+ * Our post-download step on the Rust path (spec §5): fix 1 (lyrics fallback embed, preserving
+ * the previous engine behavior) and fix 4 (preflight verification failure reclassified).
  * Never fails a download: every error is logged and the engine's result is returned.
  */
 object PostDownload {

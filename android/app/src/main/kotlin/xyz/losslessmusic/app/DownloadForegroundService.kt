@@ -227,12 +227,12 @@ class DownloadForegroundService : Service() {
     private fun stopForegroundService() {
         // Stop processing further queued items, but deliberately do NOT call
         // Engines.current.cancelDownload() here. This runs on natural batch completion
-        // (runWorker's tail) as well as on forced stop, and Go-cancelling the
+        // (runWorker's tail) as well as on forced stop, and cancelling the engine download for the
         // current item leaves a stale "cancelled" entry in the backend's cancel
         // map that poisons any later re-download of the SAME itemId (e.g. a
         // rate-limit 429 retry, which re-queues the same item) — surfacing as a
         // bogus "download cancelled" failure. Mirrors SpotiFLAC's DownloadService,
-        // which Go-cancels only on an explicit user pause/cancel. Explicit user
+        // which cancels the engine download only on an explicit user pause/cancel. Explicit user
         // cancellation still works: it goes through the Dart remove() path, which
         // calls Engines.current.cancelDownload() directly.
         workerJob?.cancel()
@@ -339,7 +339,7 @@ class DownloadForegroundService : Service() {
             updateItem(request.itemId) { it.resolvedService = winning }
             writeSnapshot(isRunning = true)
             // Amazon's lossless tier delivers an *encrypted* MP4 plus the key in
-            // the result; go_backend only forwards it, so decrypt (and unwrap the
+            // the result; the engine only forwards it, so decrypt (and unwrap the
             // FLAC out of the MP4) here, before the sidecar and tagging steps see
             // the path. Without this the file is ciphertext that merely labels
             // itself as hi-res FLAC.
@@ -357,7 +357,7 @@ class DownloadForegroundService : Service() {
                     android.util.Log.w("DownloadForegroundService", "Non-FLAC metadata embed failed: ${e.message}")
                 }
             }
-            // FLAC needs no extra step -- go_backend already tagged it natively.
+            // FLAC needs no extra step -- the engine already tagged it natively.
 
             updateItem(request.itemId) { it.status = "done"; it.progress = 1.0 }
             writeSnapshot(isRunning = true)
@@ -473,7 +473,7 @@ class DownloadForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        // Never Go-cancel the current item here (see stopForegroundService):
+        // Never cancel the engine download for the current item here (see stopForegroundService):
         // a stale cancel entry would poison a later re-download of the same
         // itemId. Cancelling the coroutine scope stops further processing; any
         // in-flight native download simply runs to completion on its own thread.
@@ -502,7 +502,7 @@ class DownloadForegroundService : Service() {
  * Writes a `.lrc` sidecar beside a downloaded audio file when the request
  * opted in via `write_lrc_sidecar`. Lyrics are fetched ONLINE through the
  * same `Engines.current.getLyricsLRC(...)` method `NonFlacMetadataEmbedder.fetchLyrics`
- * uses -- no local file path is passed, since the Go backend's file-path mode
+ * uses -- no local file path is passed, since the engine's file-path mode
  * only reads lyrics already embedded in the file (nothing is embedded yet at
  * this point in the pipeline) and would return empty, so the sidecar would
  * never write. Runs on BOTH FLAC and non-FLAC downloads (unlike
@@ -543,7 +543,7 @@ private object LrcSidecarWriter {
 
     // Mirrors NonFlacMetadataEmbedder.fetchLyrics verbatim: spotify_id +
     // track_name + artist_name + an empty filePath (forces the online fetch
-    // path in go_backend) + duration_ms. No qobuz/tidal id routing exists in
+    // path in the engine) + duration_ms. No qobuz/tidal id routing exists in
     // that reference call, so none is invented here.
     private fun fetchLyricsOnline(request: JSONObject): String {
         val spotifyId = request.optString("spotify_id", "")

@@ -21,7 +21,7 @@ Future<String> resolveDownloadDir(
 }
 
 /// Normalizes a directory chosen by the system picker into a real filesystem
-/// path usable by the Go backend (Option 1 / All-Files-Access).
+/// path usable by the engine (Option 1 / All-Files-Access).
 ///
 /// `file_picker` may hand back either a plain path (returned unchanged) or an
 /// Android SAF tree URI like
@@ -61,7 +61,7 @@ final downloadDirPathProvider = Provider<Future<String>>(
 );
 
 /// Resolves the download directory, then wires it into the backend:
-///   • [BackendBridge.setDownloadDirectory] — tells the Go backend where to write files
+///   • [BackendBridge.setDownloadDirectory] — tells the engine where to write files
 ///   • [BackendBridge.allowDownloadDir]     — grants the backend permission to that path
 ///
 /// Override [downloadDirPathProvider] and [backendBridgeProvider] in tests to

@@ -13,7 +13,7 @@ import java.io.File
  *
  * Amazon's lossless tier streams an **encrypted** MP4 and returns the key in the
  * download result (`decryption: {strategy: "ffmpeg.mov_key", key, input_format:
- * "mov", output_extension: ".flac"}`). go_backend only forwards that — applying
+ * "mov", output_extension: ".flac"}`). The engine only forwards that — applying
  * it is the app's job, and the extension's own source comments say so ("flac:
  * decrypt to .flac"). Skipping it leaves a file whose *container labels* read as
  * FLAC 24-bit (so the library shows it as hi-res and tagging appears to work)
@@ -153,7 +153,7 @@ object Mp4FlacUnwrapper {
     }
 
     /**
-     * go_backend skipped its native FLAC tagger for this download (the file was
+     * The engine skipped its native FLAC tagger for this download (the file was
      * still MP4 at the time), so tag it now. If the parser rejects the stream,
      * re-encode once to rebuild it — the same validate-then-repair order
      * SpotiFLAC's module uses.

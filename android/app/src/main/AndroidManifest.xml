@@ -98,8 +98,8 @@
             </intent-filter>
 
             <!-- Extension signed-session auth grant callback (custom scheme,
-                 not an https App Link; go_backend/extension_signed_session.go
-                 hardcodes this as the default CallbackURL for the browser-based
+                 not an https App Link; rust_backend/crates/extensions/src/signed_session/protocol.rs
+                 supplies this as the default callback URL for the browser-based
                  verification flow some extensions require). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

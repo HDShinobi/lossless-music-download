@@ -10,9 +10,9 @@
 
 <p>
   <img alt="Version"  src="https://img.shields.io/badge/version-0.5.7-1DB954?style=flat-square" />
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Android%206.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white" />
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Android%208.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white" />
   <img alt="Flutter"  src="https://img.shields.io/badge/UI-Flutter-02569B?style=flat-square&logo=flutter&logoColor=white" />
-  <img alt="Go"       src="https://img.shields.io/badge/engine-Go-00ADD8?style=flat-square&logo=go&logoColor=white" />
+  <img alt="Rust"     src="https://img.shields.io/badge/engine-Rust-DEA584?style=flat-square&logo=rust&logoColor=white" />
   <img alt="License"  src="https://img.shields.io/badge/license-MIT-lightgrey?style=flat-square" />
 </p>
 
@@ -54,7 +54,7 @@ up-front. Nothing activates on its own — and no music sources are bundled.
 
 ## ⬇️ Install
 
-> Android 6.0+ · installs outside the Play Store.
+> Android 8.0+ · arm64-v8a devices only · installs outside the Play Store.
 
 1. Grab the latest APK from the **[Releases page](https://github.com/HDShinobi/lossless-music-releases/releases/latest)**.
 2. Verify the file against the published **SHA-256** hash.
@@ -69,37 +69,39 @@ https://github.com/HDShinobi/lossless-music-releases/releases/download/v0.5.7/lo
 ## 🧱 How it works
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  Flutter UI (lib/)          search · queue · library · UI  │
-├──────────────────────────────────────────────────────────┤
-│  Native bridge (gomobile)   Dart  ⇄  Go                    │
-├──────────────────────────────────────────────────────────┤
-│  Go engine (go_backend/)    downloads · FFmpeg metadata ·  │
-│                             sandboxed JS extensions (goja) │
-│                             DLNA/UPnP · WebDAV · spectral   │
-└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ Flutter UI (lib/)          search · queue · library · UI     │
+├──────────────────────────────────────────────────────────────┤
+│ Kotlin glue + UniFFI       Dart ⇄ Kotlin ⇄ Rust              │
+├──────────────────────────────────────────────────────────────┤
+│ Rust (rust_backend/)       downloads · FFmpeg metadata       │
+│                            sandboxed JS extensions (QuickJS) │
+│ Library services           DLNA/UPnP · WebDAV · spectral     │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 - **UI** — a fresh Flutter rebuild (our own screens & widgets).
-- **Engine** — a Go download/file-management core based on the [SpotiFLAC](https://github.com/spotiflacapp/SpotiFLAC-Mobile) architecture (MIT), kept close to upstream and bridged to Flutter via gomobile.
-- **Extensions** — JavaScript, executed in a locked-down [goja](https://github.com/dop251/goja) sandbox with an explicit domain/file allow-list.
+- **Engine** — the Rust download/file-management core vendored from [SpotiFLAC](https://github.com/spotiflacapp/SpotiFLAC-Mobile) (MIT), kept close to upstream and connected to Flutter through app-owned Kotlin glue and UniFFI bindings.
+- **Extensions** — JavaScript, executed in a locked-down QuickJS (via rquickjs) sandbox with an explicit domain/file allow-list.
 
 ---
 
 ## 🛠️ Build from source
 
-**Prerequisites:** Flutter (stable), Go 1.22+, Android NDK, and `gomobile`.
+**Prerequisites:** Flutter 3.41.x / Dart 3.11.x, rustup with the Rust toolchain
+pinned in `rust_backend/rust-toolchain.toml` (currently 1.98.1), Rust target
+`aarch64-linux-android`, Android SDK + NDK `29.0.14206865`, and Android Studio JBR
+for Gradle. See [build prerequisites](docs/build-prerequisites.md) for installation.
 
 ```bash
-# 1. Build the Go engine into an Android archive (.aar) via gomobile
-cd go_backend
-gomobile bind -target=android -o ../android/app/libs/backend.aar .
-
-# 2. Build the Flutter app
-cd ..
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 flutter pub get
-flutter build apk --release
+flutter build apk --release --target-platform android-arm64
 ```
+
+Gradle builds the Rust backend automatically via `buildRustBackend` before
+`preBuild`, including UniFFI bindings. Cargo uses `--locked`. Debug and release
+APKs support **arm64-v8a only**.
 
 The signed APK lands in `build/app/outputs/flutter-apk/`.
 
@@ -118,8 +120,8 @@ The signed APK lands in `build/app/outputs/flutter-apk/`.
 
 This is a **personal, non-commercial project for research and educational purposes**. It is not
 affiliated with any music service, **hosts no music, and ships with no sources**. Any content is
-provided by extensions the user chooses to install. The `go_backend/` engine is vendored from
-SpotiFLAC (MIT) and kept pristine to ease upstream syncs.
+provided by extensions the user chooses to install. The `rust_backend/` engine is vendored from
+SpotiFLAC (MIT), with minimal registered divergences to ease upstream syncs.
 
 ## 📄 License
 

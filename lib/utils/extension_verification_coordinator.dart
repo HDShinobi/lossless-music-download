@@ -14,7 +14,7 @@ String? verificationTargetFor(DownloadEntry entry) {
 }
 
 /// Coordinates browser-based signed-session verification for the download
-/// queue (see go_backend/extension_signed_session.go for the flow): opens the
+/// queue (see rust_backend/crates/extensions/src/signed_session/exchange.rs for the flow): opens the
 /// challenge for newly-failed items, keeps one challenge per extension at a
 /// time, unblocks abandoned challenges after [timeout], and re-enqueues the
 /// affected downloads once a grant arrives — mirroring upstream SpotiFLAC's

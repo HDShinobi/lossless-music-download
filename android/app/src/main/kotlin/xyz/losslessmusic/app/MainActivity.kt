@@ -124,7 +124,7 @@ class MainActivity : FlutterActivity() {
     /**
      * Delivers a signed-session auth grant (from the spotiflac://session-grant
      * browser redirect) to the extension runtime and completes the exchange.
-     * See go_backend/extension_signed_session.go for the flow this closes.
+     * See rust_backend/crates/extensions/src/signed_session/exchange.rs for the flow this closes.
      */
     private fun handleSessionGrantIntent(intent: Intent?) {
         val uri = intent?.data ?: return
@@ -135,11 +135,9 @@ class MainActivity : FlutterActivity() {
         }
         val grant = (uri.getQueryParameter("grant") ?: uri.getQueryParameter("code"))
             ?.trim().orEmpty()
-        // `state` is a one-time random callback nonce (go_backend's
-        // newExtensionCallbackState), NOT the extension ID. It must be resolved
-        // to the extension that raised the challenge via consumeExtensionCallbackState
-        // before the grant is stored — passing the nonce straight to
-        // setExtensionSessionGrantByID fails with "extension not found". See
+        // `state` is a one-time random callback nonce, NOT the extension ID.
+        // completeSessionGrant resolves it to the extension that raised the
+        // challenge before storing the grant and completing the exchange. See
         // upstream AppDelegate.swift / MainActivity.kt for the reference flow.
         val callbackState = uri.getQueryParameter("state")?.trim().orEmpty()
         if (grant.isEmpty() || callbackState.isEmpty()) {
@@ -174,10 +172,8 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         Engines.init(applicationContext)
         super.configureFlutterEngine(flutterEngine)
-        // Set the app version so the Go backend sends the correct User-Agent
-        // ("SpotiFLAC-Mobile/<version>") to api.zarz.moe and extension HTTP
-        // calls that fall back to the app UA. Without this, api.zarz.moe
-        // rejects Spotify URL resolution requests (403 / no-version UA).
+        // Preserve the channel call; RustEngine intentionally ignores the app
+        // version and uses EngineVersion.SPOTIFLAC_ENGINE_VERSION for engine HTTP.
         val versionName = try {
             packageManager.getPackageInfo(packageName, 0).versionName ?: ""
         } catch (_: Exception) { "" }

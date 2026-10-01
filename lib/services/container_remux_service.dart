@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 ///
 /// Amazon's lossless tier streams an **encrypted** MP4 and returns the key in the
 /// download result (`decryption: {strategy: "ffmpeg.mov_key", key, input_format:
-/// "mov", output_extension: ".flac"}`). go_backend only forwards that; applying
+/// "mov", output_extension: ".flac"}`). The engine only forwards that; applying
 /// it is the app's job. Skipping it leaves a file whose container labels read as
 /// FLAC 24-bit — so the library shows hi-res and tagging appears to work — while
 /// every audio frame is ciphertext that no player can decode.

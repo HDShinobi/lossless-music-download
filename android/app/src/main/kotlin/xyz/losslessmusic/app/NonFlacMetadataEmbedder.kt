@@ -14,7 +14,7 @@ import java.util.Base64
  * Tags NON-FLAC downloads (Opus/M4A/MP3) with metadata, cover art, and
  * lyrics, using FFmpegKit's native Android classes directly (no Flutter
  * engine dependency, so this works from the background download service).
- * FLAC is tagged natively in go_backend, so this is only invoked for lossy
+ * FLAC is tagged natively in the engine, so this is only invoked for lossy
  * formats.
  */
 object NonFlacMetadataEmbedder {
