@@ -41,6 +41,7 @@ class MainActivity : FlutterActivity() {
                     RealDlnaRuntime(root, name, ip, EngineMetadataProvider(
                         rust::readTrackMetadata, rust::extractCoverToFile,
                         File(context.applicationContext.cacheDir, "dlna-art"),
+                        thumbnail = DlnaThumbnailer::write,
                     ))
                 },
                 {
