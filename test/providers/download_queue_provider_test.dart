@@ -29,6 +29,7 @@ class _FakeBridge extends BackendBridge {
 
   // Returns exists:true when duplicateIsrc is set and matches.
   String? duplicateIsrc;
+  final List<String> duplicateDirCalls = [];
 
   // Records the `filePath` arg of every getLyricsLRC call, and the value to
   // return from it (used to drive the .lrc sidecar writer).
@@ -50,6 +51,7 @@ class _FakeBridge extends BackendBridge {
   @override
   Future<Map<String, dynamic>> checkDuplicate(
       String outputDir, String isrc) async {
+    duplicateDirCalls.add(outputDir);
     if (duplicateIsrc != null && duplicateIsrc == isrc) {
       return {'exists': true, 'path': '/fake/existing.flac'};
     }
@@ -479,6 +481,32 @@ void main() {
         final entries = c.read(downloadQueueProvider);
         expect(entries.first.status, 'done');
         expect(bridge.downloadCalls, isEmpty);
+      });
+
+      // Same scope as the native worker: the resolved album folder, not the
+      // download root, so a single elsewhere never blocks an album track.
+      test('checks the resolved output folder, not the download root',
+          () async {
+        final bridge = _FakeBridge()..downloadResult = {};
+        final c = _makeContainer(bridge);
+        addTearDown(c.dispose);
+
+        const trackWithIsrc = Track(
+          id: 'scoped-track',
+          name: 'Song',
+          artists: 'Test Artist',
+          albumName: 'Test Album',
+          isrc: 'USUM71400102',
+        );
+
+        c.read(downloadQueueProvider.notifier).enqueue(trackWithIsrc);
+        await _pump();
+        await _pump();
+
+        expect(bridge.duplicateDirCalls,
+            ['/fake/downloads/Test Artist/Test Album']);
+        expect(bridge.downloadCalls.single.toJson()['output_dir'],
+            '/fake/downloads/Test Artist/Test Album');
       });
 
       test('proceeds with download when no ISRC', () async {

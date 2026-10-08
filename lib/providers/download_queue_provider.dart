@@ -428,7 +428,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   }
 
   // The original single-item Dart download path -- now the fallback used
-  // for non-Android platforms and any item the native worker's gate rejects.
+  // for non-Android platforms, items the native worker's gate rejects, and
+  // runs whose native snapshot stalls.
   Future<void> _runDartFallback(DownloadEntry next) async {
     _setStatus(next.itemId, 'downloading');
     try {
@@ -447,11 +448,13 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         }
       } catch (_) {}
 
-      // Skip download if file already exists on disk (mirrors SpotiFLAC's
-      // checkDuplicate preflight). Only checked when ISRC is known.
+      final target = _resolveOutputTarget(dir, next.track);
+
+      // Skip download if the ISRC already exists under the resolved output
+      // folder (same scope as the native worker). Only checked when ISRC is known.
       if (next.track.isrc != null && next.track.isrc!.isNotEmpty) {
         try {
-          final dup = await bridge.checkDuplicate(dir, next.track.isrc!);
+          final dup = await bridge.checkDuplicate(target.dir, next.track.isrc!);
           if (dup['exists'] == true) {
             _setStatus(next.itemId, 'done', progressIfDone: 1.0);
             ref.invalidate(libraryProvider);
@@ -483,8 +486,6 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       final embedMetadata = ref.read(embedMetadataProvider);
       final embedCover = ref.read(embedCoverProvider);
       final embedLyrics = ref.read(embedLyricsProvider);
-
-      final target = _resolveOutputTarget(dir, next.track);
 
       final req = DownloadRequest(
         trackName: next.track.name,
