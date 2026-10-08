@@ -11,6 +11,7 @@ import com.zarz.spotiflac.CoreFFmpegCommand
 import com.zarz.spotiflac.parseCoreFFmpegCommands
 import com.zarz.spotiflac.withCoreFFmpegExecution
 import java.util.UUID
+import org.json.JSONObject
 
 /** RustCore over the real UniFFI engine. Every call blocks; never call from the main thread. */
 class UniffiRustCore private constructor(private val manager: ExtensionManager) : RustCore {
@@ -98,7 +99,9 @@ class UniffiRustCore private constructor(private val manager: ExtensionManager) 
         manager.getLyricsLrc(LyricsRequest(spotifyId, track, artist, filePath, durationMs), null)
     override fun embedLyricsToFile(path: String, lyrics: String): String = manager.embedLyricsToFile(path, lyrics, null)
     override fun setLibraryCoverCacheDirectory(directory: String) = manager.setLibraryCoverCacheDirectory(directory)
-    override fun scanLibraryFolder(folder: String): String = manager.scanLibraryFolder(folder, null)
+    // Upstream retired the plain full scan; an empty snapshot makes the incremental scan a full one.
+    override fun scanLibraryFolder(folder: String): String =
+        JSONObject(manager.scanLibraryFolderIncremental(folder, "{}", null)).optJSONArray("scanned")?.toString() ?: "[]"
 
     override fun close() {
         try { requests.shutdown() } catch (_: Exception) {}

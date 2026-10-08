@@ -5,7 +5,10 @@ mod extensions;
 mod ffmpeg;
 mod filename;
 mod hires;
-mod index;
+mod library_metadata;
+// LM-FORK(isrc-index-bridge): owned UniFFI ISRC index entry points.
+mod lm_isrc_index;
+// END LM-FORK
 mod logging;
 mod lyrics;
 mod manager;
