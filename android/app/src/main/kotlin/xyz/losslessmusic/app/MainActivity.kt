@@ -123,13 +123,14 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
-     * Delivers a signed-session auth grant (from the spotiflac://session-grant
+     * Delivers a signed-session auth grant (from the mornye:// or spotiflac://session-grant
      * browser redirect) to the extension runtime and completes the exchange.
      * See rust_backend/crates/extensions/src/signed_session/exchange.rs for the flow this closes.
      */
     private fun handleSessionGrantIntent(intent: Intent?) {
         val uri = intent?.data ?: return
-        if (!uri.scheme.equals("spotiflac", ignoreCase = true) ||
+        // Engine >= 5.2.6 (Mornye) redirects to mornye://; older gateways/extensions use spotiflac://.
+        if (uri.scheme?.lowercase() !in setOf("mornye", "spotiflac") ||
             !uri.host.equals("session-grant", ignoreCase = true)
         ) {
             return

@@ -1,9 +1,9 @@
 //! The installed extension manifest contract, independent of JavaScript execution.
 
 use crate::storage::valid_extension_id;
+use mornye_network::url::UrlParts;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
-use spotiflac_network::url::UrlParts;
 
 trait GoNull {
     fn set_null(&mut self);
@@ -462,11 +462,59 @@ impl ExtensionManifest {
         }
         crate::transfer_policy::validate(&self.capabilities)
             .map_err(|message| invalid("capabilities.downloadTransfer", message))?;
+        if let Some(mode) = self.capabilities.get("accountDownloadMode") {
+            let valid = mode.as_object().is_some_and(|mode| {
+                mode.get("setting")
+                    .and_then(Value::as_str)
+                    .is_some_and(|key| !key.is_empty() && !key.starts_with('_') && key.len() <= 64)
+                    && mode
+                        .get("value")
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| !value.is_empty() && value.len() <= 64)
+            });
+            if !valid {
+                return Err(invalid(
+                    "capabilities.accountDownloadMode",
+                    "expected a setting and value",
+                ));
+            }
+        }
+        if let Some(timeout) = self.capabilities.get("actionTimeoutSeconds")
+            && !timeout
+                .as_u64()
+                .is_some_and(|seconds| (1..=120).contains(&seconds))
+        {
+            return Err(invalid(
+                "capabilities.actionTimeoutSeconds",
+                "expected 1 to 120 seconds",
+            ));
+        }
         Ok(())
     }
 
     pub fn has_capability(&self, name: &str) -> bool {
         self.capabilities.get(name) == Some(&Value::Bool(true))
+    }
+
+    pub(crate) fn account_download_enabled(&self, settings: &Map<String, Value>) -> bool {
+        self.capabilities
+            .get("accountDownloadMode")
+            .is_some_and(|mode| {
+                let Some(setting) = mode["setting"].as_str() else {
+                    return false;
+                };
+                let Some(value) = mode["value"].as_str() else {
+                    return false;
+                };
+                settings.get(setting).and_then(Value::as_str) == Some(value)
+            })
+    }
+
+    pub(crate) fn action_timeout_ms(&self, default: u64) -> u64 {
+        self.capabilities
+            .get("actionTimeoutSeconds")
+            .and_then(Value::as_u64)
+            .map_or(default, |seconds| seconds.clamp(1, 120) * 1000)
     }
 
     pub fn find_quality(&self, requested: &str) -> Option<&QualityOption> {
@@ -546,7 +594,9 @@ impl ExtensionManifest {
             .iter()
             .any(|allowed| {
                 let allowed = allowed.trim().to_lowercase();
-                allowed == domain || (allowed.starts_with("*.") && domain.ends_with(&allowed[1..]))
+                allowed == "*"
+                    || allowed == domain
+                    || (allowed.starts_with("*.") && domain.ends_with(&allowed[1..]))
             })
     }
 
@@ -578,5 +628,31 @@ impl ExtensionManifest {
                 && (parsed.hostname == host || parsed.hostname.ends_with(&format!(".{host}")))
                 && (path.is_empty() || parsed.path.starts_with(format!("/{path}").as_bytes()))
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn manifest(network: Value) -> Result<ExtensionManifest, ManifestError> {
+        ExtensionManifest::parse(
+            &serde_json::json!({
+                "name":"generic-media","version":"1.0.0","description":"Generic fixture",
+                "type":["download_provider"],"permissions":{"storage":true,"network":network},
+                "signedSession":{"namespace":"generic","baseUrl":"https://accounts.example.test"}
+            })
+            .to_string(),
+        )
+    }
+
+    #[test]
+    fn any_domain_wildcard_covers_listed_hosts() {
+        let any = manifest(serde_json::json!(["*"])).unwrap();
+        assert!(any.is_domain_allowed("accounts.example.test"));
+        assert!(any.is_domain_allowed("192.168.178.20"));
+        let scoped = manifest(serde_json::json!(["*.example.test"])).unwrap();
+        assert!(!scoped.is_domain_allowed("example.org"));
+        assert!(manifest(serde_json::json!(["example.org"])).is_err());
     }
 }

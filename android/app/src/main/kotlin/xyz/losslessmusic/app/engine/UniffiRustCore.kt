@@ -1,15 +1,15 @@
 package xyz.losslessmusic.app.engine
 
-import com.spotiflac.backend.CancellationDomain
-import com.spotiflac.backend.CancellationRegistry
-import com.spotiflac.backend.ExtensionEnvironment
-import com.spotiflac.backend.ExtensionManager
-import com.spotiflac.backend.LyricsRequest
-import com.spotiflac.backend.RequestLease
-import com.zarz.spotiflac.CoreExtensionExecution
-import com.zarz.spotiflac.CoreFFmpegCommand
-import com.zarz.spotiflac.parseCoreFFmpegCommands
-import com.zarz.spotiflac.withCoreFFmpegExecution
+import com.mornye.backend.CancellationDomain
+import com.mornye.backend.CancellationRegistry
+import com.mornye.backend.ExtensionEnvironment
+import com.mornye.backend.ExtensionManager
+import com.mornye.backend.LyricsRequest
+import com.mornye.backend.RequestLease
+import com.zarz.mornye.CoreExtensionExecution
+import com.zarz.mornye.CoreFFmpegCommand
+import com.zarz.mornye.parseCoreFFmpegCommands
+import com.zarz.mornye.withCoreFFmpegExecution
 import java.util.UUID
 import org.json.JSONObject
 

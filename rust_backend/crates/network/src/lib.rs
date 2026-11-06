@@ -1,4 +1,8 @@
 //! Shared, cancellable HTTP transport for the embedded backend.
+//!
+//! Comments that mention "Go" describe the retired Go backend, whose observable
+//! behavior (wire formats, parsing quirks, file layouts) remains a compatibility
+//! contract.
 
 mod client;
 mod cookies;
@@ -13,6 +17,12 @@ pub use client::{
     NetworkSession,
 };
 pub use dns::{Lookup, LookupFuture, SystemLookup};
+
+/// The app's TLS client configuration (system trust plus the bundled roots),
+/// for crates that run their own HTTP client, such as the Cast media relay.
+pub fn tls_client_config() -> std::io::Result<rustls::ClientConfig> {
+    tls::configuration(&[])
+}
 
 /// Shared browser identity for native clients and `utils.randomUserAgent()`.
 pub fn random_user_agent() -> String {

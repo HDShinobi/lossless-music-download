@@ -1,12 +1,14 @@
+//! Backend operations for local library files: audio metadata reads and CUE sheet parsing and scanning.
+
 use super::Backend;
 use cap_std::fs::OpenOptions;
 use chrono::{SecondsFormat, Utc};
-use serde_json::{Value, json};
-use spotiflac_core::cue::{self, CueSheet};
-use spotiflac_core::tags::{
+use mornye_core::cue::{self, CueSheet};
+use mornye_core::tags::{
     extract_cover, library_extension, library_id, library_metadata, read_library_metadata,
     read_library_metadata_with_cover,
 };
+use serde_json::{Value, json};
 use std::cell::RefCell;
 use std::path::Path;
 use std::time::UNIX_EPOCH;
@@ -49,7 +51,7 @@ impl Backend {
         };
         check()?;
         let files = self.environment().native_files()?;
-        self.scan_audio_file(&files, path, hint, cache_key, &scan_time(), 0, &check)
+        self.scan_audio_file(&files, path, hint, cache_key, &scan_time(), 0, None, &check)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -61,6 +63,7 @@ impl Backend {
         cache_key: &str,
         scan_time: &str,
         mod_time: i64,
+        covers: Option<&crate::files::SyncBatch>,
         check: &dyn Fn() -> Result<(), String>,
     ) -> Result<Value, String> {
         check()?;
@@ -98,9 +101,13 @@ impl Backend {
                         metadata = Some(tags);
                         cover.ok_or_else(|| "no cover art found in file".into())
                     } else {
-                        extract_cover(file, format, check)
+                        // The cover cache files .aac under its MP4 reader; the
+                        // container check also recognizes raw ADTS.
+                        let aac = library_extension(path, hint) == "aac";
+                        extract_cover(file, if aac { "aac" } else { format }, check)
                     }
                 },
+                covers,
                 check,
             )
             .ok()
@@ -122,9 +129,8 @@ impl Backend {
                 let input = files.resolve_legacy(path)?;
                 input.open_native_read().map_err(|error| error.to_string())
             };
-            if let Ok(lyrics) = spotiflac_core::lyrics::file::sidecar(path, &open, check) {
-                result["hasLyrics"] =
-                    spotiflac_core::lyrics::lrc::has_usable_content(&lyrics).into();
+            if let Ok(lyrics) = mornye_core::lyrics::file::sidecar(path, &open, check) {
+                result["hasLyrics"] = mornye_core::lyrics::lrc::has_usable_content(&lyrics).into();
             }
         }
         check()?;
@@ -298,6 +304,42 @@ impl Backend {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub fn scan_cue_file_for_library_with_metadata(
+        &self,
+        path: &str,
+        audio_hint: &str,
+        metadata_json: &str,
+        virtual_prefix: &str,
+        mod_time: i64,
+        scan_time: &str,
+        check: &dyn Fn() -> Result<(), String>,
+    ) -> Result<Value, String> {
+        let _operation = self.enter()?;
+        let check = || self.check().and_then(|()| check());
+        check()?;
+        let metadata: Value = serde_json::from_str(metadata_json).map_err(|e| e.to_string())?;
+        if !metadata.is_object() || audio_hint.trim().is_empty() {
+            return Err("invalid resolved CUE audio metadata".into());
+        }
+        let sheet = self.parse_cue_file(path, &check)?;
+        let mod_time = if mod_time > 0 {
+            mod_time
+        } else {
+            modified(&self.environment().native_files()?.resolve_legacy(path)?)
+        };
+        cue_library_rows(
+            path,
+            &sheet,
+            virtual_prefix,
+            mod_time,
+            scan_time,
+            &library_extension(audio_hint, ""),
+            &metadata,
+            &check,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn scan_cue_sheet(
         &self,
         path: &str,
@@ -318,7 +360,7 @@ impl Backend {
         let mut duration = 0.0;
         if let Ok(mut file) = input.open(OpenOptions::new().read(true)) {
             if format == "flac" {
-                if let Ok(quality) = spotiflac_core::media::probe_quality(&mut file, check) {
+                if let Ok(quality) = mornye_core::media::probe_quality(&mut file, check) {
                     depth = quality.bit_depth;
                     rate = quality.sample_rate;
                     if rate > 0 && quality.total_samples > 0 {
@@ -327,7 +369,7 @@ impl Backend {
                 }
             } else if format == "mp3"
                 && let Ok(metadata) =
-                    spotiflac_core::tags::read_file_metadata(&mut file, audio, "", check)
+                    mornye_core::tags::read_file_metadata(&mut file, audio, "", check)
             {
                 rate = metadata["sample_rate"].as_i64().unwrap_or_default();
                 duration = metadata["duration"].as_f64().unwrap_or_default();
@@ -351,48 +393,75 @@ impl Backend {
         } else {
             modified(&files.resolve_legacy(path)?)
         };
-        let prefix = prefer(virtual_prefix, path);
-        let mut results = Vec::with_capacity(sheet.tracks.len());
-        for (index, track) in sheet.tracks.iter().enumerate() {
-            check()?;
-            let end = next_start(sheet, index).or_else(|| (duration > 0.0).then_some(duration));
-            let mut result = json!({
-                "id":library_id(&format!("{prefix}#track{}", track.number)),
-                "filePath":format!("{prefix}#track{:02}", track.number),
-                "trackName":if track.title.is_empty() { format!("Track {:02}", track.number) } else { track.title.clone() },
-                "artistName":prefer(prefer(&track.performer, &sheet.performer), "Unknown Artist"),
-                "albumName":prefer(&sheet.title, "Unknown Album"), "scannedAt":scan_time,
-                "hasLyrics":false,"totalTracks":sheet.tracks.len(),"discNumber":1,"totalDiscs":1,
-                "format":format!("cue+{format}"),
-            });
-            for (key, value) in [
-                ("fileModTime", mod_time),
-                ("trackNumber", track.number),
-                (
-                    "duration",
-                    end.map_or(0, |end| (end - track.start_time) as i64),
-                ),
-                ("bitDepth", depth),
-                ("sampleRate", rate),
-            ] {
-                if value != 0 {
-                    result[key] = value.into();
-                }
-            }
-            for (key, value) in [
-                ("albumArtist", sheet.performer.as_str()),
-                ("coverPath", &cover),
-                ("isrc", &track.isrc),
-                ("releaseDate", &sheet.date),
-                ("genre", &sheet.genre),
-                ("composer", prefer(&track.composer, &sheet.composer)),
-            ] {
-                optional(&mut result, key, value);
-            }
-            results.push(result);
-        }
-        Ok(results.into())
+        cue_library_rows(
+            path,
+            sheet,
+            virtual_prefix,
+            mod_time,
+            scan_time,
+            &format,
+            &json!({"bitDepth":depth,"sampleRate":rate,"duration":duration,"coverPath":cover}),
+            check,
+        )
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn cue_library_rows(
+    path: &str,
+    sheet: &CueSheet,
+    virtual_prefix: &str,
+    mod_time: i64,
+    scan_time: &str,
+    format: &str,
+    metadata: &Value,
+    check: &dyn Fn() -> Result<(), String>,
+) -> Result<Value, String> {
+    let prefix = prefer(virtual_prefix, path);
+    let depth = metadata["bitDepth"].as_i64().unwrap_or_default();
+    let rate = metadata["sampleRate"].as_i64().unwrap_or_default();
+    let duration = metadata["duration"].as_f64().unwrap_or_default();
+    let cover = metadata["coverPath"].as_str().unwrap_or_default();
+    let mut results = Vec::with_capacity(sheet.tracks.len());
+    for (index, track) in sheet.tracks.iter().enumerate() {
+        check()?;
+        let end = next_start(sheet, index).or_else(|| (duration > 0.0).then_some(duration));
+        let mut result = json!({
+            "id":library_id(&format!("{prefix}#track{}", track.number)),
+            "filePath":format!("{prefix}#track{:02}", track.number),
+            "trackName":if track.title.is_empty() { format!("Track {:02}", track.number) } else { track.title.clone() },
+            "artistName":prefer(prefer(&track.performer, &sheet.performer), "Unknown Artist"),
+            "albumName":prefer(&sheet.title, "Unknown Album"), "scannedAt":scan_time,
+            "hasLyrics":false,"totalTracks":sheet.tracks.len(),"discNumber":1,"totalDiscs":1,
+            "format":format!("cue+{format}"),
+        });
+        for (key, value) in [
+            ("fileModTime", mod_time),
+            ("trackNumber", track.number),
+            (
+                "duration",
+                end.map_or(0, |end| (end - track.start_time) as i64),
+            ),
+            ("bitDepth", depth),
+            ("sampleRate", rate),
+        ] {
+            if value != 0 {
+                result[key] = value.into();
+            }
+        }
+        for (key, value) in [
+            ("albumArtist", sheet.performer.as_str()),
+            ("coverPath", cover),
+            ("isrc", &track.isrc),
+            ("releaseDate", &sheet.date),
+            ("genre", &sheet.genre),
+            ("composer", prefer(&track.composer, &sheet.composer)),
+        ] {
+            optional(&mut result, key, value);
+        }
+        results.push(result);
+    }
+    Ok(results.into())
 }
 
 fn scan_time() -> String {
@@ -540,6 +609,105 @@ mod tests {
                 Ok(())
             }
         })
+        .unwrap_err();
+        assert_eq!(error, "cancelled");
+        assert_eq!(checks.get(), 2);
+    }
+
+    #[test]
+    fn resolved_cue_metadata_scans_without_materializing_audio() {
+        let directory = tempfile::tempdir().unwrap();
+        let data = directory.path().join("data");
+        let backend = Backend::new(
+            &directory.path().join("sources"),
+            &data,
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "1",
+            crate::RuntimeLimits::default(),
+        )
+        .unwrap();
+        let path = data.join("album.cue");
+        std::fs::write(&path, CUE).unwrap();
+        let prefix = "content://example.documents/document/album.cue";
+        let metadata = json!({
+            "bitDepth": 24, "sampleRate": 96000, "duration": 367.75,
+            "coverPath": "cached-cover.jpg",
+        });
+        let result = backend
+            .scan_cue_file_for_library_with_metadata(
+                path.to_str().unwrap(),
+                "album.flac",
+                &metadata.to_string(),
+                prefix,
+                123,
+                "scan-time",
+                &|| Ok(()),
+            )
+            .unwrap();
+        assert_eq!(result.as_array().unwrap().len(), 2);
+        assert_eq!(result[0]["filePath"], format!("{prefix}#track01"));
+        assert_eq!(result[0]["duration"], 180);
+        assert_eq!(result[1]["duration"], 185);
+        assert_eq!(result[1]["artistName"], "Album Artist");
+        assert_eq!(result[1]["bitDepth"], 24);
+        assert_eq!(result[1]["sampleRate"], 96000);
+        assert_eq!(result[1]["format"], "cue+flac");
+        assert_eq!(result[1]["coverPath"], "cached-cover.jpg");
+        assert_eq!(result[1]["fileModTime"], 123);
+        assert_eq!(result[1]["scannedAt"], "scan-time");
+        assert!(!data.join("album.flac").exists());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), CUE);
+        assert_eq!(
+            backend
+                .scan_cue_file_for_library_with_metadata(
+                    path.to_str().unwrap(),
+                    "album.flac",
+                    "[]",
+                    prefix,
+                    123,
+                    "scan-time",
+                    &|| Ok(()),
+                )
+                .unwrap_err(),
+            "invalid resolved CUE audio metadata"
+        );
+        assert_eq!(
+            backend
+                .scan_cue_file_for_library_with_metadata(
+                    path.to_str().unwrap(),
+                    "album.flac",
+                    &metadata.to_string(),
+                    prefix,
+                    123,
+                    "scan-time",
+                    &|| Err("cancelled".into()),
+                )
+                .unwrap_err(),
+            "cancelled"
+        );
+    }
+
+    #[test]
+    fn cue_library_mapping_checks_cancellation_per_track() {
+        let sheet = cue::parse(&mut Cursor::new(CUE), &|| Ok(())).unwrap();
+        let checks = Cell::new(0);
+        let error = cue_library_rows(
+            "album.cue",
+            &sheet,
+            "opaque-cue",
+            123,
+            "scan-time",
+            "flac",
+            &json!({}),
+            &|| {
+                checks.set(checks.get() + 1);
+                if checks.get() == 2 {
+                    Err("cancelled".into())
+                } else {
+                    Ok(())
+                }
+            },
+        )
         .unwrap_err();
         assert_eq!(error, "cancelled");
         assert_eq!(checks.get(), 2);

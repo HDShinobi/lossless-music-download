@@ -31,6 +31,7 @@ pub struct DownloadRequest {
     pub quality: String,
     pub embed_metadata: bool,
     pub artist_tag_mode: String,
+    pub metadata_separators: Option<std::collections::BTreeMap<String, String>>,
     pub embed_lyrics: bool,
     pub embed_replaygain: bool,
     pub post_processing_enabled: bool,
@@ -64,7 +65,7 @@ pub struct DownloadRequest {
     pub network_concurrency_limit: i64,
 }
 
-crate::lyrics::json::go_deserialize!(DownloadRequest {
+crate::json::lenient_deserialize!(DownloadRequest {
     "contract_version" => contract_version, "isrc" => isrc, "service" => service,
     "download_provider" => download_provider, "provider_track_id" => provider_track_id,
     "spotify_id" => spotify_id, "track_name" => track_name, "artist_name" => artist_name,
@@ -73,6 +74,7 @@ crate::lyrics::json::go_deserialize!(DownloadRequest {
     "album_folder_template" => album_folder_template, "output_path" => output_path,
     "output_fd" => output_fd, "output_ext" => output_ext, "filename_format" => filename_format,
     "quality" => quality, "embed_metadata" => embed_metadata, "artist_tag_mode" => artist_tag_mode,
+    "metadata_separators" => metadata_separators,
     "embed_lyrics" => embed_lyrics, "embed_replaygain" => embed_replaygain,
     "post_processing_enabled" => post_processing_enabled, "track_number" => track_number,
     "playlist_position" => playlist_position, "disc_number" => disc_number,
@@ -140,6 +142,16 @@ impl DownloadState {
             let _ = self.progress.remove(id);
         }
         Ok(ids)
+    }
+
+    /// The application's bulk cancel/clear operation. Cancellation includes
+    /// queued sentinels; progress cleanup is best effort even during shutdown.
+    pub fn cancel_many(&self, ids: &[String]) -> Result<(), CancellationError> {
+        let cancelled = self
+            .cancellation
+            .cancel_many(ids.iter().map(String::as_str));
+        let _ = self.progress.remove_many(ids.iter().map(String::as_str));
+        cancelled
     }
 
     pub fn shutdown(&self) {

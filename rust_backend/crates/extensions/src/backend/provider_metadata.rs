@@ -1,8 +1,10 @@
+//! Backend entry points for provider metadata: URL handling, custom search, home feeds, and lookups.
+
 use super::{Backend, ManagerError};
+use mornye_core::cancellation::{CancellationDomain, CancellationRegistry, RequestLease};
+use mornye_core::matching::lowercase;
+use mornye_providers::resolver::{Check, ResolverError};
 use serde_json::{Map, Value, json};
-use spotiflac_core::cancellation::{CancellationDomain, CancellationRegistry, RequestLease};
-use spotiflac_core::matching::lowercase;
-use spotiflac_providers::resolver::{Check, ResolverError};
 use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
@@ -17,11 +19,10 @@ impl Backend {
             .find_url_handler(url)
             .map_err(|error| error.to_string())?
             .ok_or_else(|| format!("no extension found to handle URL: {url}"))?;
-        let raw = self
+        let value = self
             .manager
-            .provider_call(&id, "handleUrl", &json!([url]).to_string(), None, 30_000)
+            .provider_call_value(&id, "handleUrl", &json!([url]).to_string(), None, 30_000)
             .map_err(|error| error.to_string())?;
-        let value: Value = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
         let mut result = strings(
             &value,
             &[
@@ -125,9 +126,9 @@ impl Backend {
     ) -> Result<String, String> {
         let _operation = self.enter()?;
         let options = serde_json::from_str::<Map<String, Value>>(options_json).unwrap_or_default();
-        let raw = self
+        let values = self
             .manager
-            .provider_call(
+            .provider_call_value(
                 id,
                 "customSearch",
                 &json!([query, options]).to_string(),
@@ -135,7 +136,50 @@ impl Backend {
                 30_000,
             )
             .map_err(|error| error.to_string())?;
-        let values: Vec<Value> = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+        let values = values.as_array().expect("validated custom search array");
+        let normalized = values
+            .iter()
+            .map(|value| {
+                self.check()?;
+                if let Some(lease) = &lease {
+                    lease.check_active().map_err(|error| error.to_string())?;
+                }
+                Ok(track(value, "", 0))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        serde_json::to_string(&normalized).map_err(|error| error.to_string())
+    }
+
+    /// Songs like the tracks in [seeds_json] (most important first) from an
+    /// extension with the `relatedTracks` capability; [options_json] holds
+    /// `limit` (1 to 50, 25 by default).
+    pub fn get_extension_related_tracks_json(
+        &self,
+        id: &str,
+        seeds_json: &str,
+        options_json: &str,
+        lease: Option<Arc<RequestLease>>,
+    ) -> Result<String, String> {
+        let _operation = self.enter()?;
+        let seeds = serde_json::from_str::<Vec<Value>>(seeds_json)
+            .map_err(|error| format!("invalid related track seeds: {error}"))?;
+        let options = serde_json::from_str::<Map<String, Value>>(options_json).unwrap_or_default();
+        let limit = options
+            .get("limit")
+            .and_then(Value::as_u64)
+            .unwrap_or(25)
+            .clamp(1, 50);
+        let values = self
+            .manager
+            .provider_call_value(
+                id,
+                "getRelatedTracks",
+                &json!([seeds, {"limit": limit}]).to_string(),
+                lease.clone(),
+                30_000,
+            )
+            .map_err(|error| error.to_string())?;
+        let values = values.as_array().expect("validated related tracks array");
         let normalized = values
             .iter()
             .map(|value| {
@@ -207,9 +251,9 @@ impl Backend {
         arguments: &str,
         check: &Check<'_>,
     ) -> Result<Value, ResolverError> {
-        self.metadata_provider_work(check, |lease| {
+        self.metadata_provider_work_result(check, |lease| {
             self.manager
-                .provider_call(id, method, arguments, Some(lease), 30_000)
+                .provider_call_value(id, method, arguments, Some(lease), 30_000)
         })
     }
 
@@ -222,7 +266,7 @@ impl Backend {
         serde_json::from_str(&result).map_err(|error| ResolverError::Failed(error.to_string()))
     }
 
-    fn metadata_provider_work_result<T: Send>(
+    pub(super) fn metadata_provider_work_result<T: Send>(
         &self,
         check: &Check<'_>,
         work: impl FnOnce(Arc<RequestLease>) -> Result<T, ManagerError> + Send,

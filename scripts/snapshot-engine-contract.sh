@@ -10,7 +10,7 @@ case "${1:-}" in
   ''|--check) ;;
   *) echo "Usage: $0 [--check]" >&2; exit 2 ;;
 esac
-BINDINGS="rust_backend/target/bindings/kotlin/com/spotiflac/backend/spotiflac_mobile.kt"
+BINDINGS="rust_backend/target/bindings/kotlin/com/mornye/backend/mornye_mobile.kt"
 if [[ ! -f "$BINDINGS" ]]; then
   echo 'ERROR: Kotlin bindings missing. Run (cd android && ./gradlew :app:buildRustBackend).' >&2
   exit 2
@@ -26,7 +26,7 @@ import sys
 bindings = Path(sys.argv[1]).read_text()
 app = Path('android/app/src/main/kotlin/xyz/losslessmusic/app')
 sources = [p.read_text() for p in sorted(app.rglob('*.kt'))]
-sources = [s for s in sources if re.search(r'^import com\.spotiflac\.backend\.', s, re.M)]
+sources = [s for s in sources if re.search(r'^import com\.mornye\.backend\.', s, re.M)]
 # Only declaration signatures, never generated FFI/lowering functions. Keep the
 # owner internally to disambiguate names shared by several UniFFI objects.
 methods = {}
@@ -54,7 +54,7 @@ receivers = {}
 assignments = []
 for source in sources:
     source = re.sub(r'/\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"', '', source, flags=re.S)
-    imported = set(re.findall(r'^import com\.spotiflac\.backend\.(\w+)', source, re.M))
+    imported = set(re.findall(r'^import com\.mornye\.backend\.(\w+)', source, re.M))
     owners.update(imported)
     calls.update(re.findall(r'(\w+)\s*\.\s*`?(\w+)`?\s*\(', source))
     constructors.update(name for name in imported if re.search(r'\b' + name + r'\s*\(', source))

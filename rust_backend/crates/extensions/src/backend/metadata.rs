@@ -1,10 +1,12 @@
+//! Backend metadata options and operations: language and region settings, caches, and Deezer lookups.
+
 use super::Backend;
+use mornye_core::metadata::TrackMetadata;
+use mornye_providers::deezer::MetadataLookup;
+use mornye_providers::musicbrainz::MusicBrainzOptions;
+use mornye_providers::resolver::{Check, ResolverError, ResolverOptions};
 use serde::Serialize;
 use serde_json::{Value, json};
-use spotiflac_core::metadata::TrackMetadata;
-use spotiflac_providers::deezer::MetadataLookup;
-use spotiflac_providers::musicbrainz::MusicBrainzOptions;
-use spotiflac_providers::resolver::{Check, ResolverError, ResolverOptions};
 use std::time::{Duration, Instant};
 
 /// Trusted native configuration, never extension arguments or persisted settings.
@@ -106,23 +108,6 @@ impl Backend {
     pub fn clear_track_id_cache(&self) -> Result<(), String> {
         let _operation = self.enter()?;
         Ok(())
-    }
-
-    pub fn search_deezer(
-        &self,
-        query: &str,
-        track_limit: isize,
-        artist_limit: isize,
-        filter: &str,
-        check: &Check<'_>,
-    ) -> Result<String, String> {
-        self.metadata_operation(30, check, |check| {
-            encode(
-                self.deezer
-                    .search_all(query, track_limit, artist_limit, filter, check)?
-                    .as_ref(),
-            )
-        })
     }
 
     pub(super) fn deezer_metadata(
@@ -235,14 +220,21 @@ mod tests {
     use super::*;
     use crate::RuntimeLimits;
     use crate::environment::ExtensionEnvironment;
-    use spotiflac_network::{NetworkOptions, NetworkService};
+    use mornye_network::{NetworkOptions, NetworkService};
     use std::io::{BufRead, BufReader, ErrorKind, Write};
     use std::net::TcpListener;
     use std::sync::{Arc, mpsc};
     use std::thread;
 
-    #[test]
-    fn isrc_http_cancellation_does_not_cancel_another_item() {
+    type FakeDeezer = (
+        TcpListener,
+        Arc<rustls::ServerConfig>,
+        Arc<Backend>,
+        tempfile::TempDir,
+    );
+
+    /// A backend whose Deezer requests reach a local TLS listener.
+    fn fake_deezer() -> FakeDeezer {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         listener.set_nonblocking(true).unwrap();
         let certificate = rcgen::generate_simple_self_signed(vec!["127.0.0.1".into()]).unwrap();
@@ -289,6 +281,90 @@ mod tests {
             )
             .unwrap(),
         );
+        (listener, config, backend, root)
+    }
+
+    #[test]
+    fn an_unplayable_isrc_match_gives_way_to_a_playable_release() {
+        let (listener, config, backend, _root) = fake_deezer();
+        let isrc = "JPAAA8300060";
+        let worker = {
+            let owner = backend.clone();
+            thread::spawn(move || owner.search_deezer_by_isrc_for_item_id(isrc, "", &|| Ok(())))
+        };
+        let track = |id: i64, isrc: &str, readable: bool, album: &str| {
+            format!(
+                r#"{{"id":{id},"title":"Song","duration":265,"isrc":"{isrc}","readable":{readable},"artist":{{"id":2,"name":"Singer"}},"album":{{"id":{id},"title":"{album}"}}}}"#
+            )
+        };
+        let mut paths = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !worker.is_finished() && Instant::now() < deadline {
+            let stream = match listener.accept() {
+                Ok((stream, _)) => stream,
+                Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(1));
+                    continue;
+                }
+                Err(error) => panic!("{error}"),
+            };
+            stream.set_nonblocking(false).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut stream = rustls::StreamOwned::new(
+                rustls::ServerConnection::new(config.clone()).unwrap(),
+                stream,
+            );
+            let mut reader = BufReader::new(&mut stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            let path = line.split(' ').nth(1).unwrap().to_owned();
+            loop {
+                line.clear();
+                assert!(reader.read_line(&mut line).unwrap() > 0);
+                if line == "\r\n" {
+                    break;
+                }
+            }
+            let body = if path == format!("/2.0/track/isrc:{isrc}") {
+                track(1, isrc, false, "Withdrawn Best Of")
+            } else if path.starts_with("/2.0/search/track?q=Singer+Song") {
+                // The unplayable match itself, an unplayable cover and two
+                // playable releases, only the second of the same recording.
+                format!(
+                    r#"{{"data":[{},{},{},{}]}}"#,
+                    track(1, "", false, "Withdrawn Best Of"),
+                    track(2, "", false, "Covers"),
+                    track(3, "", true, "Live"),
+                    track(4, "", true, "Original Album"),
+                )
+            } else if path == "/2.0/track/3" {
+                track(3, "JPAAA9900001", true, "Live")
+            } else if path == "/2.0/track/4" {
+                track(4, &isrc.to_lowercase(), true, "Original Album")
+            } else {
+                panic!("unexpected request: {path}");
+            };
+            paths.push(path);
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+            stream.flush().unwrap();
+        }
+        let result: Value = serde_json::from_str(&worker.join().unwrap().unwrap()).unwrap();
+        assert_eq!(result["track_id"], "4");
+        assert_eq!(result["album_name"], "Original Album");
+        assert_eq!(paths.len(), 4, "{paths:?}");
+        backend.shutdown_checked().unwrap();
+    }
+
+    #[test]
+    fn isrc_http_cancellation_does_not_cancel_another_item() {
+        let (listener, config, backend, _root) = fake_deezer();
         let start = |isrc: &'static str, item: &'static str| {
             let owner = backend.clone();
             let (finished, completion) = mpsc::channel();

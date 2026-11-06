@@ -12,6 +12,7 @@ mod reenrich;
 mod share;
 mod tags;
 
+pub use cover::{LIBRARY_COVER_REGENERATE_MARKER, library_cover_is_current, library_cover_stem};
 pub use lyrics::LyricsRequest;
 pub use metadata::MetadataOptions;
 
@@ -19,11 +20,11 @@ use crate::RuntimeLimits;
 use crate::environment::ExtensionEnvironment;
 use crate::lyrics::InstalledLyricsFetcher;
 use crate::manager::{ExtensionManager, ManagerError};
-use spotiflac_core::lyrics::config::{self, FetchOptions};
-use spotiflac_providers::deezer::DeezerClient;
-use spotiflac_providers::lyrics::{LyricsService, builtin::BuiltinLyricsClient};
-use spotiflac_providers::musicbrainz::MusicBrainzClient;
-use spotiflac_providers::resolver::{PlatformResolverChain, availability::AvailabilityService};
+use mornye_core::lyrics::config::{self, FetchOptions};
+use mornye_providers::deezer::DeezerClient;
+use mornye_providers::lyrics::{LyricsService, builtin::BuiltinLyricsClient};
+use mornye_providers::musicbrainz::MusicBrainzClient;
+use mornye_providers::resolver::{PlatformResolverChain, availability::AvailabilityService};
 use std::ops::Deref;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -225,6 +226,10 @@ impl Backend {
             .cleanup_connections()
             .map_err(|error| error.to_string())?;
         if under_pressure {
+            self.manager
+                .environment()
+                .clear_isrc_cache()
+                .map_err(|error| error.to_string())?;
             self.cover.clear();
             self.lyrics
                 .drop_memory()

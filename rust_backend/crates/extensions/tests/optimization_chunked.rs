@@ -1,8 +1,8 @@
 #![cfg(unix)]
+use mornye_core::cancellation::{CancellationDomain, CancellationRegistry};
+use mornye_extensions::RuntimeLimits;
+use mornye_extensions::environment::ExtensionEnvironment;
 use serde_json::{Value, json};
-use spotiflac_core::cancellation::{CancellationDomain, CancellationRegistry};
-use spotiflac_extensions::RuntimeLimits;
-use spotiflac_extensions::environment::ExtensionEnvironment;
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
@@ -33,6 +33,9 @@ fn respond(stream: &mut TcpStream, head: &str, body: &[u8]) -> std::io::Result<(
 /// Serves byte ranges over keep-alive HTTP/1.1. `/busy` answers the first
 /// ranged chunk (after the two-byte probe) with a small retryable 503 body.
 fn connection(mut stream: TcpStream, stop: &AtomicBool, busy: &AtomicBool) {
+    // Keep the fixture's 3 ms body delay independent of Nagle/delayed ACK,
+    // which can exceed the client's bounded drain on Linux runners.
+    stream.set_nodelay(true).unwrap();
     stream
         .set_read_timeout(Some(Duration::from_millis(25)))
         .unwrap();

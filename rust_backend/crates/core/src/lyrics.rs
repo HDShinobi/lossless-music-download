@@ -10,6 +10,7 @@ pub mod matching;
 pub mod models;
 pub mod payloads;
 
+use crate::json::lenient_deserialize;
 use serde::{Deserialize, Serialize};
 
 /// HTTP providers use Go's streaming JSON decoder: decode the first value,
@@ -49,7 +50,7 @@ pub struct LyricsWord {
     pub end_time_ms: i64,
 }
 
-json::go_deserialize!(LyricsWord {
+lenient_deserialize!(LyricsWord {
     "text" => text,
     "starttimems" => start_time_ms,
     "endtimems" => end_time_ms,
@@ -69,7 +70,7 @@ pub struct LyricsLine {
     pub translation: Option<String>,
 }
 
-json::go_deserialize!(LyricsLine {
+lenient_deserialize!(LyricsLine {
     "starttimems" => start_time_ms,
     "words" => words,
     "endtimems" => end_time_ms,
@@ -90,7 +91,7 @@ pub struct LyricsResponse {
     pub source: String,
 }
 
-json::go_deserialize!(LyricsResponse {
+lenient_deserialize!(LyricsResponse {
     "lines" => lines,
     "synctype" => sync_type,
     "instrumental" => instrumental,
@@ -113,6 +114,19 @@ impl LyricsResponse {
                 .any(|line| !line.words.trim().is_empty())
     }
 
+    pub fn is_synced(&self) -> bool {
+        self.sync_type == "LINE_SYNCED" && lrc::has_usable_timing(self.lines())
+    }
+
+    pub fn normalize_timing(&mut self) {
+        if self.sync_type == "LINE_SYNCED" && !self.is_synced() {
+            self.sync_type = "UNSYNCED".into();
+            if !self.lines().is_empty() {
+                self.plain_lyrics = lrc::untimed_text(self.lines());
+            }
+        }
+    }
+
     pub fn from_text(text: &str, provider: &str, source: &str) -> Self {
         let mut result = Self {
             provider: provider.into(),
@@ -128,6 +142,7 @@ impl LyricsResponse {
             result.sync_type = "UNSYNCED".into();
             result.plain_lyrics = text.into();
         }
+        result.normalize_timing();
         result
     }
 }

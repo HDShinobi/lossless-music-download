@@ -1,8 +1,8 @@
 package xyz.losslessmusic.app.engine
 
-import com.zarz.spotiflac.FFmpegRunner
-import com.zarz.spotiflac.RunningFFmpeg
-import com.zarz.spotiflac.runCancellable
+import com.zarz.mornye.FFmpegRunner
+import com.zarz.mornye.RunningFFmpeg
+import com.zarz.mornye.runCancellable
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -59,6 +59,6 @@ class EngineShimsTest {
     }
 
     @Test fun buildConfigAliasMatchesApp() {
-        assertEquals(xyz.losslessmusic.app.BuildConfig.APPLICATION_ID, com.zarz.spotiflac.BuildConfig.APPLICATION_ID)
+        assertEquals(xyz.losslessmusic.app.BuildConfig.APPLICATION_ID, com.zarz.mornye.BuildConfig.APPLICATION_ID)
     }
 }

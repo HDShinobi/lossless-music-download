@@ -1,5 +1,7 @@
+//! Extension manager provider selection: priorities, fallback providers, and URL handler lookup.
+
 use super::*;
-use spotiflac_core::matching::lowercase;
+use mornye_core::matching::lowercase;
 use std::collections::BTreeSet;
 use std::sync::TryLockError;
 use std::time::Duration;
@@ -19,7 +21,7 @@ impl ExtensionManager {
     pub(crate) fn share_providers(
         &self,
         source_id: &str,
-    ) -> Result<Vec<spotiflac_core::metadata::share::Provider>, ManagerError> {
+    ) -> Result<Vec<mornye_core::metadata::share::Provider>, ManagerError> {
         self.check()?;
         Ok(self
             .entries
@@ -33,7 +35,7 @@ impl ExtensionManager {
                     && status.enabled
                     && status.error.is_empty()
             })
-            .map(|entry| spotiflac_core::metadata::share::Provider {
+            .map(|entry| mornye_core::metadata::share::Provider {
                 id: entry.manifest.name.clone(),
                 display_name: entry.manifest.display_name.clone(),
                 source_dir: entry.source.to_string_lossy().into_owned(),
@@ -201,7 +203,7 @@ impl ExtensionManager {
             .map(|value| value.to_string())
     }
 
-    fn provider_operation_value(
+    pub(super) fn provider_operation_value(
         &self,
         id: &str,
         method: &str,
@@ -233,6 +235,8 @@ impl ExtensionManager {
                     .is_some_and(|config| config.enabled && !config.patterns.is_empty()))
                 .then_some("does not support URL handling"),
                 "getHomeFeed" => None,
+                "getRelatedTracks" => (!manifest.has_capability("relatedTracks"))
+                    .then_some("does not suggest related tracks"),
                 _ => return Err(error(format!("unsupported provider method: {method}"))),
             };
         if let Some(requirement) = requirement {
@@ -310,6 +314,7 @@ impl ExtensionManager {
             }
             let kind = match method {
                 "searchTracks" | "customSearch" => "search result",
+                "getRelatedTracks" => "related tracks",
                 "getAlbum" => "album",
                 "getPlaylist" => "playlist",
                 "getArtist" => "artist",
@@ -331,7 +336,7 @@ impl ExtensionManager {
             }
         }
         if value.is_null() {
-            return if method == "customSearch" {
+            return if method == "customSearch" || method == "getRelatedTracks" {
                 Ok(json!([]))
             } else if method == "handleUrl" {
                 Err(error("handleUrl returned null - URL not recognized"))
@@ -343,7 +348,7 @@ impl ExtensionManager {
             "getTrack" => stamp(&mut value, id),
             "getAlbum" | "getPlaylist" => stamp_album(&mut value, id),
             "searchTracks" => stamp_tracks(&mut value["tracks"], id),
-            "customSearch" => stamp_tracks(&mut value, id),
+            "customSearch" | "getRelatedTracks" => stamp_tracks(&mut value, id),
             "getArtist" => {
                 // Go stamps releases here; albums/top tracks keep their supplied
                 // provider fields until URL handling performs recursive stamping.

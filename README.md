@@ -123,11 +123,17 @@ The signed APK lands in `build/app/outputs/flutter-apk/`.
 This is a **personal, non-commercial project for research and educational purposes**. It is not
 affiliated with any music service, **hosts no music, and ships with no sources**. Any content is
 provided by extensions the user chooses to install. The `rust_backend/` engine is vendored from
-SpotiFLAC (MIT), with minimal registered divergences to ease upstream syncs.
+[Mornye](https://github.com/mornyeapp/Mornye) (formerly SpotiFLAC), with minimal registered
+divergences to ease upstream syncs.
 
 ## 📄 License
 
-Released under the [MIT License](LICENSE).
+The app (everything outside `rust_backend/`) is released under the [MIT License](LICENSE).
+
+The vendored `rust_backend/` engine is licensed under the
+[GNU LGPL v3.0](LICENSE-LGPL-3.0) by its upstream authors; our changes to it are marked with
+`LM-FORK(<id>)` and released under the same license. Third-party notices for the engine are in
+[`rust_backend/NOTICE`](rust_backend/NOTICE).
 
 ---
 

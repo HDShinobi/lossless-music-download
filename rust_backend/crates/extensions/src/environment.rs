@@ -13,13 +13,13 @@ use crate::storage::{
     ExtensionStore, StorageError, StorageMasterKey, StoreKind, valid_extension_id,
 };
 use crate::{ExtensionError, ExtensionRuntime, ExtensionServices, RuntimeLimits};
+use mornye_core::app_version::AppVersion;
+use mornye_core::cancellation::{CancellationDomain, CancellationRegistry};
+use mornye_core::downloads::DownloadState;
+use mornye_core::progress::ProgressRegistry;
+use mornye_network::{NetworkService, policy::NetworkPermissions};
+use mornye_providers::lyrics::{CallGraph, CallNode, LyricsService};
 use serde_json::{Map, Value};
-use spotiflac_core::app_version::AppVersion;
-use spotiflac_core::cancellation::{CancellationDomain, CancellationRegistry};
-use spotiflac_core::downloads::DownloadState;
-use spotiflac_core::progress::ProgressRegistry;
-use spotiflac_network::{NetworkService, policy::NetworkPermissions};
-use spotiflac_providers::lyrics::{CallGraph, CallNode, LyricsService};
 use std::cmp::Ordering as Comparison;
 use std::collections::BTreeMap;
 use std::fs;
@@ -40,6 +40,10 @@ pub(crate) static SUPPORTED_RUNTIME_FEATURES: LazyLock<BTreeMap<String, isize>> 
             ("downloadSegments", 1),
             ("patternedFileTransform", 1),
             ("preparedContext", 1),
+            ("accountForms", 1),
+            ("accountDownloadMode", 1),
+            ("directMedia", 1),
+            ("deferredPreview", 1),
         ]
         .into_iter()
         .map(|(name, version)| (name.to_owned(), version))
@@ -75,11 +79,11 @@ struct State {
 }
 
 /// The master key comes from the native Keychain/Keystore adapter. The directory
-/// must belong to this backend; Go and Rust must not concurrently own live data.
+/// must belong to this backend, which is the only owner of the live data.
 pub struct ExtensionEnvironment {
     logs: Arc<crate::logging::LogBuffer>,
     ffmpeg: Arc<crate::ffmpeg::CommandRegistry>,
-    downloads: Arc<spotiflac_core::downloads::DownloadState>,
+    downloads: Arc<mornye_core::downloads::DownloadState>,
     data_directory: PathBuf,
     data_directory_alias: PathBuf,
     master_key: Arc<StorageMasterKey>,
@@ -88,7 +92,7 @@ pub struct ExtensionEnvironment {
     auth: Arc<AuthRegistry>,
     sessions: Arc<SignedRegistry>,
     files: Arc<crate::files::FileRegistry>,
-    isrc: Arc<spotiflac_core::isrc::IndexCache>,
+    isrc: Arc<mornye_core::isrc::IndexCache>,
     closed: Arc<AtomicBool>,
     state: Mutex<State>,
     idle: Condvar,
@@ -135,7 +139,7 @@ impl ExtensionEnvironment {
         let data_directory_alias =
             crate::files::clean(&std::path::absolute(data_directory).map_err(StorageError::from)?);
         let data_directory = fs::canonicalize(data_directory).map_err(StorageError::from)?;
-        let auth = Arc::new(AuthRegistry::default());
+        let auth = Arc::new(AuthRegistry::persistent(&data_directory, &master_key));
         let sessions = SignedRegistry::new(&data_directory, Arc::clone(&auth));
         Ok(Self {
             logs: Arc::new(crate::logging::LogBuffer::default()),
@@ -155,7 +159,7 @@ impl ExtensionEnvironment {
             auth,
             sessions,
             files: Arc::new(crate::files::FileRegistry::default()),
-            isrc: Arc::new(spotiflac_core::isrc::IndexCache::default()),
+            isrc: Arc::new(mornye_core::isrc::IndexCache::default()),
             closed: Arc::new(AtomicBool::new(false)),
             state: Mutex::default(),
             idle: Condvar::new(),
@@ -219,11 +223,9 @@ impl ExtensionEnvironment {
     pub fn set_network_compatibility_options(
         &self,
         allow_http: bool,
-        insecure_tls: bool,
     ) -> Result<(), EnvironmentError> {
         let _operation = self.enter()?;
-        self.network
-            .set_network_compatibility_options(allow_http, insecure_tls);
+        self.network.set_network_compatibility_options(allow_http);
         Ok(())
     }
 
@@ -299,7 +301,7 @@ impl ExtensionEnvironment {
         source: &str,
         limits: RuntimeLimits,
         mode: LoadMode,
-        lease: Option<Arc<spotiflac_core::cancellation::RequestLease>>,
+        lease: Option<Arc<mornye_core::cancellation::RequestLease>>,
     ) -> Result<Arc<ExtensionRuntime>, EnvironmentError> {
         self.load_internal(manifest_json, source, limits, mode, None, lease)
     }
@@ -328,7 +330,7 @@ impl ExtensionEnvironment {
         limits: RuntimeLimits,
         load_mode: LoadMode,
         primary: Option<&ExtensionRuntime>,
-        startup_lease: Option<Arc<spotiflac_core::cancellation::RequestLease>>,
+        startup_lease: Option<Arc<mornye_core::cancellation::RequestLease>>,
     ) -> Result<Arc<ExtensionRuntime>, EnvironmentError> {
         let _operation = self.enter()?;
         if manifest_json.len() > 1024 * 1024 {
@@ -590,7 +592,7 @@ impl ExtensionEnvironment {
         Arc::clone(&self.ffmpeg)
     }
 
-    pub fn download_state(&self) -> Arc<spotiflac_core::downloads::DownloadState> {
+    pub fn download_state(&self) -> Arc<mornye_core::downloads::DownloadState> {
         Arc::clone(&self.downloads)
     }
 
@@ -728,5 +730,26 @@ pub fn compare_versions(first: &str, second: &str) -> Comparison {
         if !result.is_eq() {
             return result;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deferred_preview_extensions_require_this_app_build() {
+        let manifest = ExtensionManifest::parse(
+            &serde_json::json!({
+                "name":"generic-media","version":"1.0.0","description":"Generic fixture",
+                "type":["metadata_provider"],"minAppVersion":"5.3.0",
+                "requiredRuntimeFeatures":["deferredPreview@1"]
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert!(validate_gates(&manifest, "5.3.0", &SUPPORTED_RUNTIME_FEATURES).is_ok());
+        let without = BTreeMap::new();
+        assert!(validate_gates(&manifest, "5.3.0", &without).is_err());
     }
 }

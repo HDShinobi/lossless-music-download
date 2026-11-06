@@ -1,7 +1,11 @@
-# Upstream Inheritance & Sync — SpotiFLAC
+# Upstream Inheritance & Sync — Mornye (formerly SpotiFLAC)
 
 This fork **inherits** the Rust engine from
-[SpotiFLAC-Mobile](https://github.com/spotiflacapp/SpotiFLAC-Mobile). The goal
+[Mornye](https://github.com/mornyeapp/Mornye), the renamed SpotiFLAC-Mobile
+(renamed in v5.2.5–v5.2.6: crates `spotiflac-*` → `mornye-*`, UniFFI package
+`com.mornye.backend`, Kotlin package `com.zarz.mornye`, callback scheme
+`mornye://`). Since **v5.2.6 the engine is LGPL-3.0-only** (was MIT); see
+[`LICENSE-LGPL-3.0`](../LICENSE-LGPL-3.0) and the README license section. The goal
 is to absorb upstream updates with minimal effort. This doc is the single
 source of truth for *what we inherit, what we changed, and how to sync*.
 
@@ -16,11 +20,12 @@ source of truth for *what we inherit, what we changed, and how to sync*.
 | | |
 | --- | --- |
 | Baseline tag | `vendor/spotiflac-base` |
-| Synced to | **v5.0.7** (commit `19cb7033`) — Rust engine (`rust_backend/`) |
+| Synced to | **v5.3.1** (commit `e7a8f754`) — Rust engine (`rust_backend/`) |
 | Engine | Rust only since phase 5 (2026-10); Go rollback details below. |
-| Upstream remote | `upstream` → `https://github.com/spotiflacapp/SpotiFLAC-Mobile.git` |
-| Last sync | 2026-10-08 (v5.0.6 → v5.0.7, 52 files in inherited paths). Engine: library scan pause/resume and perf, artist tag mode, library cover thumbnails, chunked-download optimizations, and `fe88048d` (retire native bridge entry points upstream Dart no longer calls). That commit removed UniFFI `checkIsrcExists`/`addToIsrcIndex` and `scanLibraryFolder`, which our glue used: the ISRC pair is restored by owned fork `isrc-index-bridge` over the `IndexCache` upstream still keeps (JS SDK + post-download indexing); `scanLibraryFolder` now calls `scanLibraryFolderIncremental(folder, "{}")` and returns its `scanned` array. `CoreBackend.kt`: `scanLibraryFolder` removed, `pauseLibraryScan`/`resumeLibraryScan` added; nothing of ours implements it. 3-way apply clean, no conflicts; PRs #609/#610 not yet in this release. `SPOTIFLAC_ENGINE_VERSION` 5.0.6 → 5.0.7. WATCHED, not ported: `BackgroundWorkService` (replaces upstream `DownloadService`), SAF scan rework, `NativeFinalizationPolicy`, `platform_bridge.dart` removals. Verified: cargo test 66/66, Gradle buildRustBackend + unit tests + assembleDebug, Flutter 436/436, engine contract refreshed. |
-| Prior sync | 2026-09-29 (v5.0.0 → v5.0.6, 369 files in inherited paths, mostly the newly vendored `rustix-1.1.4` crate). Engine: Hi-Res authenticity check (`core/media/hires`, `mobile/hires.rs`), USB audio transport (`mobile/usb_audio`), lyrics payload/eLRC fixes, tag-writer and ReplayGain-removal work, provider-metadata fixes, and `1d53609b` (avoid blocked `statx` probes on legacy ARM32 devices via vendored rustix). `CoreBackend.kt` gained one interface method (`checkHiResAuthenticity`); nothing of ours implements that interface. **3-way apply clean, no conflicts; both Rust forks (`publish-noreplace-fallback`, `signed-session-mint`) untouched upstream.** `SPOTIFLAC_ENGINE_VERSION` 5.0.0 → 5.0.6. WATCHED, not ported: upstream's own `NativeDownloadFinalizer` fixes (`4c2c3567` mislabeled-MP4 detection, `e61e54f9` metadata prep) — our finalizer path is our own; player features (USB bit-perfect, DSD, AAudio hi-res, home-screen widget), Discord removal, `platform_bridge.dart` additions. Verified: cargo test 68/68, Gradle buildRustBackend + unit tests + assembleDebug, Flutter 433/433. |
+| Upstream remote | `upstream` → `https://github.com/mornyeapp/Mornye.git` (old `spotiflacapp/SpotiFLAC-Mobile` URL redirects; tags can also be fetched from the local clone `../Mornye`) |
+| Last sync | 2026-11-06 (v5.0.7 → v5.3.1, 931 files / +106.8k −7.7k in inherited paths; includes the Mornye rename and the MIT → LGPL-3.0 relicense). New crates `cast`, `desktop`, `link` are in the workspace but only `mornye-mobile` is built for Android. Forks: `signed-session-mint` **retired** — upstream merged it (`on_mint_failure`, PR #610). `publish-noreplace-fallback` **moved** from `files.rs` to `files/unix.rs`: upstream now falls back to `hard_link` when NOREPLACE is unsupported, but Android 9 sdcardfs also rejects `link()`, so our fork keeps a final stat-then-rename step. `isrc-index-bridge` kept (`spotiflac_core` → `mornye_core`). Glue: imports `com.mornye.backend` → `com.mornye.backend`, `com.zarz.spotiflac` → `com.zarz.mornye` (incl. `EngineShims.kt`), `libmornye_mobile`, `MORNYE_RUST_ANDROID_ABIS`, NDK 29 → 30.0.16248370, Rust 1.98.1 → 1.99.1; manifest + `MainActivity` accept `mornye://session-grant` as well as `spotiflac://`. `SPOTIFLAC_ENGINE_VERSION` 5.0.7 → 5.3.1. `cargo test -p mornye-mobile` needs upstream `test/fixtures` (not vendored) — only `-p mornye-extensions` runs here. |
+| Prior sync | 2026-10-08 (v5.0.6 → v5.0.7, 52 files in inherited paths). Engine: library scan pause/resume and perf, artist tag mode, library cover thumbnails, chunked-download optimizations, and `fe88048d` (retire native bridge entry points upstream Dart no longer calls). That commit removed UniFFI `checkIsrcExists`/`addToIsrcIndex` and `scanLibraryFolder`, which our glue used: the ISRC pair is restored by owned fork `isrc-index-bridge` over the `IndexCache` upstream still keeps (JS SDK + post-download indexing); `scanLibraryFolder` now calls `scanLibraryFolderIncremental(folder, "{}")` and returns its `scanned` array. `CoreBackend.kt`: `scanLibraryFolder` removed, `pauseLibraryScan`/`resumeLibraryScan` added; nothing of ours implements it. 3-way apply clean, no conflicts; PRs #609/#610 not yet in this release. `SPOTIFLAC_ENGINE_VERSION` 5.0.6 → 5.0.7. WATCHED, not ported: `BackgroundWorkService` (replaces upstream `DownloadService`), SAF scan rework, `NativeFinalizationPolicy`, `platform_bridge.dart` removals. Verified: cargo test 66/66, Gradle buildRustBackend + unit tests + assembleDebug, Flutter 436/436, engine contract refreshed. |
+| Older sync | 2026-09-29 (v5.0.0 → v5.0.6, 369 files in inherited paths, mostly the newly vendored `rustix-1.1.4` crate). Engine: Hi-Res authenticity check (`core/media/hires`, `mobile/hires.rs`), USB audio transport (`mobile/usb_audio`), lyrics payload/eLRC fixes, tag-writer and ReplayGain-removal work, provider-metadata fixes, and `1d53609b` (avoid blocked `statx` probes on legacy ARM32 devices via vendored rustix). `CoreBackend.kt` gained one interface method (`checkHiResAuthenticity`); nothing of ours implements that interface. **3-way apply clean, no conflicts; both Rust forks (`publish-noreplace-fallback`, `signed-session-mint`) untouched upstream.** `SPOTIFLAC_ENGINE_VERSION` 5.0.0 → 5.0.6. WATCHED, not ported: upstream's own `NativeDownloadFinalizer` fixes (`4c2c3567` mislabeled-MP4 detection, `e61e54f9` metadata prep) — our finalizer path is our own; player features (USB bit-perfect, DSD, AAudio hi-res, home-screen widget), Discord removal, `platform_bridge.dart` additions. Verified: cargo test 68/68, Gradle buildRustBackend + unit tests + assembleDebug, Flutter 433/433. |
 
 > Record **commit** SHAs here, not tag-object SHAs. Upstream re-tags releases —
 > `v4.7.1` resolves to different tag objects in different clones (the old
@@ -36,7 +41,7 @@ tests green** (see protocol below).
 
 | Path | Relationship | Sync policy |
 | --- | --- | --- |
-| `rust_backend/`, `scripts/build_rust_backend.sh`, `android/app/src/main/kotlin/com/zarz/spotiflac/CoreBackend.kt` | **Inherited (Layer 1)** — byte-identical to upstream except registered `LM-FORK(<id>)` blocks | 3-way sync via script; `--check-vendored` guard |
+| `rust_backend/`, `scripts/build_rust_backend.sh`, `android/app/src/main/kotlin/com/zarz/mornye/CoreBackend.kt` | **Inherited (Layer 1)** — byte-identical to upstream except registered `LM-FORK(<id>)` blocks | 3-way sync via script; `--check-vendored` guard |
 | `lib/` | **Ours** — fresh Flutter rebuild (0 files match upstream) | Follow upstream *patterns/contracts*, do NOT merge files |
 | `android/app/src/main/kotlin/xyz/losslessmusic/app/` | **Ours** — Kotlin glue over UniFFI, engine lifecycle, and Android services | Port relevant WATCHED changes by hand; compile Kotlin and check the engine contract |
 | `landing/`, `branding/`, `docs/` | **Ours** — not in upstream | n/a |
@@ -56,15 +61,15 @@ active rows here.
 
 | Fork id | File(s) | What & why | Upstream PR |
 | --- | --- | --- | --- |
-| `LM-FORK(publish-noreplace-fallback)` | `rust_backend/crates/extensions/src/files.rs` | Android 9 sdcardfs can reject `renameat2` `NOREPLACE` with `EINVAL`; on unsupported errors, check the destination without following symlinks and use plain rename only when absent under the caller's destination lock. | Upstream PR: [#609](https://github.com/spotiflacapp/SpotiFLAC-Mobile/pull/609) (open, sent 2026-09-29); retire this fork when a synced release contains it |
-| `LM-FORK(signed-session-mint)` | `rust_backend/crates/extensions/src/signed_session/fetch.rs` | 3 sites + helper, mirroring the Go fork: when challenge minting fails after the session needs re-auth, return `needsVerification` with no URL so the next attempt retries the challenge and extensions reopen verification; preserve cancellation. | Upstream PR: [#610](https://github.com/spotiflacapp/SpotiFLAC-Mobile/pull/610) (open, sent 2026-09-29); retire this fork when a synced release contains it |
+| `LM-FORK(publish-noreplace-fallback)` | `rust_backend/crates/extensions/src/files/unix.rs` | Upstream (v5.3.x) handles NOREPLACE `EINVAL`/`NOSYS`/`OPNOTSUPP`/`NOTSUP` by `hard_link` + unlink. Android 9 sdcardfs rejects `link()` too, so when the link fails with anything but `EEXIST` we check the destination without following symlinks and plain-rename only when absent (caller holds the destination lock). | Upstream PR [#609](https://github.com/spotiflacapp/SpotiFLAC-Mobile/pull/609) superseded by upstream's hard-link fallback; retire if a device test on Android 9 shows `link()` works on sdcardfs |
+| ~~`LM-FORK(signed-session-mint)`~~ | `rust_backend/crates/extensions/src/signed_session/fetch.rs` | Retired 2026-11-06: upstream merged it as `on_mint_failure` (v5.3.x). | [#610](https://github.com/spotiflacapp/SpotiFLAC-Mobile/pull/610) merged |
 | `LM-FORK(isrc-index-bridge)` | `rust_backend/crates/extensions/src/environment.rs`, `rust_backend/crates/mobile/src/lib.rs` (one `mod` line each); owned `environment/lm_isrc_index.rs`, `mobile/src/lm_isrc_index.rs` | Upstream `fe88048d` (v5.0.7) retired UniFFI `checkIsrcExists`/`addToIsrcIndex`; our download duplicate preflight (Dart queue + `DownloadForegroundService`) still uses them. Re-exports both over the `IndexCache` upstream keeps. If upstream deletes `IndexCache`, move the check to Kotlin or a history DB. | Not upstreamable (upstream removed the API on purpose); retire when our duplicate check moves off it |
 
 ### Our shims for inherited files (not forks)
 
 | File | Why |
 | --- | --- |
-| `android/app/src/main/kotlin/xyz/losslessmusic/app/engine/EngineShims.kt` | Declares `com.zarz.spotiflac.NativeDownloadFinalizer.runFFmpegArguments` (our ffmpeg-kit) and `com.zarz.spotiflac.BuildConfig.APPLICATION_ID` so vendored `CoreBackend.kt` compiles unchanged. If upstream changes that contract, the build fails here. |
+| `android/app/src/main/kotlin/xyz/losslessmusic/app/engine/EngineShims.kt` | Declares `com.zarz.mornye.NativeDownloadFinalizer.runFFmpegArguments` (our ffmpeg-kit) and `com.zarz.mornye.BuildConfig.APPLICATION_ID` so vendored `CoreBackend.kt` compiles unchanged. If upstream changes that contract, the build fails here. |
 
 ---
 
@@ -117,12 +122,12 @@ scripts/sync-upstream.sh v5.1.0            # or: scripts/sync-upstream.sh  (= up
 scripts/sync-upstream.sh v5.1.0 --apply
 
 # 3. Resolve conflicts, keeping registered LM-FORK(<id>) intent where needed
-git grep -n '<<<<<<<' -- rust_backend/ scripts/build_rust_backend.sh android/app/src/main/kotlin/com/zarz/spotiflac/CoreBackend.kt
+git grep -n '<<<<<<<' -- rust_backend/ scripts/build_rust_backend.sh android/app/src/main/kotlin/com/zarz/mornye/CoreBackend.kt
 
 # 4. Bump SPOTIFLAC_ENGINE_VERSION in EngineVersion.kt to the target version
 
 # 5. Verify
-(cd rust_backend && cargo test --locked -p spotiflac-extensions)
+(cd rust_backend && cargo test --locked -p mornye-extensions)
 (cd android && ./gradlew :app:buildRustBackend :app:testDebugUnitTest :app:assembleDebug)
 flutter test
 scripts/snapshot-engine-contract.sh --check
@@ -142,7 +147,7 @@ scripts/sync-upstream.sh --check-vendored
 
 [`engine-contract.txt`](engine-contract.txt) snapshots the UniFFI calls made by
 `UniffiRustCore.kt` and any other app-owned Kotlin file importing
-`com.spotiflac.backend`. Each sorted row records the Kotlin name, parameter list
+`com.mornye.backend`. Each sorted row records the Kotlin name, parameter list
 and return type from generated bindings, plus the corresponding Rust `pub fn`
 signature. It includes the cancellation registry constructor and methods on
 returned environment, download state, FFmpeg command, and lease objects.
@@ -176,7 +181,7 @@ snapshot with the sync.
 2. In `initExtensionSystem`, run `EngineDataIsolation.ensureRustCopy(File(ext),
    File(data))` for the one-time Go-era upgrade copy into `engine-rust/`. Pass the
    copied canonical extension and data paths to the factory, followed by the key
-   and `EngineVersion.SPOTIFLAC_ENGINE_VERSION` (currently `"5.0.7"`).
+   and `EngineVersion.SPOTIFLAC_ENGINE_VERSION` (currently `"5.3.1"`).
    `setAppVersion(version)` is intentionally ignored; the fork's app version
    is not supplied to the engine.
 3. `UniffiRustCore.FACTORY` calls

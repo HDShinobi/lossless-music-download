@@ -1,6 +1,6 @@
 package xyz.losslessmusic.app.engine
 
-import com.zarz.spotiflac.requireSuccessfulExtensionAction
+import com.zarz.mornye.requireSuccessfulExtensionAction
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit

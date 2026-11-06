@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# sync-upstream.sh — Pull SpotiFLAC upstream updates into this fork.
+# sync-upstream.sh — Pull Mornye (formerly SpotiFLAC) upstream updates into this fork.
 #
 # Strategy: 3-way diff sync (no shared git history with upstream).
 #   We keep a baseline tag `vendor/spotiflac-base` pointing at the exact
@@ -33,13 +33,13 @@ APPLY=false
 INHERIT_PATHS=(
   rust_backend
   scripts/build_rust_backend.sh
-  android/app/src/main/kotlin/com/zarz/spotiflac/CoreBackend.kt
+  android/app/src/main/kotlin/com/zarz/mornye/CoreBackend.kt
 )
 # Upstream files we do NOT vendor but port from by hand; their diff-stat is
 # reported on every sync so glue changes are not missed.
 WATCH_PATHS=(
   android/app/src/rust/kotlin
-  android/app/src/main/kotlin/com/zarz/spotiflac
+  android/app/src/main/kotlin/com/zarz/mornye
   android/app/build.gradle.kts
   lib/services/platform_bridge.dart
 )
@@ -185,7 +185,7 @@ cat <<EOF
      Keep our LM-FORK(<id>) intent, or take upstream's hunk if it now contains the fix.
   2. Bump SPOTIFLAC_ENGINE_VERSION in $ENGINE_VERSION_FILE to the target version.
   3. Verify:
-       (cd rust_backend && cargo test --locked -p spotiflac-extensions)
+       (cd rust_backend && cargo test --locked -p mornye-extensions)
        (cd android && ./gradlew :app:buildRustBackend :app:testDebugUnitTest :app:assembleDebug)
        flutter test
        scripts/snapshot-engine-contract.sh --check

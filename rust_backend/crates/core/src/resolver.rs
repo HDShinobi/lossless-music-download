@@ -1,6 +1,6 @@
 //! Typed platform-resolver payloads and metadata matching shared with Go.
 
-use crate::lyrics::json::{Update, go_deserialize};
+use crate::json::{Update, lenient_deserialize};
 use crate::lyrics::matching::normalize_loose_artist;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::BTreeMap;
@@ -36,14 +36,14 @@ impl<'de, T: Deserialize<'de>> Update<'de> for Map<T> {
 pub struct Link {
     pub url: String,
 }
-go_deserialize!(Link { "url" => url, });
+lenient_deserialize!(Link { "url" => url, });
 
 #[derive(Clone, Debug, Default)]
 pub struct Entity {
     pub title: String,
     pub artist: String,
 }
-go_deserialize!(Entity { "title" => title, "artistname" => artist, });
+lenient_deserialize!(Entity { "title" => title, "artistname" => artist, });
 
 #[derive(Clone, Debug, Default)]
 pub struct UniTune {
@@ -51,7 +51,7 @@ pub struct UniTune {
     pub links: Map<Link>,
     pub entities: Map<Entity>,
 }
-go_deserialize!(UniTune {
+lenient_deserialize!(UniTune {
     "entityuniqueid" => entity_id,
     "linksbyplatform" => links,
     "entitiesbyuniqueid" => entities,
@@ -61,7 +61,7 @@ go_deserialize!(UniTune {
 pub struct Artist {
     pub name: String,
 }
-go_deserialize!(Artist { "name" => name, });
+lenient_deserialize!(Artist { "name" => name, });
 
 #[derive(Clone, Debug, Default)]
 pub struct Recording {
@@ -70,7 +70,7 @@ pub struct Recording {
     pub title: String,
     pub artists: Option<Vec<Artist>>,
 }
-go_deserialize!(Recording {
+lenient_deserialize!(Recording {
     "id" => id, "score" => score, "title" => title, "artist-credit" => artists,
 });
 
@@ -78,25 +78,25 @@ go_deserialize!(Recording {
 pub struct Recordings {
     pub recordings: Option<Vec<Recording>>,
 }
-go_deserialize!(Recordings { "recordings" => recordings, });
+lenient_deserialize!(Recordings { "recordings" => recordings, });
 
 #[derive(Clone, Debug, Default)]
 pub struct Resource {
     pub resource: String,
 }
-go_deserialize!(Resource { "resource" => resource, });
+lenient_deserialize!(Resource { "resource" => resource, });
 
 #[derive(Clone, Debug, Default)]
 pub struct Relation {
     pub url: Resource,
 }
-go_deserialize!(Relation { "url" => url, });
+lenient_deserialize!(Relation { "url" => url, });
 
 #[derive(Clone, Debug, Default)]
 pub struct Relations {
     pub relations: Option<Vec<Relation>>,
 }
-go_deserialize!(Relations { "relations" => relations, });
+lenient_deserialize!(Relations { "relations" => relations, });
 
 #[derive(Clone, Debug, Default)]
 pub struct Created {
@@ -104,7 +104,7 @@ pub struct Created {
     pub title: String,
     pub artist: String,
 }
-go_deserialize!(Created { "full_url" => full_url, "title" => title, "artist" => artist, });
+lenient_deserialize!(Created { "full_url" => full_url, "title" => title, "artist" => artist, });
 
 #[derive(Clone, Debug, Default)]
 pub struct PageData {
@@ -112,13 +112,13 @@ pub struct PageData {
     pub artist: String,
     pub services: Map<Option<Link>>,
 }
-go_deserialize!(PageData { "title" => title, "artist" => artist, "services" => services, });
+lenient_deserialize!(PageData { "title" => title, "artist" => artist, "services" => services, });
 
 #[derive(Clone, Debug, Default)]
 pub struct Page {
     pub data: PageData,
 }
-go_deserialize!(Page { "data" => data, });
+lenient_deserialize!(Page { "data" => data, });
 
 /// The platform resolver uses Go's broader metadata artist matcher, rather
 /// than the stricter primary-artist equality required for lyrics searches.
@@ -280,9 +280,22 @@ pub fn track_identity_title(value: &str) -> String {
 
 fn track_title_without_annotations(value: &str) -> std::borrow::Cow<'_, str> {
     static ANNOTATION: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r#"(?i)[(\[][\t\n\f\r ]*(?:(?:feat\.?|ft\.?|featuring)[\t\n\f\r ]+[^)\]]+|from[\t\n\f\r ]+["“][^)\]]+["”][\t\n\f\r ]*)[)\]]"#).unwrap()
+        regex::Regex::new(r#"(?i)[(\[][\t\n\f\r ]*(?:(feat\.?|ft\.?|featuring|with)[\t\n\f\r ]+[^)\]]+|from[\t\n\f\r ]+["“][^)\]]+["”][\t\n\f\r ]*)[)\]]"#).unwrap()
     });
-    ANNOTATION.replace_all(value, " ")
+    static VERSION: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(?i)\b(?:mix|remix|live|acoustic|demo|instrumental|karaoke|edit|extended|slowed|sped)\b").unwrap()
+    });
+    ANNOTATION.replace_all(value, |captures: &regex::Captures<'_>| {
+        if captures
+            .get(1)
+            .is_some_and(|credit| credit.as_str().eq_ignore_ascii_case("with"))
+            && VERSION.is_match(&captures[0])
+        {
+            captures[0].to_owned()
+        } else {
+            " ".to_owned()
+        }
+    })
 }
 
 pub fn track_titles_match(expected: &str, found: &str) -> bool {
@@ -324,6 +337,22 @@ pub fn track_titles_match(expected: &str, found: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn contributor_annotations_keep_the_recording_identity() {
+        assert_eq!(
+            track_identity_title("Signal (with Guest Artist)"),
+            track_identity_title("Signal")
+        );
+        assert!(track_titles_match("Signal (with Guest Artist)", "Signal"));
+        for version in ["[Live]", "(Club Mix)", "(Acoustic)"] {
+            assert!(!track_titles_match(
+                &format!("Signal (with Guest Artist) {version}"),
+                "Signal"
+            ));
+        }
+        assert!(!track_titles_match("Signal (with Live Band)", "Signal"));
+    }
 
     #[test]
     fn repeated_maps_merge_but_null_resets_and_nested_structs_retain_fields() {

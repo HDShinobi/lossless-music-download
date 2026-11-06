@@ -2,7 +2,7 @@
 // ISRC lookup entry point; the fork's duplicate preflight still reads the shared
 // IndexCache that downloads populate via add_to_isrc_index.
 use super::{EnvironmentError, ExtensionEnvironment};
-use spotiflac_core::isrc::NativeFiles;
+use mornye_core::isrc::NativeFiles;
 use std::sync::atomic::Ordering;
 
 type Check<'a> = &'a (dyn Fn() -> Result<(), String> + Sync);

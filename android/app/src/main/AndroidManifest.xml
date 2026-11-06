@@ -106,6 +106,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="spotiflac" android:host="session-grant" />
+                <data android:scheme="mornye" android:host="session-grant" />
             </intent-filter>
         </activity>
 

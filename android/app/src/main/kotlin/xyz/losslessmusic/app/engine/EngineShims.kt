@@ -1,8 +1,8 @@
-// LM-OWNED shims (not upstream). The vendored com/zarz/spotiflac/CoreBackend.kt references
+// LM-OWNED shims (not upstream). The vendored com/zarz/mornye/CoreBackend.kt references
 // NativeDownloadFinalizer.runFFmpegArguments and BuildConfig.APPLICATION_ID from upstream's
 // package; these declarations satisfy that contract with our own ffmpeg-kit and app id, so
 // CoreBackend.kt stays byte-identical to upstream. Registered in docs/UPSTREAM-SYNC.md.
-package com.zarz.spotiflac
+package com.zarz.mornye
 
 import com.antonkarpenko.ffmpegkit.FFmpegKit
 import com.antonkarpenko.ffmpegkit.ReturnCode

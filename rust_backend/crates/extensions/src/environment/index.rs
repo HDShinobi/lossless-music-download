@@ -1,5 +1,5 @@
 use super::{EnvironmentError, ExtensionEnvironment};
-use spotiflac_core::isrc::{IndexCache, NativeFiles};
+use mornye_core::isrc::{IndexCache, NativeFiles};
 use std::sync::atomic::Ordering;
 
 type Check<'a> = &'a (dyn Fn() -> Result<(), String> + Sync);
@@ -42,6 +42,12 @@ impl ExtensionEnvironment {
     pub fn invalidate_isrc_cache(&self, directory: &str) -> Result<(), EnvironmentError> {
         let _operation = self.enter()?;
         self.isrc.invalidate(directory);
+        Ok(())
+    }
+
+    pub(crate) fn clear_isrc_cache(&self) -> Result<(), EnvironmentError> {
+        let _operation = self.enter()?;
+        self.isrc.clear();
         Ok(())
     }
 }

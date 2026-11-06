@@ -87,13 +87,13 @@ android {
 val buildRustBackend = tasks.register<Exec>("buildRustBackend") {
     workingDir(rootProject.projectDir.parentFile)
     commandLine("bash", "scripts/build_rust_backend.sh", "android")
-    environment("SPOTIFLAC_RUST_ANDROID_ABIS", "arm64-v8a")
-    // Always NDK 29 (upstream pin). Deliberately NOT ANDROID_NDK_HOME: on dev machines it
+    environment("MORNYE_RUST_ANDROID_ABIS", "arm64-v8a")
+    // Always NDK 30 (upstream pin). Deliberately NOT ANDROID_NDK_HOME: on dev machines it
     // may point at the older NDK Flutter uses for the rest of the app.
     environment(
         "ANDROID_NDK_HOME",
         providers.environmentVariable("RUST_ANDROID_NDK_HOME").orNull
-            ?: android.sdkDirectory.resolve("ndk/29.0.14206865").absolutePath,
+            ?: android.sdkDirectory.resolve("ndk/30.0.16248370").absolutePath,
     )
     inputs.files(fileTree(rustBackendDir) {
         include("**/*.rs", "**/*.toml", "**/*.lock", "**/*.js", "**/*.tsv", "**/*.pem")
@@ -102,7 +102,7 @@ val buildRustBackend = tasks.register<Exec>("buildRustBackend") {
     inputs.file(rootProject.file("../scripts/build_rust_backend.sh"))
     outputs.dir(rustBackendDir.resolve("target/bindings/kotlin"))
     outputs.dir(rustBackendDir.resolve("target/android/jniLibs"))
-    outputs.file(rustBackendDir.resolve("target/release/libspotiflac_mobile.dylib"))
+    outputs.file(rustBackendDir.resolve("target/release/libmornye_mobile.dylib"))
 }
 tasks.named("preBuild").configure { dependsOn(buildRustBackend) }
 
