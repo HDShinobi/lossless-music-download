@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 
 import '../providers/batch_re_enrich_provider.dart';
+import '../providers/library_busy_provider.dart';
 import '../widgets/batch_re_enrich_panel.dart';
 
 import 'download_history_screen.dart';
@@ -62,6 +63,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
     final asyncEntries = ref.watch(libraryProvider);
+    final libraryBusy = ref.watch(libraryBusyProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -127,11 +129,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                           e.albumName!.toLowerCase()))).map((e) => e.path));
                     }), child: Text(t.librarySelectAlbum)),
                     TextButton.icon(icon: const Icon(Icons.auto_fix_high),
-                      onPressed: ref.watch(batchReEnrichProvider).running ? null : () {
+                      onPressed: libraryBusy ? null : () {
                         final tracks = entries.where((e) => _selected.contains(e.path)).toList();
                         unawaited(ref.read(batchReEnrichProvider.notifier).start(tracks));
                         setState(_selected.clear);
                       }, label: Text(t.batchRefreshMetadata)),
+                    if (libraryBusy) Text(t.libraryBusyHint),
                   ])),
               // Segment toggle buttons
               Padding(

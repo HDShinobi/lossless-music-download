@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/app_localizations.dart';
-import '../providers/batch_re_enrich_provider.dart';
+import '../providers/library_busy_provider.dart';
 import '../providers/download_dir_provider.dart';
 import '../providers/download_history_provider.dart';
 import '../providers/download_options_provider.dart';
-import '../providers/download_queue_provider.dart';
 import '../providers/library_provider.dart';
 import '../services/library_reorganizer.dart';
 
@@ -27,12 +26,6 @@ class _LibraryReorganizeState extends ConsumerState<LibraryReorganizeScreen> {
   bool _running = false, _cancel = false;
   int _done = 0;
 
-  bool get _busy =>
-      ref.read(batchReEnrichProvider).running ||
-      ref
-          .read(downloadQueueProvider)
-          .any((e) => e.status != 'done' && e.status != 'failed');
-
   @override
   void initState() {
     super.initState();
@@ -40,11 +33,12 @@ class _LibraryReorganizeState extends ConsumerState<LibraryReorganizeScreen> {
   }
 
   Future<void> _load() async {
+    final running = ref.read(libraryReorganizeRunningProvider.notifier);
+    if (!running.tryStart()) {
+      setState(() => _error = AppLocalizations.of(context).reorganizeBusy);
+      return;
+    }
     try {
-      if (_busy) {
-        setState(() => _error = AppLocalizations.of(context).reorganizeBusy);
-        return;
-      }
       await Future.wait([
         ref.read(filenameTemplateProvider.notifier).ready,
         ref.read(albumFolderTemplateProvider.notifier).ready,
@@ -57,6 +51,11 @@ class _LibraryReorganizeState extends ConsumerState<LibraryReorganizeScreen> {
       if (!mounted) return;
       final tags = await ref.read(libraryProvider.future);
       if (!mounted) return;
+      // Queue admission is independent of this lock; it may change while loading.
+      if (ref.read(libraryQueueBusyProvider)) {
+        setState(() => _error = AppLocalizations.of(context).reorganizeBusy);
+        return;
+      }
       final service = LibraryReorganizer(history);
       final plan = await service.plan(
         root: root,
@@ -74,12 +73,15 @@ class _LibraryReorganizeState extends ConsumerState<LibraryReorganizeScreen> {
       }
     } catch (e) {
       if (mounted) setState(() => _error = e);
+    } finally {
+      running.finish();
     }
   }
 
   Future<void> _apply() async {
     if (_running || _result != null) return;
-    if (_busy) {
+    final running = ref.read(libraryReorganizeRunningProvider.notifier);
+    if (!running.tryStart()) {
       setState(() => _error = AppLocalizations.of(context).reorganizeBusy);
       return;
     }
@@ -90,7 +92,8 @@ class _LibraryReorganizeState extends ConsumerState<LibraryReorganizeScreen> {
     try {
       final result = await _service!.apply(
         _plan!,
-        isCancelled: () => _cancel || !mounted || _busy,
+        isCancelled: () =>
+            _cancel || !mounted || ref.read(libraryQueueBusyProvider),
         onProgress: (done, _) {
           if (mounted) setState(() => _done = done);
         },
@@ -99,6 +102,7 @@ class _LibraryReorganizeState extends ConsumerState<LibraryReorganizeScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = e);
     } finally {
+      running.finish();
       if (mounted) {
         ref.read(historyRevisionProvider.notifier).changed();
         ref.invalidate(libraryProvider);

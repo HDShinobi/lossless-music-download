@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 
 import '../providers/batch_re_enrich_provider.dart';
+import '../providers/library_busy_provider.dart';
 import '../widgets/batch_re_enrich_panel.dart';
 
 import 'package:flutter/material.dart';
@@ -68,11 +69,13 @@ class LibraryAlbumScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context);
     final asyncEntries = ref.watch(libraryProvider);
+    final libraryBusy = ref.watch(libraryBusyProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(albumName), actions: [
-        IconButton(icon: const Icon(Icons.auto_fix_high), tooltip: t.batchRefreshAlbum,
-          onPressed: ref.watch(batchReEnrichProvider).running || !asyncEntries.hasValue
+        IconButton(icon: const Icon(Icons.auto_fix_high),
+          tooltip: libraryBusy ? t.libraryBusyHint : t.batchRefreshAlbum,
+          onPressed: libraryBusy || !asyncEntries.hasValue
             ? null : () => unawaited(ref.read(batchReEnrichProvider.notifier).start(
               albumTracksFor(asyncEntries.value!, artistName, albumName)))),
       ]),

@@ -1151,7 +1151,11 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get reorganizeBusy =>
-      'Chờ tải xuống và làm mới metadata hoàn tất rồi thử lại.';
+      'Chờ tải xuống và cập nhật tệp hoàn tất rồi thử lại.';
+
+  @override
+  String get libraryBusyHint =>
+      'Thư viện đang bận. Chờ tải xuống hoặc cập nhật tệp hoàn tất.';
 
   @override
   String get reorganizeCancelled =>

@@ -2219,8 +2219,14 @@ abstract class AppLocalizations {
   /// No description provided for @reorganizeBusy.
   ///
   /// In en, this message translates to:
-  /// **'Wait for downloads and metadata refresh to finish, then try again.'**
+  /// **'Wait for downloads and file updates to finish, then try again.'**
   String get reorganizeBusy;
+
+  /// No description provided for @libraryBusyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Library busy. Wait for downloads or file updates to finish.'**
+  String get libraryBusyHint;
 
   /// No description provided for @reorganizeCancelled.
   ///

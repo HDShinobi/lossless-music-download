@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'library_manager.dart';
 import 'library_provider.dart';
+import 'library_busy_provider.dart';
 
 class ReEnrichFailure {
   const ReEnrichFailure(this.path, this.title, this.error);
@@ -51,7 +52,14 @@ class BatchReEnrich extends Notifier<BatchReEnrichState> {
   }
 
   Future<void> start(List<LibraryEntry> selection) async {
-    if (state.running || selection.isEmpty) return;
+    if (selection.isEmpty ||
+        isLibraryBusy(
+          queueRunning: ref.read(libraryQueueBusyProvider),
+          reEnrichRunning: state.running,
+          reorganizeRunning: ref.read(libraryReorganizeRunningProvider),
+        )) {
+      return;
+    }
     final items = {
       for (final entry in selection) entry.path: entry,
     }.values.toList();
@@ -63,6 +71,8 @@ class BatchReEnrich extends Notifier<BatchReEnrichState> {
     try {
       final options = await manager.reEnrichOptions();
       for (final entry in items) {
+        if (_cancel || !ref.mounted) break;
+        if (await isActiveLibraryDownloadPath(ref, entry.path)) continue;
         if (_cancel || !ref.mounted) break;
         state = BatchReEnrichState(
           running: true,

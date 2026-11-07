@@ -1159,7 +1159,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get reorganizeBusy =>
-      'Wait for downloads and metadata refresh to finish, then try again.';
+      'Wait for downloads and file updates to finish, then try again.';
+
+  @override
+  String get libraryBusyHint =>
+      'Library busy. Wait for downloads or file updates to finish.';
 
   @override
   String get reorganizeCancelled => 'Cancelled. Completed moves are kept.';

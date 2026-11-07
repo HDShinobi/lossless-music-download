@@ -535,7 +535,8 @@
   "reorganizeConflict": "Conflict — skipped",
   "reorganizeMissing": "File missing — skipped",
   "reorganizeUnsafe": "Outside download root or unsafe path — skipped",
-  "reorganizeBusy": "Wait for downloads and metadata refresh to finish, then try again.",
+  "reorganizeBusy": "Wait for downloads and file updates to finish, then try again.",
+  "libraryBusyHint": "Library busy. Wait for downloads or file updates to finish.",
   "reorganizeCancelled": "Cancelled. Completed moves are kept.",
   "reorganizePreview": "{ready} to move · {unchanged} unchanged · {conflicts} conflicts. Review paths before applying. Only downloaded history files are included.",
   "@reorganizePreview": {

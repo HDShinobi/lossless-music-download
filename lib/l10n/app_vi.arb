@@ -535,7 +535,8 @@
   "reorganizeConflict": "Trùng đường dẫn — bỏ qua",
   "reorganizeMissing": "Không tìm thấy tệp — bỏ qua",
   "reorganizeUnsafe": "Ngoài thư mục tải xuống hoặc đường dẫn không an toàn — bỏ qua",
-  "reorganizeBusy": "Chờ tải xuống và làm mới metadata hoàn tất rồi thử lại.",
+  "reorganizeBusy": "Chờ tải xuống và cập nhật tệp hoàn tất rồi thử lại.",
+  "libraryBusyHint": "Thư viện đang bận. Chờ tải xuống hoặc cập nhật tệp hoàn tất.",
   "reorganizeCancelled": "Đã hủy. Các tệp đã di chuyển được giữ nguyên.",
   "reorganizePreview": "{ready} tệp sẽ di chuyển · {unchanged} tệp không đổi · {conflicts} tệp trùng đường dẫn. Kiểm tra đường dẫn trước khi áp dụng. Chỉ gồm tệp đã tải có trong lịch sử.",
   "@reorganizePreview": {

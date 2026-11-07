@@ -7,6 +7,10 @@ import 'package:lossless_music_download/providers/batch_re_enrich_provider.dart'
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/providers/download_history_provider.dart';
 import '../helpers/re_enrich_fakes.dart';
+import '../helpers/library_queue_fake.dart';
+import 'package:lossless_music_download/providers/download_queue_provider.dart';
+import 'package:lossless_music_download/providers/download_dir_provider.dart';
+import 'package:lossless_music_download/providers/library_busy_provider.dart';
 
 LibraryEntry entry(int n) => LibraryEntry(
   path: '/$n.flac',
@@ -35,12 +39,113 @@ void main() {
     history = FakeHistory();
     container = ProviderContainer(
       overrides: [
+        downloadQueueProvider.overrideWith(LibraryQueueFake.new),
+        downloadDirProvider.overrideWith((_) async => '/downloads'),
         backendBridgeProvider.overrideWithValue(bridge),
         historyDatabaseProvider.overrideWith((_) async => history),
       ],
     );
   });
   tearDown(() => container.dispose());
+  test(
+    'reorganize claims the library and blocks batch and another reorganize',
+    () async {
+      final reorganize = container.read(
+        libraryReorganizeRunningProvider.notifier,
+      );
+      expect(reorganize.tryStart(), isTrue);
+      expect(container.read(libraryBusyProvider), isTrue);
+      expect(reorganize.tryStart(), isFalse);
+      await container.read(batchReEnrichProvider.notifier).start([entry(1)]);
+      expect(bridge.requests, isEmpty);
+      reorganize.finish();
+      expect(container.read(libraryBusyProvider), isFalse);
+      await container.read(batchReEnrichProvider.notifier).start([entry(1)]);
+      expect(history.paths, ['/1.flac']);
+    },
+  );
+  test(
+    'batch claims the library before awaiting settings and blocks reorganize',
+    () async {
+      bridge.gate = Completer<void>();
+      final job = container.read(batchReEnrichProvider.notifier).start([
+        entry(1),
+      ]);
+      expect(
+        container.read(libraryReorganizeRunningProvider.notifier).tryStart(),
+        isFalse,
+      );
+      bridge.gate!.complete();
+      await job;
+      expect(
+        container.read(libraryReorganizeRunningProvider.notifier).tryStart(),
+        isTrue,
+      );
+    },
+  );
+  for (final useTarget in [false, true]) {
+    test(
+      'queue arriving during a batch drops ${useTarget ? 'target' : 'filePath'} match',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'filename_template': '{title}',
+        });
+        bridge.writeGate = Completer<void>();
+        final path = useTarget ? '/downloads/A/Album/Song.flac' : '/2.flac';
+        final second = LibraryEntry(
+          path: path,
+          name: 'Song.flac',
+          sizeBytes: 0,
+          format: 'FLAC',
+          verified: true,
+        );
+        final job = container.read(batchReEnrichProvider.notifier).start([
+          entry(1),
+          second,
+        ]);
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+        expect(bridge.requests, hasLength(2)); // first file is in its write
+        (container.read(downloadQueueProvider.notifier) as LibraryQueueFake)
+            .replace([
+              queueEntry(
+                'processing',
+                filePath: useTarget ? null : '/folder/../2.flac',
+              ),
+            ]);
+        bridge.writeGate!.complete();
+        await job;
+        expect(
+          bridge.requests.every((r) => r['file_path'] == '/1.flac'),
+          isTrue,
+        );
+        expect(history.paths, ['/1.flac']);
+        expect(container.read(batchReEnrichProvider).completed, 1);
+      },
+    );
+  }
+  for (final status in [
+    'queued',
+    'downloading',
+    'processing',
+    'paused',
+    'waiting_wifi',
+  ]) {
+    test('start does nothing while queue status is $status', () async {
+      (container.read(downloadQueueProvider.notifier) as LibraryQueueFake)
+          .replace([queueEntry(status, filePath: '/1.flac')]);
+      await container.read(batchReEnrichProvider.notifier).start([entry(1)]);
+      expect(bridge.requests, isEmpty);
+      expect(container.read(batchReEnrichProvider).total, 0);
+      expect(history.paths, isEmpty);
+    });
+  }
+  test('done and failed entries allow a batch', () async {
+    (container.read(downloadQueueProvider.notifier) as LibraryQueueFake)
+        .replace([queueEntry('done'), queueEntry('failed')]);
+    await container.read(batchReEnrichProvider.notifier).start([entry(1)]);
+    expect(container.read(batchReEnrichProvider).completed, 1);
+    expect(history.paths, ['/1.flac']);
+  });
   test(
     'sequential progress, settings, and errors retain successful history',
     () async {
