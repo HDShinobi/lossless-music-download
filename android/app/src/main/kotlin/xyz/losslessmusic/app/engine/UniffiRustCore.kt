@@ -19,8 +19,8 @@ class UniffiRustCore private constructor(private val manager: ExtensionManager) 
         private const val TIMEOUT_MS: ULong = 30_000uL
         private const val POST_PROCESS_TIMEOUT_MS: ULong = 120_000uL
 
-        val FACTORY = RustCoreFactory { source, data, masterKey, appVersion ->
-            UniffiRustCore(ExtensionManager.withLyricsSettings(source, data, masterKey, appVersion, TIMEOUT_MS, "[]", "{}"))
+        val FACTORY = RustCoreFactory { source, data, masterKey, appVersion, lyricsProvidersJson, lyricsOptionsJson ->
+            UniffiRustCore(ExtensionManager.withLyricsSettings(source, data, masterKey, appVersion, TIMEOUT_MS, lyricsProvidersJson, lyricsOptionsJson))
         }
     }
 
@@ -95,6 +95,8 @@ class UniffiRustCore private constructor(private val manager: ExtensionManager) 
     override fun extractCoverToFile(audioPath: String, outputPath: String) = manager.extractCoverToFile(audioPath, outputPath, null)
     override fun editFileMetadata(path: String, metadataJson: String): String = manager.editFileMetadata(path, metadataJson, null)
     override fun reenrichFile(requestJson: String): String = manager.reenrichFile(requestJson, null)
+    override fun setLyricsProvidersJson(json: String) = manager.setLyricsProvidersJson(json)
+    override fun setLyricsFetchOptionsJson(json: String) = manager.setLyricsFetchOptionsJson(json)
     override fun getLyricsLrc(spotifyId: String, track: String, artist: String, filePath: String, durationMs: Long): String =
         manager.getLyricsLrc(LyricsRequest(spotifyId, track, artist, filePath, durationMs), null)
     override fun embedLyricsToFile(path: String, lyrics: String): String = manager.embedLyricsToFile(path, lyrics, null)

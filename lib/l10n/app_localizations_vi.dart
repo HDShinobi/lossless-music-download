@@ -994,4 +994,58 @@ class AppLocalizationsVi extends AppLocalizations {
   @override
   String get settingWifiOnlyDescription =>
       'Chờ kết nối Wi-Fi không tính phí trước khi tải bài tiếp theo.';
+
+  @override
+  String get lyricsSettingsTitle => 'Lời bài hát';
+
+  @override
+  String get lyricsSettingsDescription => 'Nguồn lời, tùy chọn tải và cách lưu';
+
+  @override
+  String get lyricsProviderOrder => 'Thứ tự nguồn lời';
+
+  @override
+  String get lyricsProviderOrderDescription =>
+      'Kéo để đổi thứ tự. Cần bật ít nhất một nguồn lời.';
+
+  @override
+  String get lyricsEngineDefaults => 'Dùng thứ tự mặc định của engine';
+
+  @override
+  String get lyricsSaveMode => 'Lưu lời bài hát';
+
+  @override
+  String get lyricsModeEmbed => 'Nhúng vào tệp âm thanh';
+
+  @override
+  String get lyricsModeExternal => 'Lưu thành tệp .lrc';
+
+  @override
+  String get lyricsModeBoth => 'Nhúng và lưu tệp .lrc';
+
+  @override
+  String get lyricsModeOff => 'Không lưu';
+
+  @override
+  String get lyricsTranslation => 'Bản dịch từ NetEase';
+
+  @override
+  String get lyricsRomanization => 'Phiên âm Latin từ NetEase';
+
+  @override
+  String get lyricsMultiPerson => 'Tách giọng hát trong lời đồng bộ từng từ';
+
+  @override
+  String get lyricsAppleWordSync => 'Đồng bộ từng từ Apple Music (ELRC)';
+
+  @override
+  String get lyricsMusixmatchLanguage => 'Ngôn ngữ Musixmatch';
+
+  @override
+  String get lyricsLanguageHint =>
+      'Mã ngôn ngữ (vd. vi, en); để trống để tự chọn';
+
+  @override
+  String get lyricsSettingsError =>
+      'Chưa áp dụng được cài đặt lời bài hát. Vui lòng thử lại.';
 }

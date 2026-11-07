@@ -23,7 +23,7 @@ class UniffiRustCoreTest {
         val src = tmp.newFolder("extensions")
         val data = tmp.newFolder("ext_data")
         out = tmp.newFolder("downloads")
-        core = UniffiRustCore.FACTORY.create(src.canonicalPath, data.canonicalPath, key, EngineVersion.SPOTIFLAC_ENGINE_VERSION)
+        core = UniffiRustCore.FACTORY.create(src.canonicalPath, data.canonicalPath, key, EngineVersion.SPOTIFLAC_ENGINE_VERSION, "[]", "{}")
         core.setAllowedDownloadDirectories(listOf(out.canonicalPath, out.absolutePath))
     }
 
@@ -34,6 +34,17 @@ class UniffiRustCoreTest {
         val p = JSONObject(core.providerPriorities())
         assertEquals(0, p.getJSONArray("download").length())
         assertEquals(0, p.getJSONArray("metadata").length())
+    }
+
+    @Test fun lyricsSettersAcceptEngineOptionsAndRejectInvalidJson() {
+        core.setLyricsProvidersJson("[\"netease\",\"extension:test\"]")
+        core.setLyricsFetchOptionsJson("{\"include_translation_netease\":true,\"include_romanization_netease\":true,\"multi_person_word_by_word\":false,\"apple_elrc_word_sync\":true,\"musixmatch_language\":\"vi\"}")
+        var threw = false
+        try { core.setLyricsProvidersJson("{") } catch (_: Exception) { threw = true }
+        assertTrue(threw)
+        threw = false
+        try { core.setLyricsFetchOptionsJson("[") } catch (_: Exception) { threw = true }
+        assertTrue(threw)
     }
 
     @Test fun progressIsAnItemsObject() {

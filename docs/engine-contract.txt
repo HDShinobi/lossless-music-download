@@ -39,6 +39,8 @@ setAllowedDownloadDirectories | fun setAllowedDownloadDirectories(directories: L
 setEnabled | fun setEnabled(extensionId: kotlin.String, enabled: kotlin.Boolean): kotlin.Unit | pub fn set_enabled( &self, extension_id: String, enabled: bool, ) -> Result<(), ExtensionManagerError>
 setFallbackProviders | fun setFallbackProviders(ids: List<kotlin.String>?): kotlin.Unit | pub fn set_fallback_providers( &self, ids: Option<Vec<String>>, ) -> Result<(), ExtensionManagerError>
 setLibraryCoverCacheDirectory | fun setLibraryCoverCacheDirectory(directory: kotlin.String): kotlin.Unit | pub fn set_library_cover_cache_directory( &self, directory: String, ) -> Result<(), ExtensionManagerError>
+setLyricsFetchOptionsJson | fun setLyricsFetchOptionsJson(optionsJson: kotlin.String): kotlin.Unit | pub fn set_lyrics_fetch_options_json( &self, options_json: String, ) -> Result<(), ExtensionManagerError>
+setLyricsProvidersJson | fun setLyricsProvidersJson(providersJson: kotlin.String): kotlin.Unit | pub fn set_lyrics_providers_json( &self, providers_json: String, ) -> Result<(), ExtensionManagerError>
 setProviderPriority | fun setProviderPriority(kind: kotlin.String, ids: List<kotlin.String>): kotlin.Unit | pub fn set_provider_priority( &self, kind: String, ids: Vec<String>, ) -> Result<(), ExtensionManagerError>
 setSessionGrant | fun setSessionGrant(extensionId: kotlin.String, grant: kotlin.String): kotlin.Unit | pub fn set_session_grant( &self, extension_id: String, grant: String, ) -> Result<(), JsExtensionError>
 settings | fun settings(extensionId: kotlin.String): kotlin.String | pub fn settings(&self, extension_id: String) -> Result<String, JsExtensionError>

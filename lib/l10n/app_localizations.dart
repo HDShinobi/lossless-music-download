@@ -1927,6 +1927,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Wait for an unmetered Wi-Fi connection before starting new downloads.'**
   String get settingWifiOnlyDescription;
+
+  /// No description provided for @lyricsSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics'**
+  String get lyricsSettingsTitle;
+
+  /// No description provided for @lyricsSettingsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Providers, fetch options and saving'**
+  String get lyricsSettingsDescription;
+
+  /// No description provided for @lyricsProviderOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider order'**
+  String get lyricsProviderOrder;
+
+  /// No description provided for @lyricsProviderOrderDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to reorder. At least one provider must stay enabled.'**
+  String get lyricsProviderOrderDescription;
+
+  /// No description provided for @lyricsEngineDefaults.
+  ///
+  /// In en, this message translates to:
+  /// **'Use engine default order'**
+  String get lyricsEngineDefaults;
+
+  /// No description provided for @lyricsSaveMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Save lyrics'**
+  String get lyricsSaveMode;
+
+  /// No description provided for @lyricsModeEmbed.
+  ///
+  /// In en, this message translates to:
+  /// **'Embed in audio file'**
+  String get lyricsModeEmbed;
+
+  /// No description provided for @lyricsModeExternal.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as .lrc file'**
+  String get lyricsModeExternal;
+
+  /// No description provided for @lyricsModeBoth.
+  ///
+  /// In en, this message translates to:
+  /// **'Embed and save .lrc'**
+  String get lyricsModeBoth;
+
+  /// No description provided for @lyricsModeOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Do not save'**
+  String get lyricsModeOff;
+
+  /// No description provided for @lyricsTranslation.
+  ///
+  /// In en, this message translates to:
+  /// **'NetEase translation'**
+  String get lyricsTranslation;
+
+  /// No description provided for @lyricsRomanization.
+  ///
+  /// In en, this message translates to:
+  /// **'NetEase romanization'**
+  String get lyricsRomanization;
+
+  /// No description provided for @lyricsMultiPerson.
+  ///
+  /// In en, this message translates to:
+  /// **'Separate singers in word-synced lyrics'**
+  String get lyricsMultiPerson;
+
+  /// No description provided for @lyricsAppleWordSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Apple Music word synchronization (ELRC)'**
+  String get lyricsAppleWordSync;
+
+  /// No description provided for @lyricsMusixmatchLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Musixmatch language'**
+  String get lyricsMusixmatchLanguage;
+
+  /// No description provided for @lyricsLanguageHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Language code (e.g. vi, en); empty for automatic'**
+  String get lyricsLanguageHint;
+
+  /// No description provided for @lyricsSettingsError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not apply lyrics settings. Please try again.'**
+  String get lyricsSettingsError;
 }
 
 class _AppLocalizationsDelegate

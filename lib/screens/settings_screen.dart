@@ -16,6 +16,7 @@ import '../services/download_paths.dart';
 import '../services/update_checker.dart';
 import '../widgets/update_dialog.dart';
 import 'download_file_settings_screen.dart';
+import 'lyrics_settings_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -157,8 +158,6 @@ class SettingsScreen extends ConsumerWidget {
     final embedMeta = ref.watch(embedMetadataProvider);
     final folderLayout = ref.watch(folderOrganizationProvider);
     final embedCover = ref.watch(embedCoverProvider);
-    final embedLyrics = ref.watch(embedLyricsProvider);
-    final writeLrcSidecar = ref.watch(writeLrcSidecarProvider);
     final folderAsync = ref.watch(downloadDirProvider);
     final homeFeedSource = ref.watch(homeFeedSourceProvider);
     final extensions = ref.watch(extensionsProvider).value ?? const [];
@@ -317,24 +316,14 @@ class SettingsScreen extends ConsumerWidget {
                 ref.read(embedCoverProvider.notifier).set(v),
           ),
 
-          // Embed lyrics
-          SwitchListTile(
-            secondary: const Icon(Icons.lyrics_outlined),
-            title: Text(t.settingEmbedLyrics),
-            subtitle: Text(t.settingEmbedLyricsDesc),
-            value: embedLyrics,
-            onChanged: (v) =>
-                ref.read(embedLyricsProvider.notifier).set(v),
-          ),
-
-          // Write .lrc lyrics sidecar
-          SwitchListTile(
-            secondary: const Icon(Icons.subtitles_outlined),
-            title: Text(t.lrcSidecarTitle),
-            subtitle: Text(t.lrcSidecarSubtitle),
-            value: writeLrcSidecar,
-            onChanged: (v) =>
-                ref.read(writeLrcSidecarProvider.notifier).set(v),
+          ListTile(
+            leading: const Icon(Icons.lyrics_outlined),
+            title: Text(t.lyricsSettingsTitle),
+            subtitle: Text(t.lyricsSettingsDescription),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => const LyricsSettingsScreen(),
+            )),
           ),
 
           const Divider(height: 1),

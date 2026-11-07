@@ -36,7 +36,7 @@ class RustEngineDlnaTest {
         val files = tmp.newFolder("files")
         val ext = File(files, "extensions").apply { mkdirs() }
         val data = File(files, "ext_data").apply { mkdirs() }
-        return RustEngine({ _, _, _, _ -> fake }, files, readyTimeoutMs = 100).also {
+        return RustEngine({ _, _, _, _, _, _ -> fake }, files, readyTimeoutMs = 100).also {
             it.setExtensionStorageMasterKey("KEY")
             it.initExtensionSystem(ext.path, data.path)
         }

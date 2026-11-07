@@ -18,6 +18,7 @@ class RustEngineTest {
     private lateinit var ext: File
     private lateinit var data: File
     private lateinit var fake: FakeRustCore
+    private var duringCreate: (() -> Unit)? = null
     private var creates = 0
     private var createArgs: List<String> = emptyList()
     private var failCreate: Exception? = null
@@ -28,8 +29,8 @@ class RustEngineTest {
         ext = File(files, "extensions").apply { mkdirs() }
         data = File(files, "ext_data").apply { mkdirs() }
         fake = FakeRustCore()
-        engine = RustEngine({ s, d, k, v ->
-            creates++; createArgs = listOf(s, d, k, v); failCreate?.let { throw it }; fake
+        engine = RustEngine({ s, d, k, v, lp, lo ->
+            creates++; createArgs = listOf(s, d, k, v, lp, lo); failCreate?.let { throw it }; duringCreate?.invoke(); fake
         }, files, readyTimeoutMs = 100)
     }
 
@@ -41,6 +42,43 @@ class RustEngineTest {
     private inline fun <reified T : Throwable> assertThrows(block: () -> Unit): T {
         try { block() } catch (t: Throwable) { if (t is T) return t; throw t }
         fail("expected ${T::class.simpleName}"); throw IllegalStateException()
+    }
+
+    @Test fun lyricsDefaultsReachFactory() {
+        init()
+        assertEquals(listOf("[]", "{}"), createArgs.takeLast(2))
+    }
+
+    @Test fun lyricsSettingsAreBufferedAtCreationAndAppliedAtRuntime() {
+        engine.setLyricsProviders("[\"netease\"]")
+        engine.setLyricsFetchOptions("{\"include_translation_netease\":true}")
+        assertTrue(fake.calls.isEmpty())
+        init()
+        assertEquals(listOf("[\"netease\"]", "{\"include_translation_netease\":true}"), createArgs.takeLast(2))
+        fake.calls.clear()
+        engine.setLyricsProviders("[\"lrclib\"]")
+        engine.setLyricsFetchOptions("{\"apple_elrc_word_sync\":true}")
+        assertEquals(listOf("lyricsProviders:[\"lrclib\"]", "lyricsOptions:{\"apple_elrc_word_sync\":true}"), fake.calls)
+    }
+
+    @Test fun lyricsChangesDuringCreationAreReplayedBeforeReady() {
+        duringCreate = {
+            assertEquals(RustEngine.State.INITIALIZING, engine.state)
+            engine.setLyricsProviders("[\"qqmusic\"]")
+            engine.setLyricsFetchOptions("{\"multi_person_word_by_word\":false}")
+        }
+        init()
+        assertEquals(listOf("[]", "{}"), createArgs.takeLast(2))
+        assertTrue(fake.calls.contains("lyricsProviders:[\"qqmusic\"]"))
+        assertTrue(fake.calls.contains("lyricsOptions:{\"multi_person_word_by_word\":false}"))
+        assertEquals(RustEngine.State.READY, engine.state)
+    }
+
+    @Test fun malformedLyricsJsonDoesNotReplaceBufferedSettings() {
+        assertThrows<Exception> { engine.setLyricsProviders("{") }
+        assertThrows<Exception> { engine.setLyricsFetchOptions("[") }
+        init()
+        assertEquals(listOf("[]", "{}"), createArgs.takeLast(2))
     }
 
     // --- init state machine ---

@@ -456,5 +456,22 @@
   "queueRetryAllFailed": "Retry all failed",
   "settingSimultaneousDownloads": "Simultaneous downloads",
   "settingWifiOnly": "Download on Wi-Fi only",
-  "settingWifiOnlyDescription": "Wait for an unmetered Wi-Fi connection before starting new downloads."
+  "settingWifiOnlyDescription": "Wait for an unmetered Wi-Fi connection before starting new downloads.",
+  "lyricsSettingsTitle": "Lyrics",
+  "lyricsSettingsDescription": "Providers, fetch options and saving",
+  "lyricsProviderOrder": "Provider order",
+  "lyricsProviderOrderDescription": "Drag to reorder. At least one provider must stay enabled.",
+  "lyricsEngineDefaults": "Use engine default order",
+  "lyricsSaveMode": "Save lyrics",
+  "lyricsModeEmbed": "Embed in audio file",
+  "lyricsModeExternal": "Save as .lrc file",
+  "lyricsModeBoth": "Embed and save .lrc",
+  "lyricsModeOff": "Do not save",
+  "lyricsTranslation": "NetEase translation",
+  "lyricsRomanization": "NetEase romanization",
+  "lyricsMultiPerson": "Separate singers in word-synced lyrics",
+  "lyricsAppleWordSync": "Apple Music word synchronization (ELRC)",
+  "lyricsMusixmatchLanguage": "Musixmatch language",
+  "lyricsLanguageHint": "Language code (e.g. vi, en); empty for automatic",
+  "lyricsSettingsError": "Could not apply lyrics settings. Please try again."
 }

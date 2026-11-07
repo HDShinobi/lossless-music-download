@@ -456,5 +456,22 @@
   "queueRetryAllFailed": "Thử lại tất cả bài tải lỗi",
   "settingSimultaneousDownloads": "Số bài tải cùng lúc",
   "settingWifiOnly": "Chỉ tải qua Wi-Fi",
-  "settingWifiOnlyDescription": "Chờ kết nối Wi-Fi không tính phí trước khi tải bài tiếp theo."
+  "settingWifiOnlyDescription": "Chờ kết nối Wi-Fi không tính phí trước khi tải bài tiếp theo.",
+  "lyricsSettingsTitle": "Lời bài hát",
+  "lyricsSettingsDescription": "Nguồn lời, tùy chọn tải và cách lưu",
+  "lyricsProviderOrder": "Thứ tự nguồn lời",
+  "lyricsProviderOrderDescription": "Kéo để đổi thứ tự. Cần bật ít nhất một nguồn lời.",
+  "lyricsEngineDefaults": "Dùng thứ tự mặc định của engine",
+  "lyricsSaveMode": "Lưu lời bài hát",
+  "lyricsModeEmbed": "Nhúng vào tệp âm thanh",
+  "lyricsModeExternal": "Lưu thành tệp .lrc",
+  "lyricsModeBoth": "Nhúng và lưu tệp .lrc",
+  "lyricsModeOff": "Không lưu",
+  "lyricsTranslation": "Bản dịch từ NetEase",
+  "lyricsRomanization": "Phiên âm Latin từ NetEase",
+  "lyricsMultiPerson": "Tách giọng hát trong lời đồng bộ từng từ",
+  "lyricsAppleWordSync": "Đồng bộ từng từ Apple Music (ELRC)",
+  "lyricsMusixmatchLanguage": "Ngôn ngữ Musixmatch",
+  "lyricsLanguageHint": "Mã ngôn ngữ (vd. vi, en); để trống để tự chọn",
+  "lyricsSettingsError": "Chưa áp dụng được cài đặt lời bài hát. Vui lòng thử lại."
 }

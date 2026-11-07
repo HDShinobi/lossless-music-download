@@ -189,14 +189,20 @@ snapshot with the sync.
    is not supplied to the engine.
 3. `UniffiRustCore.FACTORY` calls
    `ExtensionManager.withLyricsSettings(source, data, masterKey, appVersion,
-   TIMEOUT_MS, "[]", "{}")`, in exactly that argument order, with
+   TIMEOUT_MS, lyricsProvidersJson, lyricsOptionsJson)`, in exactly that argument
+   order. Saved lyrics JSON is supplied by Dart at init. `RustEngine` buffers both values
+   before manager creation; untouched settings remain `"[]"` / `"{}"` so the
+   engine selects its own defaults. `setLyricsProviders` and
+   `setLyricsFetchOptions` buffer before READY and call the UniFFI JSON setters
+   at runtime. Configuration is replayed under the lock before READY to include
+   changes received during manager creation. Kotlin does not persist settings.
    `TIMEOUT_MS = 30_000uL`. The manager owns its environment; Kotlin does not
    construct a separate `ExtensionEnvironment`. `manager.environment().use(block)`
    obtains a temporary environment handle for each environment operation.
    The core also constructs `CancellationRegistry(CancellationDomain.EXTENSION_REQUEST)`.
 4. Before publishing READY, `RustEngine.applyConfig(created)` applies the download
-   directory allow-list, buffered fallback IDs, download priority, metadata
-   priority, and cover-cache directory (with a directory grant), in that order.
+   directory allow-list, latest lyrics providers and fetch options, buffered
+   fallback IDs, download priority, metadata priority, and cover-cache directory (with a directory grant), in that order.
    Unavailable download directories are filtered using the existing recovery path.
    Only after this succeeds does the engine store the core, set READY, clear the
    failure, and signal waiters. A configuration failure closes the created core

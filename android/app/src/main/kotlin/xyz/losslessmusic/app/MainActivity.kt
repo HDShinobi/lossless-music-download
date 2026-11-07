@@ -247,7 +247,17 @@ class MainActivity : FlutterActivity() {
         "initExtensionSystem" -> {
             val extDir = call.argument<String>("extDir")!!
             val dataDir = call.argument<String>("dataDir")!!
+            Engines.current.setLyricsProviders(call.argument<String>("providers_json") ?: "[]")
+            Engines.current.setLyricsFetchOptions(call.argument<String>("options_json") ?: "{}")
             Engines.current.initExtensionSystem(extDir, dataDir)
+            true to null
+        }
+        "setLyricsProviders" -> {
+            Engines.current.setLyricsProviders(call.argument<String>("providers_json") ?: "[]")
+            true to null
+        }
+        "setLyricsFetchOptions" -> {
+            Engines.current.setLyricsFetchOptions(call.argument<String>("options_json") ?: "{}")
             true to null
         }
         "loadExtensionFromPath" -> true to Engines.current.loadExtensionFromPath(call.argument<String>("path")!!)

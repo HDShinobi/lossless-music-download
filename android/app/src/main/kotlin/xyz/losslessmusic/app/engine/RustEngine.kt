@@ -40,6 +40,8 @@ class RustEngine(
 
     // Buffered configuration (R-P4).
     private val downloadDirs = LinkedHashSet<String>()
+    private var lyricsProvidersJson = "[]"
+    private var lyricsOptionsJson = "{}"
     private var downloadPriorityJson: String? = null
     private var metadataPriorityJson: String? = null
     private var fallbackIdsJson: String? = null
@@ -74,7 +76,8 @@ class RustEngine(
         val (ext, data, key) = args
         val created = try {
             val copy = EngineDataIsolation.ensureRustCopy(File(ext), File(data))
-            factory.create(copy.extensions.canonicalPath, copy.data.canonicalPath, key, EngineVersion.SPOTIFLAC_ENGINE_VERSION)
+            val lyrics = lock.withLock { lyricsProvidersJson to lyricsOptionsJson }
+            factory.create(copy.extensions.canonicalPath, copy.data.canonicalPath, key, EngineVersion.SPOTIFLAC_ENGINE_VERSION, lyrics.first, lyrics.second)
         } catch (e: Throwable) {
             fail(e); throw e
         }
@@ -89,6 +92,22 @@ class RustEngine(
             state = State.READY
             failure = null
             stateChanged.signalAll()
+        }
+    }
+
+    override fun setLyricsProviders(providersJson: String) {
+        RustJson.ids(providersJson)
+        lock.withLock {
+            core?.takeIf { state == State.READY }?.setLyricsProvidersJson(providersJson)
+            lyricsProvidersJson = providersJson
+        }
+    }
+
+    override fun setLyricsFetchOptions(optionsJson: String) {
+        JSONObject(optionsJson)
+        lock.withLock {
+            core?.takeIf { state == State.READY }?.setLyricsFetchOptionsJson(optionsJson)
+            lyricsOptionsJson = optionsJson
         }
     }
 
@@ -332,6 +351,9 @@ class RustEngine(
                 c.setAllowedDownloadDirectories(empty)
             }
         }
+        // Replay under the lock: settings may have changed while the factory was running.
+        c.setLyricsProvidersJson(lyricsProvidersJson)
+        c.setLyricsFetchOptionsJson(lyricsOptionsJson)
         fallbackIdsJson?.let { c.setFallbackProviders(RustJson.idsOrNull(it)) }
         downloadPriorityJson?.let { c.setProviderPriority("download", RustJson.ids(it)) }
         metadataPriorityJson?.let { c.setProviderPriority("metadata", RustJson.ids(it)) }

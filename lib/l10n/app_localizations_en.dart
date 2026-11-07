@@ -1002,4 +1002,58 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingWifiOnlyDescription =>
       'Wait for an unmetered Wi-Fi connection before starting new downloads.';
+
+  @override
+  String get lyricsSettingsTitle => 'Lyrics';
+
+  @override
+  String get lyricsSettingsDescription => 'Providers, fetch options and saving';
+
+  @override
+  String get lyricsProviderOrder => 'Provider order';
+
+  @override
+  String get lyricsProviderOrderDescription =>
+      'Drag to reorder. At least one provider must stay enabled.';
+
+  @override
+  String get lyricsEngineDefaults => 'Use engine default order';
+
+  @override
+  String get lyricsSaveMode => 'Save lyrics';
+
+  @override
+  String get lyricsModeEmbed => 'Embed in audio file';
+
+  @override
+  String get lyricsModeExternal => 'Save as .lrc file';
+
+  @override
+  String get lyricsModeBoth => 'Embed and save .lrc';
+
+  @override
+  String get lyricsModeOff => 'Do not save';
+
+  @override
+  String get lyricsTranslation => 'NetEase translation';
+
+  @override
+  String get lyricsRomanization => 'NetEase romanization';
+
+  @override
+  String get lyricsMultiPerson => 'Separate singers in word-synced lyrics';
+
+  @override
+  String get lyricsAppleWordSync => 'Apple Music word synchronization (ELRC)';
+
+  @override
+  String get lyricsMusixmatchLanguage => 'Musixmatch language';
+
+  @override
+  String get lyricsLanguageHint =>
+      'Language code (e.g. vi, en); empty for automatic';
+
+  @override
+  String get lyricsSettingsError =>
+      'Could not apply lyrics settings. Please try again.';
 }

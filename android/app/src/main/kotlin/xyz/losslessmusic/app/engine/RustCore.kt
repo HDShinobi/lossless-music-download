@@ -30,6 +30,9 @@ interface RustCore : AutoCloseable {
     fun setProviderPriority(kind: String, ids: List<String>)
     fun setFallbackProviders(ids: List<String>?)
 
+    fun setLyricsProvidersJson(json: String)
+    fun setLyricsFetchOptionsJson(json: String)
+
     // downloads / files
     fun downloadWithPump(requestJson: String): String
     fun allProgress(): String
@@ -50,5 +53,5 @@ interface RustCore : AutoCloseable {
 }
 
 fun interface RustCoreFactory {
-    fun create(sourceDirectory: String, dataDirectory: String, masterKey: String, appVersion: String): RustCore
+    fun create(sourceDirectory: String, dataDirectory: String, masterKey: String, appVersion: String, lyricsProvidersJson: String, lyricsOptionsJson: String): RustCore
 }

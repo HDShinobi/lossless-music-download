@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../models/track.dart';
+import '../models/lyrics_settings.dart';
 import '../models/installed_extension.dart';
 import '../models/download_request.dart';
 import '../models/download_progress.dart';
@@ -77,8 +78,19 @@ class BackendBridge {
   Future<void> setExtensionStorageMasterKey(String masterKey) =>
       _c.invokeMethod('setExtensionStorageMasterKey', {'masterKey': masterKey});
 
-  Future<void> initExtensionSystem(String extDir, String dataDir) =>
-      _c.invokeMethod('initExtensionSystem', {'extDir': extDir, 'dataDir': dataDir});
+  Future<void> initExtensionSystem(String extDir, String dataDir) async {
+    final lyrics = await LyricsSettings.load();
+    await _c.invokeMethod('initExtensionSystem', {
+      'extDir': extDir, 'dataDir': dataDir,
+      'providers_json': lyrics.providersJson, 'options_json': lyrics.optionsJson,
+    });
+  }
+
+  Future<void> setLyricsProviders(List<String> providers) =>
+      _c.invokeMethod('setLyricsProviders', {'providers_json': jsonEncode(providers)});
+
+  Future<void> setLyricsFetchOptions(Map<String, Object> options) =>
+      _c.invokeMethod('setLyricsFetchOptions', {'options_json': jsonEncode(options)});
 
   Future<String?> installExtension(String path) =>
       _c.invokeMethod<String>('loadExtensionFromPath', {'path': path});

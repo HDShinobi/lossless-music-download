@@ -14,6 +14,8 @@ interface NativeEngine {
     // init (group 1) — call order today: setAppVersion (Kotlin), setExtensionStorageMasterKey, initExtensionSystem
     fun setAppVersion(version: String)
     fun setExtensionStorageMasterKey(masterKey: String)
+    fun setLyricsProviders(providersJson: String)
+    fun setLyricsFetchOptions(optionsJson: String)
     fun initExtensionSystem(extDir: String, dataDir: String)
     fun loadExtensionsFromDir(dirPath: String): String
 

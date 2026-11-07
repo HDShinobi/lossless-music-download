@@ -26,6 +26,8 @@ class FakeRustCore : RustCore {
 
     private fun rec(s: String) { synchronized(calls) { calls += s } }
 
+    override fun setLyricsProvidersJson(json: String) = rec("lyricsProviders:$json")
+    override fun setLyricsFetchOptionsJson(json: String) = rec("lyricsOptions:$json")
     override fun loadAll() = "{\"loaded\":[],\"errors\":[]}".also { rec("loadAll") }
     override fun installed() = "[]".also { rec("installed") }
     override fun install(packagePath: String) = "{}".also { rec("install:$packagePath") }
