@@ -2,6 +2,54 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/services/download_paths.dart';
 
 void main() {
+  group('stripTrackNumberPrefix', () {
+    const cases = {
+      '01. Title': 'Title',
+      '01 Title': 'Title',
+      '1-01. Title': 'Title',
+      '2-01. Title': 'Title',
+      '2-10 Title': 'Title',
+      'Title': 'Title',
+      '1999': '1999',
+      // Callers strip extensions separately; a dot still counts as a separator.
+      '1999.flac': 'flac',
+      '7 Rings': 'Rings',
+      '22. Acacia': 'Acacia',
+      '01. 7 Rings': '7 Rings',
+      '2-10. 22. Acacia': '22. Acacia',
+      '': '',
+    };
+    for (final entry in cases.entries) {
+      test('strips one prefix from "${entry.key}"', () {
+        expect(stripTrackNumberPrefix(entry.key), entry.value);
+      });
+    }
+
+    const dottedCases = {
+      '01. Title': 'Title',
+      '01 Title': '01 Title',
+      '1-01. Title': 'Title',
+      '2-01. Title': 'Title',
+      '2-10 Title': '2-10 Title',
+      'Title': 'Title',
+      '1999': '1999',
+      '1999.flac': 'flac',
+      '7 Rings': '7 Rings',
+      '22. Acacia': 'Acacia',
+      '01. 7 Rings': '7 Rings',
+      '2-10. 22. Acacia': '22. Acacia',
+      '': '',
+    };
+    for (final entry in dottedCases.entries) {
+      test('requires a dot for artist matching of "${entry.key}"', () {
+        expect(
+          stripTrackNumberPrefix(entry.key, requireDot: true),
+          entry.value,
+        );
+      });
+    }
+  });
+
   group('sanitizeFolderSegment', () {
     test('replaces characters that are illegal in a path segment', () {
       expect(sanitizeFolderSegment('AC/DC'), 'AC DC');

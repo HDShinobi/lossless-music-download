@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/library_manager.dart';
 import '../providers/library_provider.dart';
+import '../services/download_paths.dart';
 import '../theme/app_tokens.dart';
 import '../providers/extensions_provider.dart';
 import '../util/lossless_verdict.dart';
@@ -34,12 +35,12 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
 
   LibraryEntry get entry => widget.entry;
 
-  /// Strip leading track number ("01 " or "01. ") and file extension.
+  /// Strip leading track/disc number and file extension.
   String get _displayName {
     final nameWithoutExt = entry.name.contains('.')
         ? entry.name.substring(0, entry.name.lastIndexOf('.'))
         : entry.name;
-    return nameWithoutExt.replaceFirst(RegExp(r'^[0-9]+[\s.]\s*'), '');
+    return stripTrackNumberPrefix(nameWithoutExt);
   }
 
   // ---- Management actions ----

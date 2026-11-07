@@ -129,6 +129,18 @@ String basenameTemplateFor(
   return multiDisc ? '{disc}-{track}. {title}' : '{track}. {title}';
 }
 
+final _trackNumberPrefix = RegExp(r'^\d+(?:-\d+)?[\s.]\s*');
+final _dottedTrackNumberPrefix = RegExp(r'^\d+(?:-\d+)?\.\s*');
+
+/// Removes one track-number prefix, optionally preceded by a disc number.
+/// Callers handle file extensions separately. [requireDot] preserves artist
+/// matching's stricter separator rule so titles like "7 Rings" stay intact.
+String stripTrackNumberPrefix(String name, {bool requireDot = false}) =>
+    name.replaceFirst(
+      requireDot ? _dottedTrackNumberPrefix : _trackNumberPrefix,
+      '',
+    );
+
 final _placeholder = RegExp(r'\{([a-z_]+)(?::[^}]*)?\}');
 
 /// Removes placeholders whose value is empty, together with the punctuation left

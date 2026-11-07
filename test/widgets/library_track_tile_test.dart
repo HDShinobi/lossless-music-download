@@ -58,6 +58,22 @@ Widget buildTile(LibraryEntry entry, {BackendBridge? bridge}) {
 
 void main() {
   group('LibraryTrackTile', () {
+    for (final name in ['1-01. Title.flac', '2-10 Title.flac']) {
+      testWidgets('strips the multi-disc prefix from $name', (tester) async {
+        final entry = LibraryEntry(
+          path: '/downloads/$name',
+          name: name,
+          sizeBytes: 5000000,
+          format: 'FLAC',
+          verified: true,
+        );
+        await tester.pumpWidget(buildTile(entry, bridge: _FakeBridge(null)));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Title'), findsOneWidget);
+      });
+    }
+
     testWidgets('FLAC entry shows FLAC badge and verified check icon',
         (tester) async {
       final bridge = _FakeBridge(

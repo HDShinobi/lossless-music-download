@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/library_manager.dart';
 import '../providers/library_provider.dart';
+import '../services/download_paths.dart';
 
 /// Shows the edit-metadata bottom sheet for [entry], prefilled from its current
 /// tags. Returns the lowercase-keyed field map to write (via [buildEditFields]),
@@ -41,7 +42,7 @@ class _EditMetadataSheetState extends State<_EditMetadataSheet> {
     final noExt = e.name.contains('.')
         ? e.name.substring(0, e.name.lastIndexOf('.'))
         : e.name;
-    return noExt.replaceFirst(RegExp(r'^[0-9]+[\s.]\s*'), '');
+    return stripTrackNumberPrefix(noExt);
   }
 
   @override

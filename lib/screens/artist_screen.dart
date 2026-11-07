@@ -10,6 +10,7 @@ import '../providers/download_options_provider.dart';
 import '../providers/download_queue_provider.dart';
 import '../providers/extensions_provider.dart';
 import '../providers/library_provider.dart';
+import '../services/download_paths.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/download_sheet.dart';
 import 'album_screen.dart';
@@ -405,8 +406,9 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen> {
     final libraryNames = library
         .map((e) {
           final n = e.name.toLowerCase();
-          // strip leading "01. " pattern and extension
-          return n.replaceAll(RegExp(r'^\d+\.\s*'), '').replaceAll(RegExp(r'\.\w+$'), '');
+          // Strip a dotted track/disc prefix and extension.
+          return stripTrackNumberPrefix(n, requireDot: true)
+              .replaceAll(RegExp(r'\.\w+$'), '');
         })
         .toSet();
 
@@ -687,7 +689,7 @@ class _PopularCarousel extends StatelessWidget {
 
   bool _inLibrary(Track t) {
     final normalized =
-        t.name.toLowerCase().replaceAll(RegExp(r'^\d+\.\s*'), '');
+        stripTrackNumberPrefix(t.name.toLowerCase(), requireDot: true);
     return libraryNames.contains(normalized);
   }
 

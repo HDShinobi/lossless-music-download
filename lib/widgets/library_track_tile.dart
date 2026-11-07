@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/audio_quality.dart';
 import '../providers/audio_quality_provider.dart';
 import '../providers/library_provider.dart';
+import '../services/download_paths.dart';
 import '../theme/app_tokens.dart';
 
 /// A branded list-row widget for a single library track entry.
@@ -24,7 +25,7 @@ class LibraryTrackTile extends ConsumerWidget {
     final nameWithoutExt = entry.name.contains('.')
         ? entry.name.substring(0, entry.name.lastIndexOf('.'))
         : entry.name;
-    return nameWithoutExt.replaceFirst(RegExp(r'^[0-9]+[\s.]\s*'), '');
+    return stripTrackNumberPrefix(nameWithoutExt);
   }
 
   @override
