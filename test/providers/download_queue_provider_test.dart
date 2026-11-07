@@ -144,6 +144,36 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  test('cold start uses saved templates and tags in the first request', () async {
+    SharedPreferences.setMockInitialValues({
+      'filename_template': '{title} - {artist}',
+      'album_folder_template': '{album} ({year})',
+      'artist_tag_mode': 'primary',
+      'metadata_separators': '{"genre":" / "}',
+      'embed_metadata': false,
+      'embed_cover': false,
+      'embed_lyrics': false,
+      'auto_fallback': false,
+      'simultaneous_downloads': 2,
+    });
+    final bridge = _FakeBridge()..downloadResult = {'success': true};
+    final c = _makeContainer(bridge);
+    addTearDown(c.dispose);
+    await c.read(downloadQueueProvider.notifier).enqueue(const Track(
+      id: 'cold', name: 'Song', artists: 'Artist', albumName: 'Album',
+      releaseDate: '2026-11-07'));
+    await _pump();
+    final json = bridge.downloadCalls.single.toJson();
+    expect(json['output_dir'], '/fake/downloads/Album (2026)');
+    expect(json['filename_format'], '{title} - {artist}');
+    expect(json['artist_tag_mode'], 'primary');
+    expect(json['metadata_separators']['genre'], ' / ');
+    expect(json['embed_metadata'], false);
+    expect(json['embed_max_quality_cover'], false);
+    expect(json['embed_lyrics'], false);
+    expect(json['use_fallback'], false);
+  });
+
   test('pause blocks new work; resume continues; clear only removes done', () async {
     final bridge = _FakeBridge()..downloadResult = {'success': true};
     final c = _makeContainer(bridge);
@@ -240,7 +270,7 @@ void main() {
 
     // (a) enqueue immediately adds visible entry; sequential processor sets done
     test(
-        'enqueue adds entry instantly (status downloading), '
+        'enqueue adds entry instantly while options load, '
         'then done after processing', () async {
       final bridge = _FakeBridge()..downloadResult = {};
       final container = _makeContainer(bridge);
@@ -248,15 +278,15 @@ void main() {
 
       final notifier = container.read(downloadQueueProvider.notifier);
 
-      // enqueue() has no internal awaits — returns immediately. But
-      // _processQueue() starts synchronously and sets status→downloading
-      // before its first internal await.
+      // The entry is visible immediately, but no download may start until
+      // persisted options are ready.
       final future = notifier.enqueue(_track);
 
       final immediateState = container.read(downloadQueueProvider);
       expect(immediateState, hasLength(1));
       expect(immediateState.first.track, equals(_track));
-      expect(immediateState.first.status, equals('downloading'));
+      expect(immediateState.first.status, equals('queued'));
+      expect(bridge.downloadCalls, isEmpty);
 
       // Wait for the sequential processor to finish.
       await future;

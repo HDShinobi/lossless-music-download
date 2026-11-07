@@ -241,6 +241,23 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     _nativeRunStopped = false;
     var continueProcessing = true;
     try {
+      // Hydrate every option before resolving paths or building either kind of
+      // request. These notifiers expose defaults until their startup load ends.
+      await Future.wait([
+        ref.read(folderOrganizationProvider.notifier).ready,
+        ref.read(filenameTemplateProvider.notifier).ready,
+        ref.read(albumFolderTemplateProvider.notifier).ready,
+        ref.read(artistTagModeProvider.notifier).ready,
+        ref.read(metadataSeparatorsProvider.notifier).ready,
+        ref.read(embedMetadataProvider.notifier).ready,
+        ref.read(embedCoverProvider.notifier).ready,
+        ref.read(embedLyricsProvider.notifier).ready,
+        ref.read(autoFallbackProvider.notifier).ready,
+        ref.read(writeLrcSidecarProvider.notifier).ready,
+        ref.read(simultaneousDownloadsProvider.notifier).ready,
+        ref.read(wifiOnlyProvider.notifier).ready,
+      ]);
+      if (!ref.mounted || _manualPaused) return;
       final worker = ref.read(nativeDownloadWorkerProvider);
       if (worker.isAvailable) {
         continueProcessing = await _runNativeBatch(worker, queued);
@@ -400,11 +417,6 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     var fellBackToStartupTimeout = false;
     var stoppedWithPending = false;
     if (requests.isNotEmpty) {
-      await Future.wait([
-        ref.read(simultaneousDownloadsProvider.notifier).ready,
-        ref.read(wifiOnlyProvider.notifier).ready,
-      ]);
-      if (!ref.mounted) return false;
       final runId = 'run_${DateTime.now().microsecondsSinceEpoch}';
       printAppLog(LogLevel.debug, 'Queue', 'Starting native batch: ${requests.length} items');
       await worker.start(requests, runId: runId, settings: {
@@ -541,7 +553,6 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     }
     _setStatus(next.itemId, 'downloading');
     try {
-      await ref.read(wifiOnlyProvider.notifier).ready;
       if (!ref.mounted || !state.any((e) => e.itemId == next.itemId)) return;
       if (_manualPaused || ref.read(wifiOnlyProvider)) {
         _setStatus(next.itemId, 'queued');

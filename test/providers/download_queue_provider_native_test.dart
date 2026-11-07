@@ -398,6 +398,41 @@ void main() {
     expect(state.first.progress, 1.0);
   });
 
+  test('cold start uses saved templates and tags in the first request', () async {
+    SharedPreferences.setMockInitialValues({
+      'filename_template': '{title} - {artist}',
+      'album_folder_template': '{album} ({year})',
+      'artist_tag_mode': 'primary',
+      'metadata_separators': '{"genre":" / "}',
+      'embed_metadata': false,
+      'embed_cover': false,
+      'embed_lyrics': false,
+      'auto_fallback': false,
+      'simultaneous_downloads': 2,
+    });
+    final worker = _FakeNativeWorker();
+    final c = ProviderContainer(overrides: [
+      backendBridgeProvider.overrideWithValue(_UnusedBridge()),
+      downloadDirPathProvider.overrideWithValue(Future.value('/fake/downloads')),
+      nativeDownloadWorkerProvider.overrideWithValue(worker),
+    ]);
+    addTearDown(c.dispose);
+    await c.read(downloadQueueProvider.notifier).enqueue(const Track(
+      id: 'cold', name: 'Song', artists: 'Artist', albumName: 'Album',
+      releaseDate: '2026-11-07'));
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    final json = jsonDecode(worker.startedBatches.single.single['request_json'] as String);
+    expect(json['output_dir'], '/fake/downloads/Album (2026)');
+    expect(json['filename_format'], '{title} - {artist}');
+    expect(json['artist_tag_mode'], 'primary');
+    expect(json['metadata_separators']['genre'], ' / ');
+    expect(json['embed_metadata'], false);
+    expect(json['embed_max_quality_cover'], false);
+    expect(json['embed_lyrics'], false);
+    expect(json['use_fallback'], false);
+    expect(worker.settingsReceived!['concurrent_downloads'], 2);
+  });
+
   test('native payload uses custom templates and tagging preferences', () async {
     final worker = _FakeNativeWorker();
     final c = ProviderContainer(overrides: [

@@ -104,11 +104,12 @@ class FolderOrganizationNotifier extends Notifier<FolderOrganization> {
   static const _key = 'folder_organization';
 
   bool _explicitlySet = false;
+  late Future<void> ready;
 
   @override
   FolderOrganization build() {
     _explicitlySet = false;
-    Future.microtask(() async {
+    ready = Future.microtask(() async {
       final p = await SharedPreferences.getInstance();
       if (ref.mounted && !_explicitlySet) {
         state = FolderOrganization.fromStorage(p.getString(_key));
@@ -139,11 +140,12 @@ class _StringPrefNotifier extends Notifier<String> {
   final String key, defaultValue;
   final bool Function(String) valid;
   bool _explicitlySet = false;
+  late Future<void> ready;
 
   @override
   String build() {
     _explicitlySet = false;
-    Future.microtask(() async {
+    ready = Future.microtask(() async {
       final p = await SharedPreferences.getInstance();
       final value = p.getString(key) ?? defaultValue;
       if (ref.mounted && !_explicitlySet) {
@@ -174,11 +176,12 @@ final artistTagModeProvider = NotifierProvider<_StringPrefNotifier, String>(
 class MetadataSeparatorsNotifier extends Notifier<MetadataSeparators> {
   static const _key = 'metadata_separators';
   bool _explicitlySet = false;
+  late Future<void> ready;
 
   @override
   MetadataSeparators build() {
     _explicitlySet = false;
-    Future.microtask(() async {
+    ready = Future.microtask(() async {
       final p = await SharedPreferences.getInstance();
       try {
         final json = jsonDecode(p.getString(_key) ?? '{}');

@@ -6,6 +6,9 @@ import com.antonkarpenko.ffmpegkit.ReturnCode
 import org.json.JSONObject
 import xyz.losslessmusic.app.engine.Engines
 import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
@@ -47,9 +50,9 @@ object NonFlacMetadataEmbedder {
 
         try {
             when (extOf(filePath)) {
-                "opus", "ogg" -> embedOpus(context, filePath, metadata, coverPath)
-                "m4a" -> embedM4a(context, filePath, metadata, coverPath)
-                "mp3" -> embedMp3(context, filePath, metadata, coverPath)
+                "opus", "ogg" -> embedOpus(filePath, metadata, coverPath)
+                "m4a" -> embedM4a(filePath, metadata, coverPath)
+                "mp3" -> embedMp3(filePath, metadata, coverPath)
             }
             // FFmpeg dictionaries collapse repeated keys. The existing engine
             // editor writes real repeated Vorbis comments and preserves cover/lyrics.
@@ -168,21 +171,34 @@ object NonFlacMetadataEmbedder {
         }
     }
 
+    internal fun replaceOutput(temp: File, original: File) {
+        try {
+            Files.move(temp.toPath(), original.toPath(),
+                StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } catch (_: IOException) {
+            // Some Android 9 sdcardfs mounts reject atomic moves. Try their
+            // regular rename before falling back to a serialized copy.
+            try {
+                Files.move(temp.toPath(), original.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } catch (_: IOException) {
+                temp.copyTo(original, overwrite = true)
+                temp.delete()
+            }
+        }
+    }
+
     private fun runAndReplace(args: List<String>, tempOutput: String, originalPath: String) {
         val session = FFmpegKit.executeWithArguments(args.toTypedArray())
         val temp = File(tempOutput)
         if (ReturnCode.isSuccess(session.returnCode) && temp.exists()) {
-            val original = File(originalPath)
-            if (original.exists()) original.delete()
-            temp.copyTo(original, overwrite = true)
-            temp.delete()
+            replaceOutput(temp, File(originalPath))
         } else {
             if (temp.exists()) temp.delete()
         }
     }
 
-    private fun embedOpus(context: Context, opusPath: String, metadata: Map<String, String>, coverPath: String?) {
-        val tempOutput = File.createTempFile("temp_embed_", ".opus", context.cacheDir).absolutePath
+    private fun embedOpus(opusPath: String, metadata: Map<String, String>, coverPath: String?) {
+        val tempOutput = File.createTempFile("temp_embed_", ".opus", File(opusPath).absoluteFile.parentFile).absolutePath
         val args = mutableListOf(
             "-v", "error", "-hide_banner",
             "-i", opusPath,
@@ -201,8 +217,8 @@ object NonFlacMetadataEmbedder {
         runAndReplace(args, tempOutput, opusPath)
     }
 
-    private fun embedM4a(context: Context, m4aPath: String, metadata: Map<String, String>, coverPath: String?) {
-        val tempOutput = File.createTempFile("temp_embed_", ".m4a", context.cacheDir).absolutePath
+    private fun embedM4a(m4aPath: String, metadata: Map<String, String>, coverPath: String?) {
+        val tempOutput = File.createTempFile("temp_embed_", ".m4a", File(m4aPath).absoluteFile.parentFile).absolutePath
         val hasCover = coverPath != null
         val args = mutableListOf("-v", "error", "-hide_banner", "-i", m4aPath)
         if (hasCover) { args.add("-i"); args.add(coverPath!!) }
@@ -221,8 +237,8 @@ object NonFlacMetadataEmbedder {
         runAndReplace(args, tempOutput, m4aPath)
     }
 
-    private fun embedMp3(context: Context, mp3Path: String, metadata: Map<String, String>, coverPath: String?) {
-        val tempOutput = File.createTempFile("temp_embed_", ".mp3", context.cacheDir).absolutePath
+    private fun embedMp3(mp3Path: String, metadata: Map<String, String>, coverPath: String?) {
+        val tempOutput = File.createTempFile("temp_embed_", ".mp3", File(mp3Path).absoluteFile.parentFile).absolutePath
         val hasCover = coverPath != null
         val args = mutableListOf("-v", "error", "-hide_banner", "-i", mp3Path)
         if (hasCover) { args.add("-i"); args.add(coverPath!!) }
