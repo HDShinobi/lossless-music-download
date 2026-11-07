@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+import 'package:lossless_music_download/services/app_log.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/models/track.dart';
@@ -61,6 +63,35 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+  });
+
+  test('native completion logs the resolved service and final path once', () async {
+    final log = AppLog();
+    final previousPrint = debugPrint;
+    debugPrint = (message, {wrapWidth}) {
+      if (message != null) log.capturePrint(message);
+    };
+    addTearDown(() => debugPrint = previousPrint);
+    final worker = _FakeNativeWorker()
+      ..failItemsWith = (id) => NativeWorkerItemState.fromJson({
+        'item_id': id,
+        'status': 'done',
+        'resolved_service': 'qobuz-web',
+        'file_path': '/fake/final.flac',
+      });
+    final container = ProviderContainer(overrides: [
+      backendBridgeProvider.overrideWithValue(_UnusedBridge()),
+      downloadDirPathProvider.overrideWithValue(Future.value('/fake/downloads')),
+      nativeDownloadWorkerProvider.overrideWithValue(worker),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(downloadQueueProvider.notifier).enqueue(_track);
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+
+    final success = log.entries.where((e) => e.message.contains('/fake/final.flac'));
+    expect(success, hasLength(1));
+    expect(success.single.level, LogLevel.info);
+    expect(success.single.message, contains('qobuz-web'));
   });
 
   test('enqueue hands the item to the native worker when available', () async {

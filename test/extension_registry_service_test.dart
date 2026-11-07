@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:lossless_music_download/services/app_log.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -108,6 +110,33 @@ void main() {
     setUp(() {
       svc = ExtensionRegistryService(_buildMockClient());
     });
+
+    for (final status in [404, 200]) {
+      test('logs a warning when skipping a registry (HTTP $status)', () async {
+        final log = AppLog();
+        final previousPrint = debugPrint;
+        debugPrint = (message, {wrapWidth}) {
+          if (message != null) log.capturePrint(message);
+        };
+        addTearDown(() => debugPrint = previousPrint);
+        final service = ExtensionRegistryService(MockClient((request) async {
+          if (request.url.toString() == _aggregatorUrl) {
+            return http.Response(_aggregatorBody, 200);
+          }
+          if (request.url.toString() == _deadRegistryUrl) {
+            return http.Response(status == 200 ? 'invalid JSON' : 'Not Found', status);
+          }
+          return http.Response(_registry1Body, 200);
+        }));
+
+        final catalog = await service.fetchCatalog(_aggregatorUrl);
+
+        expect(catalog, isNotEmpty);
+        final warning = log.entries.singleWhere((e) => e.level == LogLevel.warning);
+        expect(warning.message, contains('dead.example.com'));
+        expect(warning.message, contains('$status'));
+      });
+    }
 
     test('fetchCatalog merges extensions from all live registries', () async {
       final catalog = await svc.fetchCatalog(_aggregatorUrl);

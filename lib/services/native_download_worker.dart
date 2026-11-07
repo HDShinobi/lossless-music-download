@@ -25,6 +25,9 @@ class NativeWorkerItemState {
   /// Reflects the actual service that was used for the download.
   final String? resolvedService;
 
+  /// Final path after native container conversion and metadata finalization.
+  final String? filePath;
+
   const NativeWorkerItemState({
     required this.itemId,
     required this.status,
@@ -35,6 +38,7 @@ class NativeWorkerItemState {
     this.retryAfterSeconds = 0,
     this.service,
     this.resolvedService,
+    this.filePath,
   });
 
   factory NativeWorkerItemState.fromJson(Map<String, dynamic> j) => NativeWorkerItemState(
@@ -47,6 +51,7 @@ class NativeWorkerItemState {
         retryAfterSeconds: (j['retry_after_seconds'] as num?)?.toInt() ?? 0,
         service: j['service']?.toString(),
         resolvedService: j['resolved_service']?.toString(),
+        filePath: j['file_path']?.toString(),
       );
 }
 

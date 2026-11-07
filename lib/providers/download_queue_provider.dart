@@ -11,12 +11,14 @@ import '../models/download_progress.dart';
 import '../models/download_request.dart';
 import '../models/installed_extension.dart';
 import '../models/track.dart';
+import '../services/app_log.dart';
 import '../services/backend_bridge.dart';
 import '../services/container_remux_service.dart';
 import '../services/download_paths.dart';
 import '../services/ffmpeg_metadata_service.dart';
 import '../services/native_download_worker.dart';
 import '../util/queue_view.dart';
+import '../utils/extension_auth_launcher.dart';
 import '../widgets/track_tile.dart'; // TrackDownloadState
 import 'download_dir_provider.dart';
 import 'download_labels_provider.dart';
@@ -150,6 +152,9 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       ),
       ...state,
     ];
+
+    printAppLog(LogLevel.info, 'Queue',
+        'Enqueued ${track.name} – ${track.artists}; service=${service ?? 'auto'}, quality=${quality ?? 'default'}');
 
     // Kick sequential processor (no-op if already running).
     unawaited(_processQueue());
@@ -343,6 +348,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     var fellBackToStartupTimeout = false;
     if (requests.isNotEmpty) {
       final runId = 'run_${DateTime.now().microsecondsSinceEpoch}';
+      printAppLog(LogLevel.debug, 'Queue', 'Starting native batch: ${requests.length} items');
       await worker.start(requests, runId: runId);
 
       // Poll until the native worker reports it's done with this run. If it
@@ -427,7 +433,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
 
   DownloadEntry _applyNativeItemState(DownloadEntry entry, NativeWorkerItemState item) {
     if (entry.status == 'done' || entry.status == 'failed') return entry;
-    return entry.copyWith(
+    final updated = entry.copyWith(
       status: item.status,
       progress: item.progress,
       bytesReceived: item.bytesReceived,
@@ -436,12 +442,19 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       verificationService: item.service,
       resolvedService: item.resolvedService,
     );
+    if (updated.status == 'failed') _logFailure(updated);
+    if (updated.status == 'done') {
+      printAppLog(LogLevel.info, 'Queue',
+          'Completed service=${updated.resolvedService ?? updated.service ?? 'auto'}; file=${item.filePath ?? 'unavailable'}');
+    }
+    return updated;
   }
 
   // The original single-item Dart download path -- now the fallback used
   // for non-Android platforms, items the native worker's gate rejects, and
   // runs whose native snapshot stalls.
   Future<void> _runDartFallback(DownloadEntry next) async {
+    printAppLog(LogLevel.debug, 'Queue', 'Starting Dart fallback: ${next.itemId}');
     _setStatus(next.itemId, 'downloading');
     try {
       final dir = await ref.read(downloadDirProvider.future);
@@ -467,6 +480,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         try {
           final dup = await bridge.checkDuplicate(target.dir, next.track.isrc!);
           if (dup['exists'] == true) {
+            printAppLog(LogLevel.info, 'Queue',
+                'Duplicate skipped service=${next.service ?? 'auto'}; file=${dup['path'] ?? 'unavailable'}');
             _setStatus(next.itemId, 'done', progressIfDone: 1.0);
             ref.invalidate(libraryProvider);
             throw _DuplicateSkipped();
@@ -581,6 +596,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         if (ref.read(writeLrcSidecarProvider)) {
           await _writeLrcSidecar(bridge, res, next.track);
         }
+        printAppLog(LogLevel.info, 'Queue',
+            'Completed service=${resultService ?? resolvedService ?? 'auto'}; file=${res['file_path'] ?? 'unavailable'}');
         ref.invalidate(libraryProvider);
       }
     } on _DuplicateSkipped {
@@ -886,6 +903,21 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         else
           e,
     ];
+    if (status == 'failed') {
+      for (final entry in state.where((e) => e.itemId == itemId)) {
+        _logFailure(entry);
+      }
+    }
+  }
+
+  void _logFailure(DownloadEntry entry) {
+    final service = entry.verificationService ?? entry.service ?? 'auto';
+    printAppLog(LogLevel.error, 'Queue',
+        'Failed service=$service; item=${entry.itemId}; ${entry.error ?? 'unknown'}');
+    if (isExtensionVerificationRequired(entry.error ?? '')) {
+      printAppLog(LogLevel.warning, 'Queue',
+          'Verification required for service/extension=$service; item=${entry.itemId}');
+    }
   }
 
   void _removeLocal(String itemId) {
@@ -904,6 +936,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     if (_rateLimitRetriedItemIds.contains(itemId)) return false;
     _rateLimitRetriedItemIds.add(itemId);
     final delay = rateLimitBackoffDelay(errorMsg);
+    printAppLog(LogLevel.warning, 'Queue',
+        'Rate-limit retry scheduled in ${delay.inSeconds}s; item=$itemId; $errorMsg');
     _setStatus(itemId, 'downloading',
         error: 'Rate limited · retrying after ${delay.inSeconds}s');
     await Future<void>.delayed(delay);

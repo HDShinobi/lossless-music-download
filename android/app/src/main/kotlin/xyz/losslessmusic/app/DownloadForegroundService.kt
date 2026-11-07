@@ -124,6 +124,7 @@ class DownloadForegroundService : Service() {
         var service: String? = null,
         // Winning provider reported by a successful download's result JSON.
         var resolvedService: String? = null,
+        var filePath: String? = null,
     )
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -359,7 +360,7 @@ class DownloadForegroundService : Service() {
             }
             // FLAC needs no extra step -- the engine already tagged it natively.
 
-            updateItem(request.itemId) { it.status = "done"; it.progress = 1.0 }
+            updateItem(request.itemId) { it.status = "done"; it.progress = 1.0; it.filePath = filePath }
             writeSnapshot(isRunning = true)
         }
         writeSnapshot(isRunning = false)
@@ -434,6 +435,7 @@ class DownloadForegroundService : Service() {
                         .apply { if (item.retryAfterSeconds > 0) put("retry_after_seconds", item.retryAfterSeconds) }
                         .apply { item.service?.let { put("service", it) } }
                         .apply { item.resolvedService?.let { put("resolved_service", it) } }
+                        .apply { item.filePath?.let { put("file_path", it) } }
                 )
             }
         }

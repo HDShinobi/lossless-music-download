@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+import 'package:lossless_music_download/services/app_log.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/models/download_progress.dart';
@@ -142,6 +144,43 @@ void main() {
   });
 
   group('DownloadQueueController', () {
+    test('failed download logs the stored error, service and item id', () async {
+      final log = AppLog();
+      final previousPrint = debugPrint;
+      debugPrint = (message, {wrapWidth}) {
+        if (message != null) log.capturePrint(message);
+      };
+      addTearDown(() => debugPrint = previousPrint);
+      final bridge = _FakeBridge()
+        ..downloadResult = {
+          'success': false,
+          'error': 'verification_required: complete browser challenge',
+          'service': 'qobuz-web',
+        };
+      final container = _makeContainer(bridge);
+      addTearDown(container.dispose);
+      final finished = Completer<void>();
+      container.listen(downloadQueueProvider, (_, entries) {
+        if (entries.any((e) => e.status == 'failed') && !finished.isCompleted) {
+          finished.complete();
+        }
+      });
+
+      await container.read(downloadQueueProvider.notifier).enqueue(
+        _track, service: 'amazon', quality: 'flac',
+      );
+      await finished.future.timeout(const Duration(seconds: 5));
+
+      final entry = container.read(downloadQueueProvider).single;
+      final failure = log.entries.singleWhere((e) => e.level == LogLevel.error);
+      expect(failure.tag, 'Queue');
+      expect(failure.message, contains(entry.error!));
+      expect(failure.message, contains(entry.itemId));
+      expect(failure.message, contains('qobuz-web'));
+      expect(log.entries.where((e) => e.level == LogLevel.warning).single.message,
+          contains('qobuz-web'));
+    });
+
     // (a) enqueue immediately adds visible entry; sequential processor sets done
     test(
         'enqueue adds entry instantly (status downloading), '

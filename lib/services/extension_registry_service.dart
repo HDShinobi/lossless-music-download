@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/store_extension.dart';
+import 'app_log.dart';
 
 class ExtensionRegistryService {
   ExtensionRegistryService(this._client);
@@ -10,7 +11,11 @@ class ExtensionRegistryService {
   /// Fetch aggregator -> each registry -> merged catalog (dedup by id, first wins).
   Future<List<StoreExtension>> fetchCatalog(String aggregatorUrl) async {
     final aggRes = await _client.get(Uri.parse(aggregatorUrl));
-    if (aggRes.statusCode != 200) throw HttpException('aggregator ${aggRes.statusCode}');
+    if (aggRes.statusCode != 200) {
+      printAppLog(LogLevel.warning, 'Registry',
+          'Aggregator ${Uri.tryParse(aggregatorUrl)?.host ?? 'unknown'}: HTTP ${aggRes.statusCode}');
+      throw HttpException('aggregator ${aggRes.statusCode}');
+    }
     final agg = jsonDecode(aggRes.body) as Map<String, dynamic>;
     final repos = (agg['repos'] as List? ?? []);
     final byId = <String, StoreExtension>{};
@@ -19,9 +24,15 @@ class ExtensionRegistryService {
       final url = (repo['url'] ?? '').toString();
       final name = (repo['name'] ?? url).toString();
       if (url.isEmpty) continue;
+      int? status;
       try {
         final regRes = await _client.get(Uri.parse(url));
-        if (regRes.statusCode != 200) continue;
+        status = regRes.statusCode;
+        if (status != 200) {
+          printAppLog(LogLevel.warning, 'Registry',
+              'Skipping registry ${Uri.tryParse(url)?.host ?? 'unknown'}: HTTP $status');
+          continue;
+        }
         final reg = jsonDecode(regRes.body) as Map<String, dynamic>;
         for (final e in (reg['extensions'] as List? ?? [])) {
           final se = StoreExtension.fromRegistryJson(
@@ -30,7 +41,9 @@ class ExtensionRegistryService {
           );
           byId.putIfAbsent(se.id, () => se);
         }
-      } catch (_) {
+      } catch (e) {
+        printAppLog(LogLevel.warning, 'Registry',
+            'Skipping registry ${Uri.tryParse(url)?.host ?? 'unknown'}: HTTP ${status ?? 'unavailable'}; $e');
         // skip a dead/invalid registry, keep others
       }
     }

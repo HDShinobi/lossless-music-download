@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/store_extension.dart';
+import '../services/app_log.dart';
 import '../services/extension_registry_service.dart';
 import 'extensions_provider.dart'; // backendBridgeProvider, appDirsProvider, extensionsProvider
 
@@ -84,15 +85,20 @@ class DiscoverController extends AsyncNotifier<List<StoreExtension>> {
   /// downloaded temp file is cleaned up and the error is rethrown; the existing
   /// installation is left untouched because the backend only swaps on success.
   Future<String?> _downloadAndInstall(StoreExtension e) async {
-    final (extDir, _) = await ref.read(appDirsProvider);
-    final bridge = ref.read(backendBridgeProvider);
-    final path = await ref
-        .read(registryServiceProvider)
-        .downloadExtension(e, '$extDir/_dl');
+    String? path;
     try {
+      final (extDir, _) = await ref.read(appDirsProvider);
+      final bridge = ref.read(backendBridgeProvider);
+      path = await ref
+          .read(registryServiceProvider)
+          .downloadExtension(e, '$extDir/_dl');
       return await bridge.installExtension(path);
-    } catch (_) {
-      try { await File(path).delete(); } catch (_) {}
+    } catch (error) {
+      printAppLog(LogLevel.warning, 'Discover',
+          'Extension install/update failed: ${e.id}; host=${Uri.tryParse(e.downloadUrl)?.host ?? 'unknown'}; $error');
+      if (path != null) {
+        try { await File(path).delete(); } catch (_) {}
+      }
       rethrow;
     }
   }
