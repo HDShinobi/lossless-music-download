@@ -1123,4 +1123,57 @@ class AppLocalizationsVi extends AppLocalizations {
   String batchRefreshSummary(int success, int total, int failed) {
     return 'Đã làm mới $success/$total · $failed tệp bị lỗi';
   }
+
+  @override
+  String get reorganizeTitle => 'Sắp xếp lại tệp đã tải';
+
+  @override
+  String get reorganizeExisting => 'Áp dụng cho tệp đã tải…';
+
+  @override
+  String get reorganizeApply => 'Áp dụng thay đổi';
+
+  @override
+  String get reorganizeReady => 'Sẽ di chuyển';
+
+  @override
+  String get reorganizeUnchanged => 'Không thay đổi';
+
+  @override
+  String get reorganizeConflict => 'Trùng đường dẫn — bỏ qua';
+
+  @override
+  String get reorganizeMissing => 'Không tìm thấy tệp — bỏ qua';
+
+  @override
+  String get reorganizeUnsafe =>
+      'Ngoài thư mục tải xuống hoặc đường dẫn không an toàn — bỏ qua';
+
+  @override
+  String get reorganizeBusy =>
+      'Chờ tải xuống và làm mới metadata hoàn tất rồi thử lại.';
+
+  @override
+  String get reorganizeCancelled =>
+      'Đã hủy. Các tệp đã di chuyển được giữ nguyên.';
+
+  @override
+  String reorganizePreview(int ready, int unchanged, int conflicts) {
+    return '$ready tệp sẽ di chuyển · $unchanged tệp không đổi · $conflicts tệp trùng đường dẫn. Kiểm tra đường dẫn trước khi áp dụng. Chỉ gồm tệp đã tải có trong lịch sử.';
+  }
+
+  @override
+  String reorganizeProgress(int done, int total) {
+    return 'Đang di chuyển $done/$total';
+  }
+
+  @override
+  String reorganizeSummary(int moved, int skipped) {
+    return 'Đã di chuyển $moved tệp · bỏ qua $skipped tệp';
+  }
+
+  @override
+  String reorganizeError(String error) {
+    return 'Không thể sắp xếp lại tệp: $error';
+  }
 }

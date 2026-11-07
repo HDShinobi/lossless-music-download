@@ -175,6 +175,42 @@ void main() {
     await db.close();
     await dir.delete(recursive: true);
   });
+  test('library scan hides all re-enrich temps and removes only stale orphans', () async {
+    await File('${dir.path}/old.flac').writeAsString('original');
+    await File('${dir.path}/new.mp3').writeAsString('original');
+    final stale = await File('${dir.path}/old.flac.reenrich-1762531200000000.flac').writeAsString('old');
+    final fresh = await File('${dir.path}/new.mp3.reenrich-1762531200000000.mp3').writeAsString('new');
+    final song = await File('${dir.path}/song.flac').writeAsString('audio');
+    await stale.setLastModified(DateTime.now().subtract(const Duration(minutes: 10)));
+    bridge.scan = [for (final f in [stale, fresh, song]) {'filePath': f.path}];
+    container = setup();
+    final entries = await container.read(libraryProvider.future);
+    expect(entries.map((e) => e.path), [song.path]);
+    expect(await stale.exists(), isFalse);
+    expect(await fresh.exists(), isTrue);
+    expect((await db.list()).map((e) => e.filePath), [song.path]);
+  });
+
+  test('library load replays a moved audio intent before scan admission', () async {
+    final source = '${dir.path}/old.flac';
+    final target = await File('${dir.path}/new.flac').writeAsString('audio');
+    await db.upsert(HistoryEntry(id: 'recover', track: song, service: 'qobuz',
+        filePath: source, fileSize: 5, downloadedAt: DateTime(2026)));
+    await (await db.database).insert('history_meta', {
+      'key': 'reorganize:recover',
+      'value': jsonEncode({'root': dir.path, 'id': 'recover',
+        'parts': [{'source': source, 'target': target.path, 'size': 5,
+          'shared': false}]}),
+    });
+    bridge.scan = [{'filePath': target.path}];
+    container = setup();
+    await container.read(libraryProvider.future);
+    final rows = await db.list();
+    expect(rows, hasLength(1));
+    expect(rows.single.id, 'recover');
+    expect(rows.single.filePath, target.path);
+  });
+
   test('native startup fallback reuses history admission', () async {
     bridge.result = {'success': true};
     container = setup(worker: SilentWorker('${dir.path}/new.flac'));

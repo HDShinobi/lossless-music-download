@@ -1131,4 +1131,56 @@ class AppLocalizationsEn extends AppLocalizations {
   String batchRefreshSummary(int success, int total, int failed) {
     return '$success/$total refreshed · $failed failed';
   }
+
+  @override
+  String get reorganizeTitle => 'Reorganize downloaded files';
+
+  @override
+  String get reorganizeExisting => 'Apply to existing files…';
+
+  @override
+  String get reorganizeApply => 'Apply changes';
+
+  @override
+  String get reorganizeReady => 'Will move';
+
+  @override
+  String get reorganizeUnchanged => 'Unchanged';
+
+  @override
+  String get reorganizeConflict => 'Conflict — skipped';
+
+  @override
+  String get reorganizeMissing => 'File missing — skipped';
+
+  @override
+  String get reorganizeUnsafe =>
+      'Outside download root or unsafe path — skipped';
+
+  @override
+  String get reorganizeBusy =>
+      'Wait for downloads and metadata refresh to finish, then try again.';
+
+  @override
+  String get reorganizeCancelled => 'Cancelled. Completed moves are kept.';
+
+  @override
+  String reorganizePreview(int ready, int unchanged, int conflicts) {
+    return '$ready to move · $unchanged unchanged · $conflicts conflicts. Review paths before applying. Only downloaded history files are included.';
+  }
+
+  @override
+  String reorganizeProgress(int done, int total) {
+    return 'Moving $done/$total';
+  }
+
+  @override
+  String reorganizeSummary(int moved, int skipped) {
+    return '$moved moved · $skipped skipped';
+  }
+
+  @override
+  String reorganizeError(String error) {
+    return 'Could not reorganize files: $error';
+  }
 }

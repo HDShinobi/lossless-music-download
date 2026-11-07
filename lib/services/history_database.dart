@@ -106,6 +106,9 @@ class HistoryEntry {
       'album_artist': track.albumArtist,
       'track_number': track.trackNumber,
       'disc_number': track.discNumber,
+      'total_discs': track.totalDiscs,
+      'release_date': track.releaseDate,
+      'playlist_position': track.playlistPosition,
       'duration_ms': track.durationMs,
       'quality': quality,
       'file_path': filePath,
@@ -131,6 +134,9 @@ class HistoryEntry {
       coverUrl: row['cover_url'] as String?,
       trackNumber: row['track_number'] as int?,
       discNumber: row['disc_number'] as int?,
+      totalDiscs: row['total_discs'] as int?,
+      releaseDate: row['release_date'] as String?,
+      playlistPosition: row['playlist_position'] as int?,
       durationMs: row['duration_ms'] as int?,
     ),
     service: row['service'] as String,
@@ -144,9 +150,10 @@ class HistoryEntry {
 }
 
 /// Own schema versioning: this reduced Android database is not upstream's DB.
-/// v1 holds metadata; v2 adds lookup columns; v3 repairs inferred identities.
+/// v1 holds metadata; v2 adds lookups; v3 repairs identities; v4 retains
+/// the disc/date/playlist fields needed to reapply download templates.
 class HistoryDatabase {
-  static const version = 3;
+  static const version = 4;
   final String path;
   final DatabaseFactory? factory;
   Future<Database>? _opening;
@@ -235,6 +242,11 @@ class HistoryDatabase {
       );
       await db.execute('CREATE INDEX history_path ON history(file_path)');
     }
+    if (old < 4 && next >= 4) {
+      await db.execute('ALTER TABLE history ADD COLUMN total_discs INTEGER');
+      await db.execute('ALTER TABLE history ADD COLUMN release_date TEXT');
+      await db.execute('ALTER TABLE history ADD COLUMN playlist_position INTEGER');
+    }
     if (old < 3) {
       // v2 guessed Spotify for bare IDs; their provenance cannot be recovered.
       await db.execute(
@@ -248,6 +260,11 @@ class HistoryDatabase {
       );
     }
   }
+
+  /// Compare-and-set: a stale preview must never relink a changed history row.
+  Future<bool> updateFilePath(String id, String expected, String target) async =>
+      await (await database).update('history', {'file_path': target},
+        where: 'id = ? AND file_path = ?', whereArgs: [id, expected]) == 1;
 
   Future<void> close() async {
     final opening = _opening;
@@ -291,7 +308,8 @@ class HistoryDatabase {
         const fields = {'track_name': 'title', 'artist_name': 'artists',
           'album_name': 'album', 'album_artist': 'album_artist', 'isrc': 'isrc',
           'track_number': 'track_number', 'disc_number': 'disc_number',
-          'duration_ms': 'duration_ms', 'cover_url': 'cover_url'};
+          'duration_ms': 'duration_ms', 'cover_url': 'cover_url',
+          'total_discs': 'total_discs', 'release_date': 'release_date'};
         for (final field in fields.entries) {
           final value = tags[field.key];
           if (value is String && value.trim().isNotEmpty || value is num && value > 0) {

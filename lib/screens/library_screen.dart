@@ -5,6 +5,7 @@ import '../providers/batch_re_enrich_provider.dart';
 import '../widgets/batch_re_enrich_panel.dart';
 
 import 'download_history_screen.dart';
+import 'library_reorganize_screen.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -69,6 +70,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           onPressed: () => setState(_selected.clear)) : null,
         title: Text(_selecting ? t.librarySelectedCount(_selected.length) : t.tabLibrary),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.drive_file_move_outlined),
+            tooltip: t.reorganizeExisting,
+            onPressed: () async {
+              await Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => LibraryReorganizeScreen(
+                  selection: _selecting ? Set.of(_selected) : null)));
+              if (mounted) setState(_selected.clear);
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.history),
             tooltip: t.downloadHistory,

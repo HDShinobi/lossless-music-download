@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import '../models/library_entry.dart';
 import '../models/track.dart';
 import '../services/history_database.dart';
+import '../services/reenrich_orphans.dart';
+import '../services/library_reorganizer.dart';
 import 'download_history_provider.dart';
 import 'download_dir_provider.dart';
 import 'extensions_provider.dart';
@@ -28,6 +30,12 @@ final libraryProvider = FutureProvider<List<LibraryEntry>>((ref) async {
   final d = Directory(dir);
   if (!d.existsSync()) return [];
 
+  try {
+    final history = await ref.read(historyDatabaseProvider.future);
+    await LibraryReorganizer(history).recover(dir);
+  } catch (_) {
+    // Match scan/backfill behavior when history storage is unavailable.
+  }
   final bridge = ref.read(backendBridgeProvider);
 
   // Ensure the Go backend knows where to cache extracted cover art.
@@ -35,7 +43,9 @@ final libraryProvider = FutureProvider<List<LibraryEntry>>((ref) async {
   await bridge.setLibraryCoverCacheDir(coverDir);
 
   // Scan the folder — Go reads embedded tags for ALL files.
-  final items = await bridge.scanLibraryFolder(dir);
+  await cleanupReEnrichOrphans(dir);
+  final items = (await bridge.scanLibraryFolder(dir)).where((item) =>
+    !isReEnrichTemporary(item['filePath'] as String? ?? ''));
 
   final entries = items.map((item) {
     final filePath = item['filePath'] as String? ?? '';

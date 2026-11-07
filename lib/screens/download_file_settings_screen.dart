@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../models/metadata_separators.dart';
 import '../providers/download_options_provider.dart';
 import '../services/download_templates.dart';
+import 'library_reorganize_screen.dart';
 
 class DownloadFileSettingsScreen extends ConsumerWidget {
   const DownloadFileSettingsScreen({super.key});
@@ -45,6 +46,12 @@ class DownloadFileSettingsScreen extends ConsumerWidget {
                 onSave: ref.read(albumFolderTemplateProvider.notifier).set,
               ),
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.drive_file_move_outlined),
+            title: Text(t.reorganizeExisting),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => const LibraryReorganizeScreen())),
           ),
           const Divider(),
           ListTile(

@@ -2167,6 +2167,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{success}/{total} refreshed · {failed} failed'**
   String batchRefreshSummary(int success, int total, int failed);
+
+  /// No description provided for @reorganizeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reorganize downloaded files'**
+  String get reorganizeTitle;
+
+  /// No description provided for @reorganizeExisting.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply to existing files…'**
+  String get reorganizeExisting;
+
+  /// No description provided for @reorganizeApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply changes'**
+  String get reorganizeApply;
+
+  /// No description provided for @reorganizeReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Will move'**
+  String get reorganizeReady;
+
+  /// No description provided for @reorganizeUnchanged.
+  ///
+  /// In en, this message translates to:
+  /// **'Unchanged'**
+  String get reorganizeUnchanged;
+
+  /// No description provided for @reorganizeConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'Conflict — skipped'**
+  String get reorganizeConflict;
+
+  /// No description provided for @reorganizeMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'File missing — skipped'**
+  String get reorganizeMissing;
+
+  /// No description provided for @reorganizeUnsafe.
+  ///
+  /// In en, this message translates to:
+  /// **'Outside download root or unsafe path — skipped'**
+  String get reorganizeUnsafe;
+
+  /// No description provided for @reorganizeBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for downloads and metadata refresh to finish, then try again.'**
+  String get reorganizeBusy;
+
+  /// No description provided for @reorganizeCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled. Completed moves are kept.'**
+  String get reorganizeCancelled;
+
+  /// No description provided for @reorganizePreview.
+  ///
+  /// In en, this message translates to:
+  /// **'{ready} to move · {unchanged} unchanged · {conflicts} conflicts. Review paths before applying. Only downloaded history files are included.'**
+  String reorganizePreview(int ready, int unchanged, int conflicts);
+
+  /// No description provided for @reorganizeProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Moving {done}/{total}'**
+  String reorganizeProgress(int done, int total);
+
+  /// No description provided for @reorganizeSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{moved} moved · {skipped} skipped'**
+  String reorganizeSummary(int moved, int skipped);
+
+  /// No description provided for @reorganizeError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reorganize files: {error}'**
+  String reorganizeError(String error);
 }
 
 class _AppLocalizationsDelegate

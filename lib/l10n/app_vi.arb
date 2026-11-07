@@ -526,5 +526,59 @@
         "type": "int"
       }
     }
+  },
+  "reorganizeTitle": "Sắp xếp lại tệp đã tải",
+  "reorganizeExisting": "Áp dụng cho tệp đã tải…",
+  "reorganizeApply": "Áp dụng thay đổi",
+  "reorganizeReady": "Sẽ di chuyển",
+  "reorganizeUnchanged": "Không thay đổi",
+  "reorganizeConflict": "Trùng đường dẫn — bỏ qua",
+  "reorganizeMissing": "Không tìm thấy tệp — bỏ qua",
+  "reorganizeUnsafe": "Ngoài thư mục tải xuống hoặc đường dẫn không an toàn — bỏ qua",
+  "reorganizeBusy": "Chờ tải xuống và làm mới metadata hoàn tất rồi thử lại.",
+  "reorganizeCancelled": "Đã hủy. Các tệp đã di chuyển được giữ nguyên.",
+  "reorganizePreview": "{ready} tệp sẽ di chuyển · {unchanged} tệp không đổi · {conflicts} tệp trùng đường dẫn. Kiểm tra đường dẫn trước khi áp dụng. Chỉ gồm tệp đã tải có trong lịch sử.",
+  "@reorganizePreview": {
+    "placeholders": {
+      "ready": {
+        "type": "int"
+      },
+      "unchanged": {
+        "type": "int"
+      },
+      "conflicts": {
+        "type": "int"
+      }
+    }
+  },
+  "reorganizeProgress": "Đang di chuyển {done}/{total}",
+  "@reorganizeProgress": {
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "reorganizeSummary": "Đã di chuyển {moved} tệp · bỏ qua {skipped} tệp",
+  "@reorganizeSummary": {
+    "placeholders": {
+      "moved": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
+    }
+  },
+  "reorganizeError": "Không thể sắp xếp lại tệp: {error}",
+  "@reorganizeError": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   }
 }

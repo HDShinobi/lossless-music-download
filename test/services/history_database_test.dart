@@ -377,6 +377,10 @@ void main() {
         where: 'id = ?',
         whereArgs: [legacy.id],
       );
+      // Build an actual v2 fixture rather than relabeling the current schema.
+      for (final column in ['total_discs', 'release_date', 'playlist_position']) {
+        await sql.execute('ALTER TABLE history DROP COLUMN $column');
+      }
       await sql.setVersion(2);
       await history.close();
       history = HistoryDatabase(
