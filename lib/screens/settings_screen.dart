@@ -15,6 +15,7 @@ import '../providers/home_feed_provider.dart';
 import '../services/download_paths.dart';
 import '../services/update_checker.dart';
 import '../widgets/update_dialog.dart';
+import 'download_file_settings_screen.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -246,6 +247,14 @@ class SettingsScreen extends ConsumerWidget {
               trailing: const Icon(Icons.edit_outlined),
               onTap: () => _pickDownloadFolder(context, ref),
             ),
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.drive_file_rename_outline),
+            title: Text(t.fileSettingsTitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => const DownloadFileSettingsScreen())),
           ),
 
           // Folder layout

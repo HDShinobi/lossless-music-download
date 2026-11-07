@@ -886,4 +886,92 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get logsVersionUnavailable => 'App version unavailable';
+
+  @override
+  String get fileSettingsTitle => 'Filenames and artist tags';
+
+  @override
+  String get filenameTemplateTitle => 'Filename template';
+
+  @override
+  String get albumFolderTemplateTitle => 'Album folder template';
+
+  @override
+  String get artistTagModeTitle => 'Artist tag mode';
+
+  @override
+  String get artistTagJoined => 'Joined artists';
+
+  @override
+  String get artistTagSplitVorbis => 'Multiple values (Vorbis formats)';
+
+  @override
+  String get artistTagPrimary => 'Primary artist only';
+
+  @override
+  String get artistTagModeDescription =>
+      'Multiple values writes separate artist values in FLAC, Ogg and Opus. Other formats use joined artists. Primary keeps only the first artist.';
+
+  @override
+  String get metadataSeparatorsDescription =>
+      'Separators for downloaded tags. Empty keeps provider values. Use up to 16 characters without control characters.';
+
+  @override
+  String get separatorArtist => 'Artist separator';
+
+  @override
+  String get separatorAlbumArtist => 'Album artist separator';
+
+  @override
+  String get separatorComposer => 'Composer separator';
+
+  @override
+  String get separatorGenre => 'Genre separator';
+
+  @override
+  String get separatorOriginal => 'Keep provider values';
+
+  @override
+  String get separatorError =>
+      'Use at most 16 characters, without control characters.';
+
+  @override
+  String get templateDefault => 'Default (current behavior)';
+
+  @override
+  String get templateCustom => 'Custom';
+
+  @override
+  String get templatePlaceholderError =>
+      'Use supported placeholders with matching braces.';
+
+  @override
+  String get templatePathError =>
+      'Filename: no / or \\. Folders: relative paths only; no empty, . or .. segments.';
+
+  @override
+  String get templateEmptyError =>
+      'Enter a template that produces a non-empty name (up to 1024 characters).';
+
+  @override
+  String get templatePlaceholders => 'Supported placeholders:';
+
+  @override
+  String templatePaddingHelp(String examples) {
+    return 'Numeric padding: $examples (1–9 digits). Date uses the source release date.';
+  }
+
+  @override
+  String get templateFolderHelp =>
+      'Overrides folder layout. Separate folder levels with /. Metadata cannot add folder levels.';
+
+  @override
+  String get templateDiscSafety =>
+      'For multi-disc albums, custom filenames without a disc placeholder automatically gain a disc- prefix. Tags remain the source for library titles with custom names.';
+
+  @override
+  String get templatePreviewSingle => 'Preview · single disc';
+
+  @override
+  String get templatePreviewMulti => 'Preview · multiple discs';
 }

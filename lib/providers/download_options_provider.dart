@@ -1,7 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/download_paths.dart';
+import '../services/download_templates.dart';
+import '../models/metadata_separators.dart';
 
 class AskBeforeDownloadNotifier extends Notifier<bool> {
   static const _key = 'ask_before_download';
@@ -127,3 +131,78 @@ final folderOrganizationProvider =
     NotifierProvider<FolderOrganizationNotifier, FolderOrganization>(
   FolderOrganizationNotifier.new,
 );
+
+// Empty templates opt into the legacy, folder-dependent defaults.
+class _StringPrefNotifier extends Notifier<String> {
+  _StringPrefNotifier(this.key, this.defaultValue, this.valid);
+  final String key, defaultValue;
+  final bool Function(String) valid;
+  bool _explicitlySet = false;
+
+  @override
+  String build() {
+    _explicitlySet = false;
+    Future.microtask(() async {
+      final p = await SharedPreferences.getInstance();
+      final value = p.getString(key) ?? defaultValue;
+      if (ref.mounted && !_explicitlySet) {
+        state = valid(value) ? value : defaultValue;
+      }
+    });
+    return defaultValue;
+  }
+
+  Future<void> set(String value) async {
+    if (!valid(value)) return;
+    _explicitlySet = true;
+    state = value;
+    final p = await SharedPreferences.getInstance();
+    await p.setString(key, value);
+  }
+}
+
+final filenameTemplateProvider = NotifierProvider<_StringPrefNotifier, String>(
+  () => _StringPrefNotifier('filename_template', '',
+    (v) => v.isEmpty || DownloadTemplates.validate(v) == null));
+final albumFolderTemplateProvider = NotifierProvider<_StringPrefNotifier, String>(
+  () => _StringPrefNotifier('album_folder_template', '',
+    (v) => v.isEmpty || DownloadTemplates.validate(v, folder: true) == null));
+final artistTagModeProvider = NotifierProvider<_StringPrefNotifier, String>(
+  () => _StringPrefNotifier('artist_tag_mode', 'joined', artistTagModes.contains));
+
+class MetadataSeparatorsNotifier extends Notifier<MetadataSeparators> {
+  static const _key = 'metadata_separators';
+  bool _explicitlySet = false;
+
+  @override
+  MetadataSeparators build() {
+    _explicitlySet = false;
+    Future.microtask(() async {
+      final p = await SharedPreferences.getInstance();
+      try {
+        final json = jsonDecode(p.getString(_key) ?? '{}');
+        if (ref.mounted && !_explicitlySet && json is Map<String, dynamic>) {
+          state = MetadataSeparators.fromJson(json);
+        }
+      } on FormatException {
+        // A damaged preference must not prevent downloads or opening settings.
+      }
+    });
+    return const MetadataSeparators();
+  }
+
+  Future<void> setField(String field, String value) async {
+    if (!MetadataSeparators.fields.contains(field) ||
+        !MetadataSeparators.isValid(value)) {
+      return;
+    }
+    _explicitlySet = true;
+    state = state.withField(field, value);
+    final p = await SharedPreferences.getInstance();
+    await p.setString(_key, jsonEncode(state.toJson()));
+  }
+}
+
+final metadataSeparatorsProvider =
+    NotifierProvider<MetadataSeparatorsNotifier, MetadataSeparators>(
+      MetadataSeparatorsNotifier.new);

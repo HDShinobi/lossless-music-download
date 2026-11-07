@@ -301,6 +301,41 @@ void main() {
       });
     }
 
+    test('folder template uses the requested quality', () async {
+      final bridge = _FakeBridge();
+      final c = _makeContainer(bridge);
+      addTearDown(c.dispose);
+      await c.read(albumFolderTemplateProvider.notifier).set('{album}/{quality}');
+      await c.read(downloadQueueProvider.notifier).enqueue(_track, quality: 'LOSSLESS');
+      await _pump();
+      expect(bridge.downloadCalls.single.outputDir,
+        '/fake/downloads/Test Album/LOSSLESS');
+      expect(bridge.duplicateDirCalls, [bridge.downloadCalls.single.outputDir]);
+    });
+
+    test('custom templates and tags share the duplicate pre-check directory', () async {
+      final bridge = _FakeBridge();
+      final c = _makeContainer(bridge);
+      addTearDown(c.dispose);
+      await c.read(filenameTemplateProvider.notifier).set('{track}. {title} - {artist}');
+      await c.read(albumFolderTemplateProvider.notifier).set('{artist}/{album} ({year})');
+      await c.read(artistTagModeProvider.notifier).set('split_vorbis');
+      await c.read(metadataSeparatorsProvider.notifier).setField('artist', '; ');
+      await c.read(downloadQueueProvider.notifier).enqueue(const Track(
+        id: 'custom', name: 'Song', artists: 'Artist', albumName: 'Album',
+        releaseDate: '2026-11-07', isrc: 'ISRC', trackNumber: 1,
+        discNumber: 2, totalDiscs: 2));
+      await _pump();
+      final json = bridge.downloadCalls.single.toJson();
+      expect(json['output_dir'], '/fake/downloads/Artist/Album (2026)');
+      expect(bridge.duplicateDirCalls, [json['output_dir']]);
+      expect(json['filename_format'], '{disc}-{track}. {title} - {artist}');
+      expect(json['artist_tag_mode'], 'split_vorbis');
+      expect(json['metadata_separators']['artist'], '; ');
+      // Folder is already resolved, so the engine must not re-parent it.
+      expect(json.containsKey('album_folder_template'), isFalse);
+    });
+
     test('enqueue forwards available search tagging metadata', () async {
       final bridge = _FakeBridge();
       final container = _makeContainer(bridge);

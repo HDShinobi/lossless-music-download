@@ -14,7 +14,7 @@ import '../models/track.dart';
 import '../services/app_log.dart';
 import '../services/backend_bridge.dart';
 import '../services/container_remux_service.dart';
-import '../services/download_paths.dart';
+import '../services/download_templates.dart';
 import '../services/ffmpeg_metadata_service.dart';
 import '../services/native_download_worker.dart';
 import '../util/queue_view.dart';
@@ -193,37 +193,14 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   /// path.
   ({String dir, String template}) _resolveOutputTarget(
     String baseDir,
-    Track track,
-  ) {
-    final mode = ref.read(folderOrganizationProvider);
-    final basename = basenameTemplateFor(
-      mode,
-      discNumber: track.discNumber,
-      totalDiscs: track.totalDiscs,
-    );
-    final template = pruneEmptyPlaceholders(basename, {
-      'artist': track.artists,
-      'title': track.name,
-      'album': track.albumName ?? '',
-      'track': track.trackNumber?.toString() ?? '',
-      'disc': (track.discNumber ?? 0) > 0 ? '${track.discNumber}' : '',
-      'year': _yearOf(track.releaseDate),
-    });
-
-    final relative = buildRelativeFolder(
-      mode,
-      FolderMetadata(
-        artist: track.artists,
-        albumArtist: track.albumArtist,
-        album: track.albumName,
-      ),
-    );
-    if (relative.isEmpty) return (dir: baseDir, template: template);
-
-    return (
-      dir: '${baseDir.replaceAll(RegExp(r'/+$'), '')}/$relative',
-      template: template,
-    );
+    Track track, {
+    String? quality,
+  }) {
+    return resolveDownloadTarget(baseDir, track,
+      mode: ref.read(folderOrganizationProvider),
+      filenameTemplate: ref.read(filenameTemplateProvider),
+      albumFolderTemplate: ref.read(albumFolderTemplateProvider),
+      quality: quality);
   }
 
   static String _yearOf(String? releaseDate) {
@@ -280,7 +257,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       spotifyId = null;
     }
 
-    final target = _resolveOutputTarget(dir, entry.track);
+    final target = _resolveOutputTarget(dir, entry.track, quality: entry.quality);
 
     final req = DownloadRequest(
       trackName: entry.track.name,
@@ -319,6 +296,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       embedMaxQualityCover: ref.read(embedCoverProvider),
       embedLyrics: ref.read(embedLyricsProvider),
       useFallback: ref.read(autoFallbackProvider),
+      artistTagMode: ref.read(artistTagModeProvider),
+      metadataSeparators: ref.read(metadataSeparatorsProvider),
       writeLrcSidecar: ref.read(writeLrcSidecarProvider),
     );
     return req.toJson();
@@ -473,7 +452,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         }
       } catch (_) {}
 
-      final target = _resolveOutputTarget(dir, next.track);
+      final target = _resolveOutputTarget(dir, next.track, quality: next.quality);
 
       // Skip download if the ISRC already exists under the resolved output
       // folder (same scope as the native worker). Only checked when ISRC is known.
@@ -550,6 +529,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         embedMaxQualityCover: embedCover,
         embedLyrics: embedLyrics,
         useFallback: ref.read(autoFallbackProvider),
+        artistTagMode: ref.read(artistTagModeProvider),
+        metadataSeparators: ref.read(metadataSeparatorsProvider),
         writeLrcSidecar: ref.read(writeLrcSidecarProvider),
       );
 

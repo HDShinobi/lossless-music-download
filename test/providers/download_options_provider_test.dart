@@ -10,6 +10,34 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
+  test('formatting preferences persist and reject invalid edits', () async {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    expect(c.read(filenameTemplateProvider), '');
+    expect(c.read(albumFolderTemplateProvider), '');
+    expect(c.read(artistTagModeProvider), 'joined');
+    expect(c.read(metadataSeparatorsProvider).isDefault, true);
+    await c.read(filenameTemplateProvider.notifier).set('{track}. {title}');
+    await c.read(filenameTemplateProvider.notifier).set('{oops}');
+    await c.read(albumFolderTemplateProvider.notifier).set('{album} ({year})');
+    await c.read(artistTagModeProvider.notifier).set('primary');
+    await c.read(metadataSeparatorsProvider.notifier).setField('artist', '; ');
+    await c.read(metadataSeparatorsProvider.notifier).setField('genre', ' / ');
+    await c.read(metadataSeparatorsProvider.notifier).setField('artist', '\n');
+    final restored = ProviderContainer();
+    addTearDown(restored.dispose);
+    restored.read(filenameTemplateProvider);
+    restored.read(albumFolderTemplateProvider);
+    restored.read(artistTagModeProvider);
+    restored.read(metadataSeparatorsProvider);
+    await Future<void>.delayed(Duration.zero);
+    expect(restored.read(filenameTemplateProvider), '{track}. {title}');
+    expect(restored.read(albumFolderTemplateProvider), '{album} ({year})');
+    expect(restored.read(artistTagModeProvider), 'primary');
+    expect(restored.read(metadataSeparatorsProvider).artist, '; ');
+    expect(restored.read(metadataSeparatorsProvider).genre, ' / ');
+  });
+
   group('askBeforeDownloadProvider', () {
     test('default state is true', () {
       final container = ProviderContainer();

@@ -1717,6 +1717,162 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'App version unavailable'**
   String get logsVersionUnavailable;
+
+  /// No description provided for @fileSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Filenames and artist tags'**
+  String get fileSettingsTitle;
+
+  /// No description provided for @filenameTemplateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Filename template'**
+  String get filenameTemplateTitle;
+
+  /// No description provided for @albumFolderTemplateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Album folder template'**
+  String get albumFolderTemplateTitle;
+
+  /// No description provided for @artistTagModeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Artist tag mode'**
+  String get artistTagModeTitle;
+
+  /// No description provided for @artistTagJoined.
+  ///
+  /// In en, this message translates to:
+  /// **'Joined artists'**
+  String get artistTagJoined;
+
+  /// No description provided for @artistTagSplitVorbis.
+  ///
+  /// In en, this message translates to:
+  /// **'Multiple values (Vorbis formats)'**
+  String get artistTagSplitVorbis;
+
+  /// No description provided for @artistTagPrimary.
+  ///
+  /// In en, this message translates to:
+  /// **'Primary artist only'**
+  String get artistTagPrimary;
+
+  /// No description provided for @artistTagModeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Multiple values writes separate artist values in FLAC, Ogg and Opus. Other formats use joined artists. Primary keeps only the first artist.'**
+  String get artistTagModeDescription;
+
+  /// No description provided for @metadataSeparatorsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Separators for downloaded tags. Empty keeps provider values. Use up to 16 characters without control characters.'**
+  String get metadataSeparatorsDescription;
+
+  /// No description provided for @separatorArtist.
+  ///
+  /// In en, this message translates to:
+  /// **'Artist separator'**
+  String get separatorArtist;
+
+  /// No description provided for @separatorAlbumArtist.
+  ///
+  /// In en, this message translates to:
+  /// **'Album artist separator'**
+  String get separatorAlbumArtist;
+
+  /// No description provided for @separatorComposer.
+  ///
+  /// In en, this message translates to:
+  /// **'Composer separator'**
+  String get separatorComposer;
+
+  /// No description provided for @separatorGenre.
+  ///
+  /// In en, this message translates to:
+  /// **'Genre separator'**
+  String get separatorGenre;
+
+  /// No description provided for @separatorOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep provider values'**
+  String get separatorOriginal;
+
+  /// No description provided for @separatorError.
+  ///
+  /// In en, this message translates to:
+  /// **'Use at most 16 characters, without control characters.'**
+  String get separatorError;
+
+  /// No description provided for @templateDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Default (current behavior)'**
+  String get templateDefault;
+
+  /// No description provided for @templateCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get templateCustom;
+
+  /// No description provided for @templatePlaceholderError.
+  ///
+  /// In en, this message translates to:
+  /// **'Use supported placeholders with matching braces.'**
+  String get templatePlaceholderError;
+
+  /// No description provided for @templatePathError.
+  ///
+  /// In en, this message translates to:
+  /// **'Filename: no / or \\. Folders: relative paths only; no empty, . or .. segments.'**
+  String get templatePathError;
+
+  /// No description provided for @templateEmptyError.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a template that produces a non-empty name (up to 1024 characters).'**
+  String get templateEmptyError;
+
+  /// No description provided for @templatePlaceholders.
+  ///
+  /// In en, this message translates to:
+  /// **'Supported placeholders:'**
+  String get templatePlaceholders;
+
+  /// No description provided for @templatePaddingHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Numeric padding: {examples} (1–9 digits). Date uses the source release date.'**
+  String templatePaddingHelp(String examples);
+
+  /// No description provided for @templateFolderHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Overrides folder layout. Separate folder levels with /. Metadata cannot add folder levels.'**
+  String get templateFolderHelp;
+
+  /// No description provided for @templateDiscSafety.
+  ///
+  /// In en, this message translates to:
+  /// **'For multi-disc albums, custom filenames without a disc placeholder automatically gain a disc- prefix. Tags remain the source for library titles with custom names.'**
+  String get templateDiscSafety;
+
+  /// No description provided for @templatePreviewSingle.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview · single disc'**
+  String get templatePreviewSingle;
+
+  /// No description provided for @templatePreviewMulti.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview · multiple discs'**
+  String get templatePreviewMulti;
 }
 
 class _AppLocalizationsDelegate

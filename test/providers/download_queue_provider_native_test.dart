@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/models/track.dart';
 import 'package:lossless_music_download/providers/download_dir_provider.dart';
+import 'package:lossless_music_download/providers/download_options_provider.dart';
 import 'package:lossless_music_download/providers/download_queue_provider.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
@@ -127,10 +128,37 @@ void main() {
     expect(payload['deezer_id'], '42');
     expect(payload['playlist_position'], 3);
     expect(payload['cover_max_dimension'], 0);
+    expect(payload['artist_tag_mode'], 'joined');
+    expect(payload.containsKey('metadata_separators'), false);
+    expect(payload.containsKey('album_folder_template'), false);
 
     final state = container.read(downloadQueueProvider);
     expect(state.first.status, 'done');
     expect(state.first.progress, 1.0);
+  });
+
+  test('native payload uses custom templates and tagging preferences', () async {
+    final worker = _FakeNativeWorker();
+    final c = ProviderContainer(overrides: [
+      backendBridgeProvider.overrideWithValue(_UnusedBridge()),
+      downloadDirPathProvider.overrideWithValue(Future.value('/fake/downloads')),
+      nativeDownloadWorkerProvider.overrideWithValue(worker),
+    ]);
+    addTearDown(c.dispose);
+    await c.read(filenameTemplateProvider.notifier).set('{title} - {artist}');
+    await c.read(albumFolderTemplateProvider.notifier).set('{album} ({year})');
+    await c.read(artistTagModeProvider.notifier).set('primary');
+    await c.read(metadataSeparatorsProvider.notifier).setField('genre', ' / ');
+    await c.read(downloadQueueProvider.notifier).enqueue(const Track(
+      id: 'custom', name: 'Song', artists: 'Artist', albumName: 'Album',
+      releaseDate: '2026-11-07', discNumber: 2, totalDiscs: 2));
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    final json = jsonDecode(worker.startedBatches.single.single['request_json'] as String);
+    expect(json['output_dir'], '/fake/downloads/Album (2026)');
+    expect(json['filename_format'], '{disc}-{title} - {artist}');
+    expect(json['artist_tag_mode'], 'primary');
+    expect(json['metadata_separators']['genre'], ' / ');
+    expect(json.containsKey('album_folder_template'), false);
   });
 
   test('NativeWorkerItemState.fromJson parses the verification service', () {

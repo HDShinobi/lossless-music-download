@@ -878,4 +878,92 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get logsVersionUnavailable => 'Không đọc được phiên bản ứng dụng';
+
+  @override
+  String get fileSettingsTitle => 'Tên tệp và tag nghệ sĩ';
+
+  @override
+  String get filenameTemplateTitle => 'Mẫu tên tệp';
+
+  @override
+  String get albumFolderTemplateTitle => 'Mẫu thư mục album';
+
+  @override
+  String get artistTagModeTitle => 'Cách ghi tag nghệ sĩ';
+
+  @override
+  String get artistTagJoined => 'Gộp tên nghệ sĩ';
+
+  @override
+  String get artistTagSplitVorbis => 'Nhiều giá trị (định dạng Vorbis)';
+
+  @override
+  String get artistTagPrimary => 'Chỉ nghệ sĩ chính';
+
+  @override
+  String get artistTagModeDescription =>
+      'Nhiều giá trị ghi riêng từng nghệ sĩ trong FLAC, Ogg và Opus. Các định dạng khác gộp tên nghệ sĩ. Chỉ nghệ sĩ chính giữ tên đầu tiên.';
+
+  @override
+  String get metadataSeparatorsDescription =>
+      'Dấu phân cách cho tag của tệp tải xuống. Để trống để giữ giá trị từ nguồn. Tối đa 16 ký tự, không dùng ký tự điều khiển.';
+
+  @override
+  String get separatorArtist => 'Dấu phân cách nghệ sĩ';
+
+  @override
+  String get separatorAlbumArtist => 'Dấu phân cách nghệ sĩ album';
+
+  @override
+  String get separatorComposer => 'Dấu phân cách nhạc sĩ';
+
+  @override
+  String get separatorGenre => 'Dấu phân cách thể loại';
+
+  @override
+  String get separatorOriginal => 'Giữ giá trị từ nguồn';
+
+  @override
+  String get separatorError =>
+      'Dùng tối đa 16 ký tự, không dùng ký tự điều khiển.';
+
+  @override
+  String get templateDefault => 'Mặc định (giữ cách hiện tại)';
+
+  @override
+  String get templateCustom => 'Tùy chỉnh';
+
+  @override
+  String get templatePlaceholderError =>
+      'Dùng các biến được hỗ trợ và đóng đủ dấu ngoặc nhọn.';
+
+  @override
+  String get templatePathError =>
+      'Tên tệp không chứa / hoặc \\. Thư mục phải là đường dẫn tương đối, không có phần rỗng, . hoặc ..';
+
+  @override
+  String get templateEmptyError =>
+      'Nhập mẫu tạo ra tên không rỗng (tối đa 1024 ký tự).';
+
+  @override
+  String get templatePlaceholders => 'Các biến được hỗ trợ:';
+
+  @override
+  String templatePaddingHelp(String examples) {
+    return 'Đệm số: $examples (1–9 chữ số). Date dùng ngày phát hành từ nguồn.';
+  }
+
+  @override
+  String get templateFolderHelp =>
+      'Thay thế cách chia thư mục. Dùng / để chia các cấp. Giá trị metadata không tạo thêm cấp thư mục.';
+
+  @override
+  String get templateDiscSafety =>
+      'Với album nhiều đĩa, mẫu tên tệp tùy chỉnh thiếu biến disc sẽ tự thêm số đĩa và dấu - ở đầu. Thư viện ưu tiên tag để lấy tên bài khi dùng tên tệp tùy chỉnh.';
+
+  @override
+  String get templatePreviewSingle => 'Xem trước · một đĩa';
+
+  @override
+  String get templatePreviewMulti => 'Xem trước · nhiều đĩa';
 }

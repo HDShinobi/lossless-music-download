@@ -1,3 +1,5 @@
+import 'metadata_separators.dart';
+
 class DownloadRequest {
   final String trackName, artistName, outputDir;
   final String? itemId, albumName, albumArtist, isrc, spotifyId, qobuzId,
@@ -24,6 +26,7 @@ class DownloadRequest {
 
   // SpotiFLAC contract fields with defaults matching SpotiFLAC's defaults.
   final String artistTagMode;
+  final MetadataSeparators metadataSeparators;
   final String lyricsMode;
   final String songLinkRegion;
 
@@ -55,6 +58,7 @@ class DownloadRequest {
     // Upstream embeddedCoverMaxDimension default: 0 keeps the original size.
     this.coverMaxDimension = 0,
     this.artistTagMode = 'joined',
+    this.metadataSeparators = const MetadataSeparators(),
     this.lyricsMode = 'embed',
     this.songLinkRegion = 'US',
   });
@@ -102,6 +106,8 @@ class DownloadRequest {
         'embed_lyrics': embedLyrics,
         'write_lrc_sidecar': writeLrcSidecar,
         'artist_tag_mode': artistTagMode,
+        if (!metadataSeparators.isDefault)
+          'metadata_separators': metadataSeparators.toJson(),
         'lyrics_mode': lyricsMode,
         'songlink_region': songLinkRegion,
       };

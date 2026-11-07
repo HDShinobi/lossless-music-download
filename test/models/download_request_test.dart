@@ -1,8 +1,29 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/models/download_request.dart';
+import 'package:lossless_music_download/models/metadata_separators.dart';
 
 void main() {
   group('DownloadRequest.toJson', () {
+    test('serializes custom tag mode and all four separators', () {
+      final json = const DownloadRequest(trackName: 'S', artistName: 'A',
+        outputDir: '/dl', filenameFormat: '{title}', artistTagMode: 'split_vorbis',
+        metadataSeparators: MetadataSeparators(artist: '; ', albumArtist: ' / ',
+          composer: ', ', genre: ' | ')).toJson();
+      expect(json['filename_format'], '{title}');
+      expect(json['artist_tag_mode'], 'split_vorbis');
+      expect(json['metadata_separators'], {'artist': '; ', 'album_artist': ' / ',
+        'composer': ', ', 'genre': ' | '});
+    });
+
+    test('default formatting payload preserves existing behavior', () {
+      final json = const DownloadRequest(trackName: 'S', artistName: 'A',
+        outputDir: '/dl').toJson();
+      expect(json['artist_tag_mode'], 'joined');
+      expect(json['filename_format'], '{artist} - {title}');
+      expect(json.containsKey('metadata_separators'), isFalse);
+      expect(json.containsKey('album_folder_template'), isFalse);
+    });
+
     test('emits only available tagging fields and meaningful playlist position', () {
       final json = const DownloadRequest(
         trackName: 'Song', artistName: 'Artist', outputDir: '/dl',
