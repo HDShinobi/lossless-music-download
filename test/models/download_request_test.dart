@@ -3,6 +3,44 @@ import 'package:lossless_music_download/models/download_request.dart';
 
 void main() {
   group('DownloadRequest.toJson', () {
+    test('emits only available tagging fields and meaningful playlist position', () {
+      final json = const DownloadRequest(
+        trackName: 'Song', artistName: 'Artist', outputDir: '/dl',
+        explicit: true, upc: '00123', albumType: 'compilation',
+        deezerId: '42', playlistPosition: 3,
+      ).toJson();
+      expect(json['explicit'], true);
+      expect(json['upc'], '00123');
+      expect(json['album_type'], 'compilation');
+      expect(json['deezer_id'], '42');
+      expect(json['playlist_position'], 3);
+    });
+
+    test('omits empty tagging strings and nonpositive playlist positions', () {
+      for (final position in [null, 0, -1]) {
+        final json = DownloadRequest(
+          trackName: 'Song', artistName: 'Artist', outputDir: '/dl',
+          explicit: false, upc: '', albumType: '  ', deezerId: '',
+          playlistPosition: position,
+        ).toJson();
+        expect(json['explicit'], false);
+        for (final key in ['upc', 'album_type', 'deezer_id', 'playlist_position']) {
+          expect(json.containsKey(key), false, reason: key);
+        }
+      }
+    });
+
+    test('uses upstream default cover size and omits unavailable metadata', () {
+      final json = const DownloadRequest(
+        trackName: 'Song', artistName: 'Artist', outputDir: '/dl',
+      ).toJson();
+      expect(json['cover_max_dimension'], 0);
+      for (final key in ['explicit', 'upc', 'album_type', 'deezer_id',
+        'playlist_position']) {
+        expect(json.containsKey(key), false, reason: key);
+      }
+    });
+
     test('includes item_id when itemId is set', () {
       const req = DownloadRequest(
         trackName: 'My Song',

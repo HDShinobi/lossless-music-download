@@ -28,6 +28,10 @@ class Track {
   final String? label;
   final String? copyright;
 
+  final bool? explicit;
+  final String? upc, albumType, deezerId;
+  final int? playlistPosition;
+
   const Track({
     required this.id,
     required this.name,
@@ -52,6 +56,11 @@ class Track {
     this.genre,
     this.label,
     this.copyright,
+    this.explicit,
+    this.upc,
+    this.albumType,
+    this.deezerId,
+    this.playlistPosition,
   });
 
   factory Track.fromJson(Map<String, dynamic> j) {
@@ -76,9 +85,9 @@ class Track {
       }(),
       source: (j['source'] ?? j['extension_id'] ?? j['provider_id'])?.toString(),
       trackNumber: (j['track_number'] as num?)?.toInt(),
-      discNumber: (j['disc_number'] as num?)?.toInt(),
+      discNumber: ((j['disc_number'] ?? j['discNumber']) as num?)?.toInt(),
       totalTracks: (j['total_tracks'] as num?)?.toInt(),
-      totalDiscs: (j['total_discs'] as num?)?.toInt(),
+      totalDiscs: ((j['total_discs'] ?? j['totalDiscs']) as num?)?.toInt(),
       releaseDate: j['release_date']?.toString(),
       composer: j['composer']?.toString(),
       audioQuality: j['audio_quality']?.toString(),
@@ -88,6 +97,15 @@ class Track {
       genre: j['genre']?.toString(),
       label: j['label']?.toString(),
       copyright: j['copyright']?.toString(),
+      explicit: _explicitFlag(j['explicit'] ?? j['is_explicit'] ?? j['isExplicit']),
+      upc: _optionalText(j['upc'] ?? j['barcode']),
+      albumType: _optionalText(j['album_type'] ?? j['albumType']),
+      deezerId: _optionalText(j['deezer_id'] ?? j['deezerId']),
+      playlistPosition: () {
+        final value = j['playlist_position'] ?? j['playlistPosition'];
+        final position = value is num ? value.toInt() : int.tryParse('$value');
+        return position != null && position > 0 ? position : null;
+      }(),
     );
   }
 
@@ -101,4 +119,19 @@ class Track {
 
   /// True when a non-empty streaming preview URL is available.
   bool get hasPreview => previewUrl != null && previewUrl!.isNotEmpty;
+}
+
+String? _optionalText(dynamic value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty || text.toLowerCase() == 'null'
+      ? null
+      : text;
+}
+
+bool? _explicitFlag(dynamic value) {
+  if (value is bool) return value;
+  if (value is num) return value == 1;
+  if (value is! String) return null;
+  final text = _optionalText(value)?.toLowerCase();
+  return text == null ? null : text == 'true' || text == '1';
 }

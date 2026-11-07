@@ -190,11 +190,17 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     Track track,
   ) {
     final mode = ref.read(folderOrganizationProvider);
-    final template = pruneEmptyPlaceholders(basenameTemplateFor(mode), {
+    final basename = basenameTemplateFor(
+      mode,
+      discNumber: track.discNumber,
+      totalDiscs: track.totalDiscs,
+    );
+    final template = pruneEmptyPlaceholders(basename, {
       'artist': track.artists,
       'title': track.name,
       'album': track.albumName ?? '',
       'track': track.trackNumber?.toString() ?? '',
+      'disc': (track.discNumber ?? 0) > 0 ? '${track.discNumber}' : '',
       'year': _yearOf(track.releaseDate),
     });
 
@@ -293,6 +299,11 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       genre: entry.track.genre,
       label: entry.track.label,
       copyright: entry.track.copyright,
+      explicit: entry.track.explicit,
+      upc: entry.track.upc,
+      albumType: entry.track.albumType,
+      deezerId: entry.track.deezerId,
+      playlistPosition: entry.track.playlistPosition,
       service: resolvedService,
       quality: entry.quality,
       itemId: entry.itemId,
@@ -510,6 +521,11 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         genre: next.track.genre,
         label: next.track.label,
         copyright: next.track.copyright,
+        explicit: next.track.explicit,
+        upc: next.track.upc,
+        albumType: next.track.albumType,
+        deezerId: next.track.deezerId,
+        playlistPosition: next.track.playlistPosition,
         service: resolvedService,
         quality: next.quality,
         itemId: next.itemId,

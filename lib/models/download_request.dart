@@ -17,6 +17,11 @@ class DownloadRequest {
   final String? label;
   final String? copyright;
 
+  final bool? explicit;
+  final String? upc, albumType, deezerId;
+  final int? playlistPosition;
+  final int coverMaxDimension;
+
   // SpotiFLAC contract fields with defaults matching SpotiFLAC's defaults.
   final String artistTagMode;
   final String lyricsMode;
@@ -42,6 +47,13 @@ class DownloadRequest {
     this.genre,
     this.label,
     this.copyright,
+    this.explicit,
+    this.upc,
+    this.albumType,
+    this.deezerId,
+    this.playlistPosition,
+    // Upstream embeddedCoverMaxDimension default: 0 keeps the original size.
+    this.coverMaxDimension = 0,
     this.artistTagMode = 'joined',
     this.lyricsMode = 'embed',
     this.songLinkRegion = 'US',
@@ -73,6 +85,14 @@ class DownloadRequest {
         if (genre != null && genre!.isNotEmpty) 'genre': genre,
         if (label != null && label!.isNotEmpty) 'label': label,
         if (copyright != null && copyright!.isNotEmpty) 'copyright': copyright,
+        if (explicit != null) 'explicit': explicit,
+        if (upc != null && upc!.trim().isNotEmpty) 'upc': upc,
+        if (albumType != null && albumType!.trim().isNotEmpty)
+          'album_type': albumType,
+        if (deezerId != null && deezerId!.trim().isNotEmpty) 'deezer_id': deezerId,
+        if (playlistPosition != null && playlistPosition! > 0)
+          'playlist_position': playlistPosition,
+        'cover_max_dimension': coverMaxDimension,
         'filename_format': filenameFormat,
         'requires_container_conversion': requiresContainerConversion,
         'use_extensions': useExtensions,

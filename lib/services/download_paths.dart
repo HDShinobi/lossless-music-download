@@ -115,8 +115,19 @@ String buildRelativeFolder(FolderOrganization mode, FolderMetadata track) {
 /// When downloads are grouped into folders the artist and album already live in
 /// the path, so the filename stays short. Without folders the filename is all
 /// the user has to tell two tracks apart, so it carries the artist too.
-String basenameTemplateFor(FolderOrganization mode) =>
-    mode == FolderOrganization.none ? '{artist} - {title}' : '{track}. {title}';
+/// Multi-disc albums prefix the disc (unpadded) before the track (two digits),
+/// using the engine's standard numeric placeholders. Unknown totals are not
+/// evidence of multiple discs unless the track itself belongs to disc 2+.
+String basenameTemplateFor(
+  FolderOrganization mode, {
+  int? discNumber,
+  int? totalDiscs,
+}) {
+  if (mode == FolderOrganization.none) return '{artist} - {title}';
+  final multiDisc = (totalDiscs ?? 0) > 1 ||
+      ((totalDiscs ?? 0) <= 0 && (discNumber ?? 0) > 1);
+  return multiDisc ? '{disc}-{track}. {title}' : '{track}. {title}';
+}
 
 final _placeholder = RegExp(r'\{([a-z_]+)(?::[^}]*)?\}');
 

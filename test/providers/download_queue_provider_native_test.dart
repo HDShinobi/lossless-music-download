@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/models/track.dart';
@@ -72,13 +74,28 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    await container.read(downloadQueueProvider.notifier).enqueue(_track);
+    await container.read(downloadQueueProvider.notifier).enqueue(Track.fromJson({
+      'id': 'native-track', 'name': 'Native Song', 'artists': 'Native Artist',
+      'album_name': 'Album', 'track_number': 1, 'disc_number': 2, 'total_discs': 2,
+      'explicit': true, 'upc': '00123', 'album_type': 'album',
+      'deezer_id': '42', 'playlistPosition': 3,
+    }));
     await Future<void>.delayed(const Duration(milliseconds: 700));
 
     expect(nativeWorker.startedBatches, hasLength(1));
     final request = nativeWorker.startedBatches.first.single;
     expect(request['track_name'], 'Native Song');
     expect(request['artist_name'], 'Native Artist');
+    final payload = jsonDecode(request['request_json'] as String) as Map<String, dynamic>;
+    expect(payload['output_dir'], '/fake/downloads/Native Artist/Album');
+    expect(payload['filename_format'], '{disc}-{track}. {title}');
+    expect(payload['disc_number'], 2);
+    expect(payload['explicit'], true);
+    expect(payload['upc'], '00123');
+    expect(payload['album_type'], 'album');
+    expect(payload['deezer_id'], '42');
+    expect(payload['playlist_position'], 3);
+    expect(payload['cover_max_dimension'], 0);
 
     final state = container.read(downloadQueueProvider);
     expect(state.first.status, 'done');

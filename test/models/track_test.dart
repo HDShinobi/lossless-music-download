@@ -3,6 +3,53 @@ import 'package:lossless_music_download/models/track.dart';
 
 void main() {
   group('Track.fromJson (rich fields)', () {
+    test('parses snake_case and camelCase tagging fields', () {
+      for (final input in [
+        {'explicit': true, 'upc': '00123', 'album_type': 'album',
+          'deezer_id': 42, 'playlist_position': 3,
+          'disc_number': 2, 'total_discs': 3},
+        {'isExplicit': 1, 'barcode': '00123', 'albumType': 'album',
+          'deezerId': 42, 'playlistPosition': 3,
+          'discNumber': 2, 'totalDiscs': 3},
+      ]) {
+        final track = Track.fromJson(input);
+        expect(track.explicit, true);
+        expect(track.upc, '00123');
+        expect(track.albumType, 'album');
+        expect(track.deezerId, '42');
+        expect(track.playlistPosition, 3);
+        expect(track.discNumber, 2);
+        expect(track.totalDiscs, 3);
+      }
+    });
+
+    test('parses upstream explicit flag representations without inventing data', () {
+      for (final value in [true, 1, '1', ' TRUE ']) {
+        expect(Track.fromJson({'explicit': value}).explicit, true);
+      }
+      for (final value in [false, 0, '0', 'false']) {
+        expect(Track.fromJson({'is_explicit': value}).explicit, false);
+      }
+      for (final value in [null, '', 'null', [], {}]) {
+        expect(Track.fromJson({'explicit': value}).explicit, isNull);
+      }
+    });
+
+    test('normalizes blank metadata and rejects unknown playlist positions', () {
+      for (final value in [null, '', '  ', 'null']) {
+        final track = Track.fromJson({
+          'upc': value, 'album_type': value, 'deezer_id': value,
+        });
+        expect(track.upc, isNull);
+        expect(track.albumType, isNull);
+        expect(track.deezerId, isNull);
+      }
+      for (final value in [null, 0, -1, 'unknown']) {
+        expect(Track.fromJson({'playlistPosition': value}).playlistPosition,
+          isNull);
+      }
+    });
+
     test('parses full metadata from the search JSON', () {
       final t = Track.fromJson(const {
         'id': 'qobuz:123',

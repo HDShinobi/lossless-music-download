@@ -234,6 +234,53 @@ void main() {
       expect(bridge.cancelCalls, contains(itemId));
     });
 
+    for (final sample in [
+      (disc: 1, total: 1, template: '{track}. {title}'),
+      (disc: 1, total: 2, template: '{disc}-{track}. {title}'),
+      (disc: 2, total: 2, template: '{disc}-{track}. {title}'),
+      (disc: 2, total: null, template: '{disc}-{track}. {title}'),
+      (disc: 2, total: 0, template: '{disc}-{track}. {title}'),
+      (disc: null, total: null, template: '{track}. {title}'),
+      (disc: null, total: 2, template: '{track}. {title}'),
+    ]) {
+      test('enqueue disc ${sample.disc}/${sample.total} keeps engine path contract',
+          () async {
+        final bridge = _FakeBridge();
+        final container = _makeContainer(bridge);
+        addTearDown(container.dispose);
+        await container.read(downloadQueueProvider.notifier).enqueue(Track(
+          id: 'disc-track', name: 'Song', artists: 'Artist', albumName: 'Album',
+          isrc: 'ISRC', trackNumber: 1,
+          discNumber: sample.disc, totalDiscs: sample.total,
+        ));
+        await _pump();
+        final json = bridge.downloadCalls.single.toJson();
+        expect(json['filename_format'], sample.template);
+        expect(json['disc_number'], sample.disc);
+        expect(json['output_dir'], '/fake/downloads/Artist/Album');
+        expect(bridge.duplicateDirCalls, ['/fake/downloads/Artist/Album']);
+      });
+    }
+
+    test('enqueue forwards available search tagging metadata', () async {
+      final bridge = _FakeBridge();
+      final container = _makeContainer(bridge);
+      addTearDown(container.dispose);
+      await container.read(downloadQueueProvider.notifier).enqueue(Track.fromJson({
+        'id': 'track', 'name': 'Song', 'artists': 'Artist',
+        'explicit': false, 'barcode': '01234', 'albumType': 'compilation',
+        'deezerId': 123, 'playlist_position': 7,
+      }));
+      await _pump();
+      final json = bridge.downloadCalls.single.toJson();
+      expect(json['explicit'], false);
+      expect(json['upc'], '01234');
+      expect(json['album_type'], 'compilation');
+      expect(json['deezer_id'], '123');
+      expect(json['playlist_position'], 7);
+      expect(json['cover_max_dimension'], 0);
+    });
+
     // enqueue builds a DownloadRequest with the correct fields
     test('enqueue passes correct DownloadRequest to bridge', () async {
       final bridge = _FakeBridge()..downloadResult = {};
@@ -343,10 +390,14 @@ void main() {
       await container
           .read(folderOrganizationProvider.notifier)
           .set(FolderOrganization.none);
-      await container.read(downloadQueueProvider.notifier).enqueue(_track);
+      await container.read(downloadQueueProvider.notifier).enqueue(const Track(
+        id: 'multi', name: 'Song', artists: 'Artist',
+        trackNumber: 1, discNumber: 2, totalDiscs: 2,
+      ));
       await _pump();
 
       final json = bridge.downloadCalls.first.toJson();
+      expect(json['filename_format'], '{artist} - {title}');
       expect(json['output_dir'], '/fake/downloads');
       expect(json['filename_format'], isNot(contains('/')));
     });
