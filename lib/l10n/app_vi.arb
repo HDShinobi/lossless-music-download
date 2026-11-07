@@ -81,6 +81,7 @@
   "downloadSheetNoSources": "Chưa có nguồn tải. Cài extension tải trong Khám phá.",
   "queueStatusQueued": "Trong hàng đợi",
   "queueStatusFailed": "Lỗi · chạm để thử lại",
+  "queueDownloadAnyway": "Tải lại",
   "queueAlreadyInLibrary": "Đã có trong thư viện",
   "queueStatusDone": "Verified · đã vào Thư viện",
   "queueStatusFinalizing": "Đang ghi metadata...",
@@ -474,5 +475,15 @@
   "lyricsAppleWordSync": "Đồng bộ từng từ Apple Music (ELRC)",
   "lyricsMusixmatchLanguage": "Ngôn ngữ Musixmatch",
   "lyricsLanguageHint": "Mã ngôn ngữ (vd. vi, en); để trống để tự chọn",
-  "lyricsSettingsError": "Chưa áp dụng được cài đặt lời bài hát. Vui lòng thử lại."
+  "lyricsSettingsError": "Chưa áp dụng được cài đặt lời bài hát. Vui lòng thử lại.",
+  "downloadHistory": "Lịch sử tải",
+  "historyEmpty": "Chưa có lịch sử tải",
+  "historySearchHint": "Tìm tên bài hoặc nghệ sĩ",
+  "historyRemove": "Xóa khỏi lịch sử",
+  "historyOpenLocation": "Mở vị trí tệp",
+  "historyLocationUnavailable": "Không thể mở vị trí tệp",
+  "historyError": "Không thể tải lịch sử tải xuống",
+  "historyDownloaded": "Đã tải",
+  "historyNext": "Trang sau",
+  "historyPrevious": "Trang trước"
 }

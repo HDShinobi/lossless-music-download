@@ -8,6 +8,7 @@ import 'package:lossless_music_download/l10n/app_localizations.dart';
 import '../models/home_feed.dart';
 import '../models/search_entities.dart';
 import '../models/track.dart';
+import '../providers/download_history_provider.dart';
 import '../providers/download_options_provider.dart';
 import '../providers/download_queue_provider.dart';
 import '../providers/extensions_provider.dart';
@@ -422,6 +423,7 @@ class _SearchBody extends ConsumerWidget {
                 filter == SearchFilter.all ||
                 filter == SearchFilter.song) &&
             results.tracks.isNotEmpty;
+        final downloaded = ref.watch(downloadedTracksProvider(HistoryLookupBatch(results.tracks))).value ?? const <String>{};
         final withHeaders = !selectionMode && filter == SearchFilter.all;
 
         // Section order: Songs → Albums → Artists.
@@ -431,6 +433,7 @@ class _SearchBody extends ConsumerWidget {
           for (final track in results.tracks) {
             children.add(TrackTile(
               track: track,
+              downloaded: downloaded.contains(historyLookupKey(track)),
               qualityHint: track.qualityBadge,
               selectionMode: selectionMode,
               selected: selectedIds.contains(track.id),

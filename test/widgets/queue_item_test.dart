@@ -8,10 +8,38 @@ import 'package:lossless_music_download/models/download_progress.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/models/track.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
+import 'package:lossless_music_download/providers/download_queue_provider.dart';
+import 'package:lossless_music_download/providers/download_dir_provider.dart';
+import 'package:lossless_music_download/providers/download_options_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lossless_music_download/services/backend_bridge.dart';
 import 'package:lossless_music_download/theme/app_theme.dart';
 import 'package:lossless_music_download/util/queue_view.dart';
 import 'package:lossless_music_download/widgets/queue_item.dart';
+
+class _Queue extends DownloadQueueController {
+  final String path;
+  String? downloadedAnyway;
+  _Queue(this.path);
+  @override
+  void downloadAnyway(String itemId) {
+    downloadedAnyway = itemId;
+  }
+
+  @override
+  List<DownloadEntry> build() => [
+    DownloadEntry(
+      track: const Track(id: 'tid1', name: 'My Song', artists: 'Artist Name'),
+      itemId: 'existing',
+      status: 'done',
+      progress: 1,
+      bytesReceived: 0,
+      filePath: path,
+      alreadyInLibrary: true,
+      quality: 'FLAC',
+    ),
+  ];
+}
 
 // ---------------------------------------------------------------------------
 // Minimal fake BackendBridge for queue item tests
@@ -48,12 +76,17 @@ class _FakeBridge extends BackendBridge {
 Future<void> _pumpView(
   WidgetTester tester,
   QueueItemView view,
-  _FakeBridge bridge,
-) async {
+  _FakeBridge bridge, {
+  Locale locale = const Locale('en'),
+  String existingPath = '/old/My Song.flac',
+  _Queue? queue,
+}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         backendBridgeProvider.overrideWithValue(bridge),
+        downloadDirProvider.overrideWith((ref) async => '/downloads'),
+        downloadQueueProvider.overrideWith(() => queue ?? _Queue(existingPath)),
         appDirsProvider.overrideWithValue(
           Future.value(('/fake/ext', '/fake/data')),
         ),
@@ -62,7 +95,7 @@ Future<void> _pumpView(
         theme: appTheme(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        locale: const Locale('en'),
+        locale: locale,
         home: Scaffold(
           body: QueueItem(view: view),
         ),
@@ -102,7 +135,139 @@ Future<void> _pumpViewOnce(
 void main() {
   const track = Track(id: 'tid1', name: 'My Song', artists: 'Artist Name');
 
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   group('QueueItem', () {
+    testWidgets('same resolved destination hides Download anyway', (
+      tester,
+    ) async {
+      await _pumpView(
+        tester,
+        const QueueItemView(
+          progress: DownloadProgress(
+            itemId: 'existing',
+            status: 'done',
+            progress: 1,
+            bytesReceived: 0,
+          ),
+          track: track,
+          alreadyInLibrary: true,
+        ),
+        _FakeBridge(),
+        existingPath: '/downloads/Artist Name/My Song.flac',
+      );
+      expect(find.byTooltip('Download anyway'), findsNothing);
+    });
+    testWidgets('action updates when the current filename template changes', (
+      tester,
+    ) async {
+      await _pumpView(
+        tester,
+        const QueueItemView(
+          progress: DownloadProgress(
+            itemId: 'existing',
+            status: 'done',
+            progress: 1,
+            bytesReceived: 0,
+          ),
+          track: track,
+          alreadyInLibrary: true,
+        ),
+        _FakeBridge(),
+        existingPath: '/downloads/Artist Name/My Song.flac',
+      );
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(QueueItem)),
+      );
+      expect(find.byTooltip('Download anyway'), findsNothing);
+      await container
+          .read(filenameTemplateProvider.notifier)
+          .set('{title} new');
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Download anyway'), findsOneWidget);
+      await container.read(filenameTemplateProvider.notifier).set('{title}');
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Download anyway'), findsNothing);
+    });
+
+    for (final same in [true, false]) {
+      testWidgets(
+        'current folder template and quality ${same ? "hide" : "show"} action',
+        (tester) async {
+          SharedPreferences.setMockInitialValues({
+            'folder_organization': 'none',
+            'album_folder_template': 'Custom/{quality}',
+            'filename_template': '{artist} - {title} [{quality}]',
+          });
+          await _pumpView(
+            tester,
+            const QueueItemView(
+              progress: DownloadProgress(
+                itemId: 'existing',
+                status: 'done',
+                progress: 1,
+                bytesReceived: 0,
+              ),
+              track: track,
+              alreadyInLibrary: true,
+            ),
+            _FakeBridge(),
+            existingPath: same
+                ? '/downloads/Custom/FLAC/Artist Name - My Song [FLAC].flac'
+                : '/downloads/Custom/MP3/Artist Name - My Song [MP3].flac',
+          );
+          expect(
+            find.byTooltip('Download anyway'),
+            same ? findsNothing : findsOneWidget,
+          );
+        },
+      );
+    }
+
+    testWidgets('library duplicate offers Download anyway', (tester) async {
+      final queue = _Queue('/old/My Song.flac');
+      await _pumpView(
+        tester,
+        const QueueItemView(
+          progress: DownloadProgress(
+            itemId: 'existing',
+            status: 'done',
+            progress: 1,
+            bytesReceived: 0,
+          ),
+          track: track,
+          alreadyInLibrary: true,
+        ),
+        _FakeBridge(),
+        queue: queue,
+      );
+      expect(find.byTooltip('Download anyway'), findsOneWidget);
+      await tester.tap(find.byTooltip('Download anyway'));
+      expect(queue.downloadedAnyway, 'existing');
+    });
+
+    testWidgets('library duplicate offers localized Vietnamese action', (
+      tester,
+    ) async {
+      await _pumpView(
+        tester,
+        const QueueItemView(
+          progress: DownloadProgress(
+            itemId: 'existing',
+            status: 'done',
+            progress: 1,
+            bytesReceived: 0,
+          ),
+          track: track,
+          alreadyInLibrary: true,
+        ),
+        _FakeBridge(),
+        locale: const Locale('vi'),
+      );
+      expect(find.byTooltip('Tải lại'), findsOneWidget);
+    });
+
+
     testWidgets('track name shows (not itemId) when track is provided',
         (tester) async {
       final bridge = _FakeBridge();

@@ -66,6 +66,7 @@ dependencies:
   # Keystore-backed master key for v4.9.5 encrypted extension storage-at-rest.
   # Required before InitExtensionSystem, else extension install/load fails.
   flutter_secure_storage: ^9.2.2
+  sqflite: ^2.4.2
 
 dev_dependencies:
   flutter_test:
@@ -85,6 +86,7 @@ dev_dependencies:
   mocktail: ^1.0.0
   alchemist: ^0.14.0
   patrol: ^4.6.0
+  sqflite_common_ffi: 2.4.0
 
 flutter_launcher_icons:
   android: true

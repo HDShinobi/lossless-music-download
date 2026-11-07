@@ -18,10 +18,12 @@ import '../services/container_remux_service.dart';
 import '../services/download_templates.dart';
 import '../services/ffmpeg_metadata_service.dart';
 import '../services/native_download_worker.dart';
+import '../services/history_database.dart';
 import '../util/queue_view.dart';
 import '../utils/extension_auth_launcher.dart';
 import '../widgets/track_tile.dart'; // TrackDownloadState
 import 'download_dir_provider.dart';
+import 'download_history_provider.dart';
 import 'download_labels_provider.dart';
 import 'download_options_provider.dart';
 import 'downloads_provider.dart';
@@ -65,6 +67,7 @@ class DownloadEntry {
 
   final String? filePath;
   final bool alreadyInLibrary;
+  final bool bypassDuplicateCheck;
 
   const DownloadEntry({
     required this.track,
@@ -82,6 +85,7 @@ class DownloadEntry {
     this.resolvedService,
     this.filePath,
     this.alreadyInLibrary = false,
+    this.bypassDuplicateCheck = false,
   });
 
   DownloadEntry copyWith({
@@ -113,6 +117,7 @@ class DownloadEntry {
       resolvedService: resolvedService ?? this.resolvedService,
       filePath: filePath ?? this.filePath,
       alreadyInLibrary: alreadyInLibrary ?? this.alreadyInLibrary,
+      bypassDuplicateCheck: bypassDuplicateCheck,
     );
   }
 }
@@ -137,6 +142,46 @@ class QueuePauseReasonNotifier extends Notifier<String?> {
 final queuePauseReasonProvider = NotifierProvider<QueuePauseReasonNotifier, String?>(
   QueuePauseReasonNotifier.new,
 );
+
+/// Only offer a duplicate override when the current target moves the file.
+final canDownloadAnywayProvider = FutureProvider.autoDispose.family<bool, String>((
+  ref,
+  itemId,
+) async {
+  final entry = ref.watch(downloadQueueProvider.select(
+    (entries) => entries.where((e) => e.itemId == itemId).firstOrNull,
+  ));
+  if (entry == null ||
+      !entry.alreadyInLibrary ||
+      entry.filePath == null ||
+      entry.filePath!.isEmpty) {
+    return false;
+  }
+  final directory = ref.watch(downloadDirProvider.future);
+  ref.watch(folderOrganizationProvider);
+  ref.watch(filenameTemplateProvider);
+  ref.watch(albumFolderTemplateProvider);
+  await Future.wait([
+    ref.read(folderOrganizationProvider.notifier).ready,
+    ref.read(filenameTemplateProvider.notifier).ready,
+    ref.read(albumFolderTemplateProvider.notifier).ready,
+  ]);
+  final dir = await directory;
+  if (!ref.mounted) return false;
+  final target = ref
+      .read(downloadQueueProvider.notifier)
+      ._resolveOutputTarget(dir, entry.track, quality: entry.quality);
+  // DownloadRequest leaves output_ext unset: the engine's destination defaults
+  // to .flac. A provider may report a different container after downloading.
+  final basename = DownloadTemplates.preview(
+    target.template,
+    entry.track,
+    quality: entry.quality,
+  );
+  final path = '${target.dir}/$basename.flac';
+  return File(entry.filePath!).absolute.uri.normalizePath() !=
+      File(path).absolute.uri.normalizePath();
+});
 
 class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   final Map<String, Sample> _samples = {};
@@ -211,7 +256,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     return [];
   }
 
-  Future<void> enqueue(Track track, {String? service, String? quality}) async {
+  Future<void> enqueue(Track track, {String? service, String? quality,
+      bool bypassDuplicateCheck = false}) async {
     final itemId = 'dl_${DateTime.now().microsecondsSinceEpoch}_${track.id}';
 
     // Register label so QueueItem can resolve track from itemId.
@@ -227,6 +273,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         bytesReceived: 0,
         service: service,
         quality: quality,
+        bypassDuplicateCheck: bypassDuplicateCheck,
       ),
       ...state,
     ];
@@ -268,14 +315,82 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       ]);
       if (!ref.mounted || _manualPaused) return;
       final worker = ref.read(nativeDownloadWorkerProvider);
+      final admitted = worker.isAvailable ? await _historyPrecheck(queued) : queued;
+      if (!ref.mounted || admitted.isEmpty) return;
       if (worker.isAvailable) {
-        continueProcessing = await _runNativeBatch(worker, queued);
+        continueProcessing = await _runNativeBatch(worker, admitted);
       } else {
-        await _runDartFallback(queued.first);
+        await _runDartFallback(admitted.first);
       }
     } finally {
       _isProcessing = false;
       if (ref.mounted && continueProcessing) unawaited(_processQueue());
+    }
+  }
+
+  Future<List<DownloadEntry>> _historyPrecheck(List<DownloadEntry> entries) async {
+    try {
+      final db = await ref.read(historyDatabaseProvider.future);
+      final matches = await db.findBatch(entries.map((e) => e.track).toList(), strict: true);
+      if (!ref.mounted) return [];
+      final admitted = <DownloadEntry>[];
+      for (var i = 0; i < entries.length; i++) {
+        final entry = entries[i];
+        if (!state.any((e) => e.itemId == entry.itemId && e.status != 'done' && e.status != 'failed')) continue;
+        final match = matches[i];
+        if (entry.bypassDuplicateCheck || match == null) {
+          admitted.add(entry);
+        } else {
+          _setStatus(entry.itemId, 'done', progressIfDone: 1,
+              filePath: match.filePath, alreadyInLibrary: true);
+        }
+      }
+      return admitted;
+    } catch (e) {
+      // Storage failure must not prevent downloading. The engine's existing
+      // ISRC/IndexCache check still runs in both execution paths.
+      debugPrint('[DownloadQueue] history precheck unavailable: $e');
+      return entries;
+    }
+  }
+
+  Future<bool> _skipIndexedDuplicate(DownloadEntry entry, String directory) async {
+    if (entry.bypassDuplicateCheck) return false;
+    final isrc = entry.track.isrc;
+    if (isrc == null || isrc.isEmpty) return false;
+    try {
+      final duplicate = await ref.read(backendBridgeProvider).checkDuplicate(directory, isrc);
+      if (!ref.mounted || duplicate['exists'] != true) return false;
+      final path = (duplicate['filepath'] ?? duplicate['path'])?.toString();
+      _setStatus(entry.itemId, 'done', progressIfDone: 1,
+        filePath: path, alreadyInLibrary: true);
+      await _recordCompletedHistory([entry.copyWith(status: 'done',
+        filePath: path, alreadyInLibrary: true)]);
+      return true;
+    } catch (_) { return false; }
+  }
+
+  final Map<String, String> _recordedHistory = {};
+  Future<void> _recordCompletedHistory(Iterable<DownloadEntry> entries) async {
+    for (final entry in entries.where((e) => e.status == 'done')) {
+      final path = entry.filePath;
+      if (path == null || path.isEmpty) continue;
+      final service = [entry.resolvedService, entry.service, entry.track.source]
+          .whereType<String>().where((s) => s.isNotEmpty).firstOrNull ?? '';
+      final fingerprint = '$path|$service';
+      if (_recordedHistory[entry.itemId] == fingerprint) continue;
+      try {
+        final db = await ref.read(historyDatabaseProvider.future);
+        final stat = await File(path).stat();
+        await db.upsert(HistoryEntry(id: entry.itemId, track: entry.track,
+          service: service, filePath: path,
+          fileSize: stat.type == FileSystemEntityType.file ? stat.size : null,
+          quality: entry.quality, downloadedAt: DateTime.now()));
+        _recordedHistory[entry.itemId] = fingerprint;
+        if (ref.mounted) ref.read(historyRevisionProvider.notifier).changed();
+      } catch (e) {
+        printAppLog(LogLevel.warning, 'Queue', 'History recording failed; item=${entry.itemId}; $e');
+      }
     }
   }
 
@@ -398,7 +513,9 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     );
     final provider = (ref.read(extensionsProvider).value ?? const <InstalledExtension>[])
         .where((e) => e.id == resolvedService).firstOrNull;
-    return {...req.toJson(), 'network_concurrency_limit': provider?.maxConcurrentDownloads ?? 3};
+    return {...req.toJson(),
+      if (entry.bypassDuplicateCheck) 'bypass_duplicate_check': true,
+      'network_concurrency_limit': provider?.maxConcurrentDownloads ?? 3};
   }
 
   Future<bool> _runNativeBatch(
@@ -407,11 +524,19 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   ) async {
     final requests = <Map<String, dynamic>>[];
     final byItemId = {for (final e in queued) e.itemId: e};
+    var skippedDuplicate = false;
     for (final entry in queued) {
       final json = await _buildRequestJson(entry);
       if (json == null || json['track_name'] == null || json['output_dir'] == null) {
         continue; // gate rejected -- handled by the Dart fallback below
       }
+      // Retain the engine index as a secondary signal, and capture its path
+      // here: the native duplicate status alone does not carry a file_path.
+      if (await _skipIndexedDuplicate(entry, json['output_dir'] as String)) {
+        skippedDuplicate = true;
+        continue;
+      }
+      if (!ref.mounted || !state.any((e) => e.itemId == entry.itemId)) continue;
       requests.add(buildNativeWorkerRequest(
         itemId: entry.itemId,
         trackName: entry.track.name,
@@ -420,8 +545,11 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       ));
     }
 
+    if (skippedDuplicate && ref.mounted) ref.invalidate(libraryProvider);
+
     final gateRejected =
-        queued.where((e) => !requests.any((r) => r['item_id'] == e.itemId)).toList();
+        queued.where((e) => !requests.any((r) => r['item_id'] == e.itemId) &&
+          state.any((current) => current.itemId == e.itemId && current.status != 'done')).toList();
 
     var fellBackToStartupTimeout = false;
     var stoppedWithPending = false;
@@ -470,6 +598,9 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         started = true;
         lastSeenAt = DateTime.now();
         _mergeNativeSnapshot(snapshot, byItemId);
+        await _recordCompletedHistory(byItemId.values);
+        // Native publishes done + final file_path together before its final
+        // non-running snapshot; progress-only done may arrive earlier.
         if (!snapshot.isRunning) {
           stoppedWithPending = snapshot.items.any((i) =>
               byItemId.containsKey(i.itemId) && i.status == 'queued');
@@ -479,6 +610,9 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       }
       _activeWorker = null;
       if (!ref.mounted) return false;
+      for (final id in byItemId.keys) {
+        if (!state.any((e) => e.itemId == id)) _recordedHistory.remove(id);
+      }
       ref.read(queuePauseReasonProvider.notifier).set(_manualPaused ? 'paused' : null);
       ref.invalidate(libraryProvider);
     }
@@ -487,7 +621,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         ? [...gateRejected, ...queued.where((e) => requests.any((r) => r['item_id'] == e.itemId))]
         : gateRejected;
     for (final entry in fallbackEntries) {
-      await _runDartFallback(entry);
+      await _runDartFallback(entry, historyChecked: true);
     }
     return !stoppedWithPending;
   }
@@ -502,25 +636,16 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     ref.read(queuePauseReasonProvider.notifier).set(_manualPaused
         ? 'paused' : snapshot.pauseReason == 'waiting_wifi' ? 'waiting_wifi' : null);
     if (!snapshot.items.any((i) => byItemId.containsKey(i.itemId))) return;
-    state = [
-      for (final entry in state)
-        if (byItemId.containsKey(entry.itemId))
-          _applyNativeItemState(
-            entry,
-            snapshot.items.firstWhere(
-              (i) => i.itemId == entry.itemId,
-              orElse: () => NativeWorkerItemState(
-                itemId: entry.itemId,
-                status: entry.status,
-                progress: entry.progress,
-                bytesReceived: entry.bytesReceived,
-                bytesTotal: entry.totalBytes ?? 0,
-              ),
-            ),
-          )
-        else
-          entry,
-    ];
+    // Run-owned entries outlive cleared UI rows, so a late final path still
+    // reaches history. Only entries still visible are published to queue UI.
+    final visible = {for (final entry in state) entry.itemId: entry};
+    for (final item in snapshot.items) {
+      final entry = visible[item.itemId] ?? byItemId[item.itemId];
+      if (entry != null && byItemId.containsKey(item.itemId)) {
+        byItemId[item.itemId] = _applyNativeItemState(entry, item);
+      }
+    }
+    state = [for (final entry in state) byItemId[entry.itemId] ?? entry];
 
     // Native worker reported a rate-limit (HTTP 429) failure — give it one
     // delayed retry so the shared API's limit resets, instead of hard-failing.
@@ -536,7 +661,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   DownloadEntry _applyNativeItemState(DownloadEntry entry, NativeWorkerItemState item) {
     // Late terminal snapshots may supply the error/service missing in progress.
     if ((entry.status == 'done' || entry.status == 'failed') &&
-        entry.status != item.status) {
+        entry.status != item.status &&
+        !(entry.status == 'done' && _existingLibraryPath(item.error) != null)) {
       return entry;
     }
     final existingPath = item.status == 'failed'
@@ -551,7 +677,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       verificationService: item.service,
       resolvedService: item.resolvedService,
       filePath: existingPath ?? item.filePath,
-      alreadyInLibrary: existingPath != null,
+      alreadyInLibrary: existingPath != null || entry.alreadyInLibrary,
     );
     _logTransition(entry, updated, filePath: updated.filePath);
     return updated;
@@ -560,12 +686,16 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   // The original single-item Dart download path -- now the fallback used
   // for non-Android platforms, items the native worker's gate rejects, and
   // runs whose native snapshot stalls.
-  Future<void> _runDartFallback(DownloadEntry next) async {
+  Future<void> _runDartFallback(DownloadEntry next,
+      {bool historyChecked = false}) async {
     if (!ref.mounted || !state.any((e) => e.itemId == next.itemId &&
         e.status != 'done' && e.status != 'failed')) {
       return;
     }
+    if (!historyChecked && (await _historyPrecheck([next])).isEmpty) return;
+    if (!ref.mounted) return;
     _setStatus(next.itemId, 'downloading');
+    DownloadEntry? completed;
     try {
       if (!ref.mounted || !state.any((e) => e.itemId == next.itemId)) return;
       if (_manualPaused || ref.read(wifiOnlyProvider)) {
@@ -591,23 +721,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
 
       final target = _resolveOutputTarget(dir, next.track, quality: next.quality);
 
-      // Skip download if the ISRC already exists under the resolved output
-      // folder (same scope as the native worker). Only checked when ISRC is known.
-      if (next.track.isrc != null && next.track.isrc!.isNotEmpty) {
-        try {
-          final dup = await bridge.checkDuplicate(target.dir, next.track.isrc!);
-          if (dup['exists'] == true) {
-            _setStatus(next.itemId, 'done', progressIfDone: 1.0,
-                filePath: dup['path']?.toString(), alreadyInLibrary: true);
-            ref.invalidate(libraryProvider);
-            throw _DuplicateSkipped();
-          }
-        } on _DuplicateSkipped {
-          rethrow;
-        } catch (_) {
-          // checkDuplicate failure is non-fatal — proceed with download.
-        }
-      }
+      if (await _skipIndexedDuplicate(next, target.dir)) throw _DuplicateSkipped();
 
       final resolvedService =
           (next.service != null && next.service!.isNotEmpty)
@@ -684,6 +798,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
           ? _existingLibraryPath(res['error']?.toString())
           : null;
       if (existingPath != null) {
+        completed = next.copyWith(status: 'done', filePath: existingPath, alreadyInLibrary: true);
         _setStatus(next.itemId, 'done', progressIfDone: 1.0,
             filePath: existingPath, alreadyInLibrary: true);
         ref.invalidate(libraryProvider);
@@ -725,11 +840,18 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         resolvedService:
             !failed && (resultService?.isNotEmpty ?? false) ? resultService : null,
       );
-      if (!failed) ref.invalidate(libraryProvider);
+      if (!failed) {
+        completed = next.copyWith(status: 'done', filePath: res['file_path']?.toString(),
+          resolvedService: resultService);
+        ref.invalidate(libraryProvider);
+      }
     } on _DuplicateSkipped {
       // Item skipped — status already set to done above.
+      if (ref.mounted) ref.invalidate(libraryProvider);
     } catch (e) {
       _setStatus(next.itemId, 'failed', error: e.toString());
+    } finally {
+      if (ref.mounted && completed != null) await _recordCompletedHistory([completed]);
     }
   }
 
@@ -898,11 +1020,16 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     }
   }
 
-  void retry(String itemId) {
+  void retry(String itemId) => _requeue(itemId);
+
+  void downloadAnyway(String itemId) => _requeue(itemId, bypassDuplicateCheck: true);
+
+  void _requeue(String itemId, {bool bypassDuplicateCheck = false}) {
     final entry = state.where((e) => e.itemId == itemId).firstOrNull;
     if (entry == null) return;
     _removeLocal(itemId);
-    unawaited(enqueue(entry.track, service: entry.service, quality: entry.quality));
+    unawaited(enqueue(entry.track, service: entry.service, quality: entry.quality,
+      bypassDuplicateCheck: bypassDuplicateCheck));
   }
 
   void remove(String itemId) {
@@ -1079,6 +1206,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     state = [for (final e in state) if (e.itemId != itemId) e];
     _samples.remove(itemId);
     _loggedLifecycleEvents.remove(itemId);
+
   }
 
   // --- Rate-limit (HTTP 429) backoff — ported from SpotiFLAC ---------------

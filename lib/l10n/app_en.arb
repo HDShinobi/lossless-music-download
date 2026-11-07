@@ -81,6 +81,7 @@
   "downloadSheetNoSources": "No download source yet. Install one in Discover.",
   "queueStatusQueued": "In queue",
   "queueStatusFailed": "Failed · tap to retry",
+  "queueDownloadAnyway": "Download anyway",
   "queueAlreadyInLibrary": "Already in library",
   "queueStatusDone": "Verified · in Library",
   "queueStatusFinalizing": "Writing metadata...",
@@ -474,5 +475,15 @@
   "lyricsAppleWordSync": "Apple Music word synchronization (ELRC)",
   "lyricsMusixmatchLanguage": "Musixmatch language",
   "lyricsLanguageHint": "Language code (e.g. vi, en); empty for automatic",
-  "lyricsSettingsError": "Could not apply lyrics settings. Please try again."
+  "lyricsSettingsError": "Could not apply lyrics settings. Please try again.",
+  "downloadHistory": "Download history",
+  "historyEmpty": "No download history",
+  "historySearchHint": "Search title or artist",
+  "historyRemove": "Remove entry",
+  "historyOpenLocation": "Open file location",
+  "historyLocationUnavailable": "Could not open the file location",
+  "historyError": "Could not load download history",
+  "historyDownloaded": "Downloaded",
+  "historyNext": "Next page",
+  "historyPrevious": "Previous page"
 }

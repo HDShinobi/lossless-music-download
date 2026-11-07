@@ -500,6 +500,12 @@ abstract class AppLocalizations {
   /// **'Failed · tap to retry'**
   String get queueStatusFailed;
 
+  /// No description provided for @queueDownloadAnyway.
+  ///
+  /// In en, this message translates to:
+  /// **'Download anyway'**
+  String get queueDownloadAnyway;
+
   /// No description provided for @queueAlreadyInLibrary.
   ///
   /// In en, this message translates to:
@@ -2035,6 +2041,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not apply lyrics settings. Please try again.'**
   String get lyricsSettingsError;
+
+  /// No description provided for @downloadHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Download history'**
+  String get downloadHistory;
+
+  /// No description provided for @historyEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No download history'**
+  String get historyEmpty;
+
+  /// No description provided for @historySearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search title or artist'**
+  String get historySearchHint;
+
+  /// No description provided for @historyRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove entry'**
+  String get historyRemove;
+
+  /// No description provided for @historyOpenLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Open file location'**
+  String get historyOpenLocation;
+
+  /// No description provided for @historyLocationUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the file location'**
+  String get historyLocationUnavailable;
+
+  /// No description provided for @historyError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load download history'**
+  String get historyError;
+
+  /// No description provided for @historyDownloaded.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloaded'**
+  String get historyDownloaded;
+
+  /// No description provided for @historyNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next page'**
+  String get historyNext;
+
+  /// No description provided for @historyPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous page'**
+  String get historyPrevious;
 }
 
 class _AppLocalizationsDelegate

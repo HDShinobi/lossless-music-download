@@ -32,9 +32,11 @@ class TrackTile extends StatelessWidget {
     this.onArtistTap,
     this.onAlbumTap,
     this.showPreview = true,
+    this.downloaded = false,
   });
 
   final Track track;
+  final bool downloaded;
   final VoidCallback onDownload;
   final String? qualityHint;
   final bool selectionMode;
@@ -92,6 +94,13 @@ class TrackTile extends StatelessWidget {
                 Row(
                   children: [
                     Flexible(child: _buildSubtitle(context, cs, tt)),
+                    if (downloaded) ...[
+                      const SizedBox(width: 6),
+                      Tooltip(
+                        message: Localizations.of<AppLocalizations>(context, AppLocalizations)?.historyDownloaded ?? '',
+                        child: Icon(Icons.download_done, key: const Key('historyDownloaded'), size: 14, color: cs.primary),
+                      ),
+                    ],
                     if (qualityHint != null) ...[
                       const SizedBox(width: 6),
                       _QualityBadge(

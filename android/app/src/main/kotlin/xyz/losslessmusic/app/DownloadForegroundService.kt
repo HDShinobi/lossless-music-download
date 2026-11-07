@@ -494,6 +494,7 @@ class DownloadForegroundService : Service() {
     private fun isDuplicate(requestJson: String): Boolean {
         return try {
             val req = JSONObject(requestJson)
+            if (req.optBoolean("bypass_duplicate_check", false)) return false
             val isrc = req.optString("isrc", "")
             val outputDir = req.optString("output_dir", "")
             if (isrc.isEmpty() || outputDir.isEmpty()) return false

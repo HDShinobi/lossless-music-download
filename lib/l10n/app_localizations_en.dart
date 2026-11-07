@@ -216,6 +216,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get queueStatusFailed => 'Failed · tap to retry';
 
   @override
+  String get queueDownloadAnyway => 'Download anyway';
+
+  @override
   String get queueAlreadyInLibrary => 'Already in library';
 
   @override
@@ -1059,4 +1062,34 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get lyricsSettingsError =>
       'Could not apply lyrics settings. Please try again.';
+
+  @override
+  String get downloadHistory => 'Download history';
+
+  @override
+  String get historyEmpty => 'No download history';
+
+  @override
+  String get historySearchHint => 'Search title or artist';
+
+  @override
+  String get historyRemove => 'Remove entry';
+
+  @override
+  String get historyOpenLocation => 'Open file location';
+
+  @override
+  String get historyLocationUnavailable => 'Could not open the file location';
+
+  @override
+  String get historyError => 'Could not load download history';
+
+  @override
+  String get historyDownloaded => 'Downloaded';
+
+  @override
+  String get historyNext => 'Next page';
+
+  @override
+  String get historyPrevious => 'Previous page';
 }

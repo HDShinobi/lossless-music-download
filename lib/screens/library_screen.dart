@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'download_history_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -53,6 +55,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       appBar: AppBar(
         title: Text(t.tabLibrary),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: t.downloadHistory,
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
+              builder: (_) => const DownloadHistoryScreen())),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: t.refresh,

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'package:lossless_music_download/models/download_progress.dart';
 import 'package:lossless_music_download/models/download_request.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/models/track.dart';
 import 'package:lossless_music_download/providers/download_queue_provider.dart';
+import 'package:lossless_music_download/providers/download_dir_provider.dart';
 import 'package:lossless_music_download/providers/downloads_provider.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
 import 'package:lossless_music_download/screens/queue_screen.dart';
@@ -31,6 +33,7 @@ class _FakeBackendBridge extends BackendBridge {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   // ---------------------------------------------------------------------------
   // Widget tests: QueueScreen — driven by downloadQueueProvider
   // ---------------------------------------------------------------------------
@@ -49,6 +52,7 @@ void main() {
     }) {
       return ProviderScope(
         overrides: [
+          downloadDirProvider.overrideWith((ref) async => '/downloads'),
           // Override the persistent queue with a fixed list.
           downloadQueueProvider.overrideWith(() => _FixedQueueController(entries)),
           // Keep the poll alive but return nothing (entries drive display).
@@ -95,7 +99,8 @@ void main() {
               ? 'Already in library' : 'Đã có trong thư viện'),
           findsOneWidget,
         );
-        expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+        expect(find.byTooltip(locale == 'en' ? 'Download anyway' : 'Tải lại'),
+            findsOneWidget);
         expect(find.byIcon(Icons.refresh), findsNothing);
       });
     }

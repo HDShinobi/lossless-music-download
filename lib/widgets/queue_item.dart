@@ -119,7 +119,16 @@ class QueueItem extends ConsumerWidget {
               .retry(item.itemId),
         );
       case _ItemState.done:
-        trailing = Icon(Icons.check_circle_outline, color: scheme.primary);
+        trailing = view.alreadyInLibrary &&
+                ref.watch(canDownloadAnywayProvider(item.itemId)).asData?.value == true
+            ? IconButton(
+                icon: Icon(Icons.download_outlined, color: scheme.primary),
+                tooltip: t.queueDownloadAnyway,
+                onPressed: () => ref
+                    .read(downloadQueueProvider.notifier)
+                    .downloadAnyway(item.itemId),
+              )
+            : Icon(Icons.check_circle_outline, color: scheme.primary);
       case _ItemState.queued:
         trailing = Icon(Icons.schedule, color: tokens.muted2);
       case _ItemState.unknown:

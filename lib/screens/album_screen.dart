@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/track.dart';
+import '../providers/download_history_provider.dart';
 import '../providers/download_options_provider.dart';
 import '../services/backend_bridge.dart';
 import '../providers/download_queue_provider.dart';
@@ -222,6 +223,7 @@ class AlbumScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
         data: (data) {
+          final downloaded = ref.watch(downloadedTracksProvider(HistoryLookupBatch(data.tracks))).value ?? const <String>{};
           return Column(
             children: [
               // Album header: cover + name + artist
@@ -297,6 +299,7 @@ class AlbumScreen extends ConsumerWidget {
                     itemCount: data.tracks.length,
                     itemBuilder: (ctx, i) => TrackTile(
                       track: data.tracks[i],
+                      downloaded: downloaded.contains(historyLookupKey(data.tracks[i])),
                       qualityHint: data.tracks[i].qualityBadge,
                       onDownload: () => _onDownload(context, ref, data.tracks[i]),
                     ),

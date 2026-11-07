@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/track.dart';
+import '../providers/download_history_provider.dart';
 import '../providers/download_options_provider.dart';
 import '../providers/download_queue_provider.dart';
 import '../providers/extensions_provider.dart';
@@ -401,6 +402,9 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen> {
     final cs = Theme.of(context).colorScheme;
     final async = ref.watch(_artistDataProvider(widget.id));
     final library = ref.watch(libraryProvider).value ?? [];
+    final topTracks = async.value?.topTracks.take(10).toList() ?? const <Track>[];
+    final downloaded = topTracks.isEmpty ? const <String>{} :
+        ref.watch(downloadedTracksProvider(HistoryLookupBatch(topTracks))).value ?? const <String>{};
 
     // Build a quick lookup set: normalized track names in library
     final libraryNames = library
@@ -452,6 +456,7 @@ class _ArtistScreenState extends ConsumerState<ArtistScreen> {
                 child: _PopularCarousel(
                   tracks: data.topTracks.take(10).toList(),
                   libraryNames: libraryNames,
+                  downloadedIds: downloaded,
                   pageCtrl: _popularPageCtrl,
                   currentPage: _popularPage,
                   onPageChanged: (p) => setState(() => _popularPage = p),
@@ -668,6 +673,7 @@ class _PopularCarousel extends StatelessWidget {
   const _PopularCarousel({
     required this.tracks,
     required this.libraryNames,
+    this.downloadedIds = const {},
     required this.pageCtrl,
     required this.currentPage,
     required this.onPageChanged,
@@ -678,6 +684,7 @@ class _PopularCarousel extends StatelessWidget {
 
   final List<Track> tracks;
   final Set<String> libraryNames;
+  final Set<String> downloadedIds;
   final PageController pageCtrl;
   final int currentPage;
   final void Function(int) onPageChanged;
@@ -690,7 +697,7 @@ class _PopularCarousel extends StatelessWidget {
   bool _inLibrary(Track t) {
     final normalized =
         stripTrackNumberPrefix(t.name.toLowerCase(), requireDot: true);
-    return libraryNames.contains(normalized);
+    return downloadedIds.contains(historyLookupKey(t)) || libraryNames.contains(normalized);
   }
 
   @override

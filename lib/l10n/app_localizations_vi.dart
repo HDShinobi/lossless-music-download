@@ -216,6 +216,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get queueStatusFailed => 'Lỗi · chạm để thử lại';
 
   @override
+  String get queueDownloadAnyway => 'Tải lại';
+
+  @override
   String get queueAlreadyInLibrary => 'Đã có trong thư viện';
 
   @override
@@ -1051,4 +1054,34 @@ class AppLocalizationsVi extends AppLocalizations {
   @override
   String get lyricsSettingsError =>
       'Chưa áp dụng được cài đặt lời bài hát. Vui lòng thử lại.';
+
+  @override
+  String get downloadHistory => 'Lịch sử tải';
+
+  @override
+  String get historyEmpty => 'Chưa có lịch sử tải';
+
+  @override
+  String get historySearchHint => 'Tìm tên bài hoặc nghệ sĩ';
+
+  @override
+  String get historyRemove => 'Xóa khỏi lịch sử';
+
+  @override
+  String get historyOpenLocation => 'Mở vị trí tệp';
+
+  @override
+  String get historyLocationUnavailable => 'Không thể mở vị trí tệp';
+
+  @override
+  String get historyError => 'Không thể tải lịch sử tải xuống';
+
+  @override
+  String get historyDownloaded => 'Đã tải';
+
+  @override
+  String get historyNext => 'Trang sau';
+
+  @override
+  String get historyPrevious => 'Trang trước';
 }
