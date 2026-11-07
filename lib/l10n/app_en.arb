@@ -81,6 +81,7 @@
   "downloadSheetNoSources": "No download source yet. Install one in Discover.",
   "queueStatusQueued": "In queue",
   "queueStatusFailed": "Failed · tap to retry",
+  "queueAlreadyInLibrary": "Already in library",
   "queueStatusDone": "Verified · in Library",
   "queueStatusFinalizing": "Writing metadata...",
   "libraryAll": "All",

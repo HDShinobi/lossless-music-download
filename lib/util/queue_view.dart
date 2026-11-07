@@ -10,6 +10,7 @@ class QueueItemView {
   final double? speedBytesPerSec;
   final Duration? eta;
   final String? error;
+  final bool alreadyInLibrary;
 
   /// Download intent (originally requested provider) and the provider that
   /// actually delivered the file. Set by the queue screen from
@@ -25,6 +26,7 @@ class QueueItemView {
     this.speedBytesPerSec,
     this.eta,
     this.error,
+    this.alreadyInLibrary = false,
     this.service,
     this.resolvedService,
   });

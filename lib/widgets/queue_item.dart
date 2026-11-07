@@ -68,7 +68,9 @@ class QueueItem extends ConsumerWidget {
             ? '${t.queueStatusFailed} · ${view.error}'
             : t.queueStatusFailed;
       case _ItemState.done:
-        statusLine = t.queueStatusDone;
+        statusLine = view.alreadyInLibrary
+            ? t.queueAlreadyInLibrary
+            : t.queueStatusDone;
       case _ItemState.unknown:
         statusLine = item.status;
     }

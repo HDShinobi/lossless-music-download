@@ -43,7 +43,10 @@ void main() {
       bytesReceived: 104857600, // 100 MB
     );
 
-    Widget buildQueue({required List<DownloadEntry> entries}) {
+    Widget buildQueue({
+      required List<DownloadEntry> entries,
+      String locale = 'en',
+    }) {
       return ProviderScope(
         overrides: [
           // Override the persistent queue with a fixed list.
@@ -57,11 +60,11 @@ void main() {
             () => _FakeExtensionsController([]),
           ),
         ],
-        child: const MaterialApp(
+        child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          locale: Locale('en'),
-          home: QueueScreen(),
+          locale: Locale(locale),
+          home: const QueueScreen(),
         ),
       );
     }
@@ -75,6 +78,27 @@ void main() {
       expect(find.byIcon(Icons.cancel_outlined), findsOneWidget);
       expect(find.textContaining('MB'), findsWidgets);
     });
+
+    for (final locale in ['en', 'vi']) {
+      testWidgets('duplicate shows localized library note ($locale)',
+          (tester) async {
+        await tester.pumpWidget(buildQueue(locale: locale, entries: [
+          downloading.copyWith(
+            status: 'done',
+            alreadyInLibrary: true,
+            filePath: '/existing.flac',
+          ),
+        ]));
+        await tester.pumpAndSettle();
+        expect(
+          find.text(locale == 'en'
+              ? 'Already in library' : 'Đã có trong thư viện'),
+          findsOneWidget,
+        );
+        expect(find.byIcon(Icons.check_circle_outline), findsOneWidget);
+        expect(find.byIcon(Icons.refresh), findsNothing);
+      });
+    }
 
     testWidgets('shows queueEmpty text when list is empty', (tester) async {
       await tester.pumpWidget(buildQueue(entries: []));

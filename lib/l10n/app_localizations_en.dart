@@ -216,6 +216,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get queueStatusFailed => 'Failed · tap to retry';
 
   @override
+  String get queueAlreadyInLibrary => 'Already in library';
+
+  @override
   String get queueStatusDone => 'Verified · in Library';
 
   @override

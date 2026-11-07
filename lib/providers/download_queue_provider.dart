@@ -63,6 +63,9 @@ class DownloadEntry {
   /// `service`). Differs from [service] when a fallback provider won.
   final String? resolvedService;
 
+  final String? filePath;
+  final bool alreadyInLibrary;
+
   const DownloadEntry({
     required this.track,
     required this.itemId,
@@ -77,6 +80,8 @@ class DownloadEntry {
     this.quality,
     this.verificationService,
     this.resolvedService,
+    this.filePath,
+    this.alreadyInLibrary = false,
   });
 
   DownloadEntry copyWith({
@@ -89,6 +94,8 @@ class DownloadEntry {
     String? error,
     String? verificationService,
     String? resolvedService,
+    String? filePath,
+    bool? alreadyInLibrary,
   }) {
     return DownloadEntry(
       track: track,
@@ -99,11 +106,13 @@ class DownloadEntry {
       totalBytes: totalBytes ?? this.totalBytes,
       speedBytesPerSec: speedBytesPerSec ?? this.speedBytesPerSec,
       eta: eta ?? this.eta,
-      error: error ?? this.error,
+      error: alreadyInLibrary == true ? null : error ?? this.error,
       service: service,
       quality: quality,
       verificationService: verificationService ?? this.verificationService,
       resolvedService: resolvedService ?? this.resolvedService,
+      filePath: filePath ?? this.filePath,
+      alreadyInLibrary: alreadyInLibrary ?? this.alreadyInLibrary,
     );
   }
 }
@@ -530,16 +539,21 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         entry.status != item.status) {
       return entry;
     }
+    final existingPath = item.status == 'failed'
+        ? _existingLibraryPath(item.error)
+        : null;
     final updated = entry.copyWith(
-      status: item.status,
-      progress: item.progress,
+      status: existingPath != null ? 'done' : item.status,
+      progress: existingPath != null ? 1.0 : item.progress,
       bytesReceived: item.bytesReceived,
       totalBytes: item.bytesTotal > 0 ? item.bytesTotal : entry.totalBytes,
       error: foldRetryAfterSeconds(item.error, item.retryAfterSeconds),
       verificationService: item.service,
       resolvedService: item.resolvedService,
+      filePath: existingPath ?? item.filePath,
+      alreadyInLibrary: existingPath != null,
     );
-    _logTransition(entry, updated, filePath: item.filePath);
+    _logTransition(entry, updated, filePath: updated.filePath);
     return updated;
   }
 
@@ -584,7 +598,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
           final dup = await bridge.checkDuplicate(target.dir, next.track.isrc!);
           if (dup['exists'] == true) {
             _setStatus(next.itemId, 'done', progressIfDone: 1.0,
-                filePath: dup['path']?.toString());
+                filePath: dup['path']?.toString(), alreadyInLibrary: true);
             ref.invalidate(libraryProvider);
             throw _DuplicateSkipped();
           }
@@ -666,6 +680,15 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       final retryAfter = (res['retry_after_seconds'] as num?)?.toInt() ?? 0;
       final err = foldRetryAfterSeconds(
           res['error']?.toString() ?? res['error_type']?.toString(), retryAfter);
+      final existingPath = failed
+          ? _existingLibraryPath(res['error']?.toString())
+          : null;
+      if (existingPath != null) {
+        _setStatus(next.itemId, 'done', progressIfDone: 1.0,
+            filePath: existingPath, alreadyInLibrary: true);
+        ref.invalidate(libraryProvider);
+        return;
+      }
       final resultService = res['service']?.toString();
       if (failed &&
           isRateLimitError(err) &&
@@ -995,7 +1018,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
 
   void _setStatus(String itemId, String status,
       {double? progressIfDone, String? error, String? verificationService,
-      String? resolvedService, String? filePath}) {
+      String? resolvedService, String? filePath, bool? alreadyInLibrary}) {
     state = state.map((entry) {
       if (entry.itemId != itemId) return entry;
       final updated = entry.copyWith(
@@ -1004,6 +1027,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         error: error,
         verificationService: verificationService,
         resolvedService: resolvedService,
+        filePath: filePath,
+        alreadyInLibrary: alreadyInLibrary,
       );
       _logTransition(entry, updated, filePath: filePath);
       return updated;
@@ -1011,9 +1036,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   }
 
   /// Logs terminal transitions once per attempt across progress/result paths.
-  /// Progress has no file path: log file=pending immediately rather than wait
-  /// for a snapshot that might never arrive. Late failure details can still
-  /// produce the verification warning, without repeating the Failed line.
+  /// Completion progress has no path/service: log pending immediately. Failure
+  /// logs wait for details to distinguish destination collisions from errors.
   void _logTransition(DownloadEntry before, DownloadEntry after,
       {String? filePath}) {
     if (before.status != after.status && after.status == 'queued') {
@@ -1022,10 +1046,20 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     }
     if (after.status != 'done' && after.status != 'failed') return;
     final logged = _loggedLifecycleEvents.putIfAbsent(after.itemId, () => {});
-    if (before.status != after.status && logged.add(after.status)) {
+    // Progress carries no error details. Wait for the result/snapshot so a
+    // destination collision can become a duplicate skip without a Failed log.
+    if (after.status == 'failed' && after.error == null) return;
+    if (logged.add(after.status)) {
       if (after.status == 'done') {
-        printAppLog(LogLevel.info, 'Queue',
-            'Completed service=${after.resolvedService ?? after.service ?? 'auto'}; file=${filePath?.isNotEmpty == true ? filePath : 'pending'}');
+        if (after.alreadyInLibrary) {
+          printAppLog(LogLevel.info, 'Queue',
+              'Duplicate skip; item=${after.itemId}; file=${after.filePath ?? 'pending'}');
+        } else {
+          final service = after.resolvedService?.isNotEmpty == true
+              ? after.resolvedService : 'pending';
+          printAppLog(LogLevel.info, 'Queue',
+              'Completed service=$service; file=${filePath?.isNotEmpty == true ? filePath : 'pending'}');
+        }
       } else {
         final service = after.verificationService ?? after.service ?? 'auto';
         printAppLog(LogLevel.error, 'Queue',
@@ -1118,4 +1152,15 @@ String? foldRetryAfterSeconds(String? err, int seconds) {
   if (err == null || err.isEmpty || seconds <= 0) return err;
   if (err.toLowerCase().contains('retry-after')) return err;
   return '$err retry-after: $seconds';
+}
+
+// Only this upstream destination-collision error means the final file exists.
+String? _existingLibraryPath(String? error) {
+  const prefix = 'resolve album folder: open ';
+  const suffix = ': file exists';
+  if (error == null || !error.startsWith(prefix) || !error.endsWith(suffix)) {
+    return null;
+  }
+  final path = error.substring(prefix.length, error.length - suffix.length);
+  return path.isNotEmpty ? path : null;
 }

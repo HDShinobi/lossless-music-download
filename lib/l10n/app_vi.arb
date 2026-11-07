@@ -81,6 +81,7 @@
   "downloadSheetNoSources": "Chưa có nguồn tải. Cài extension tải trong Khám phá.",
   "queueStatusQueued": "Trong hàng đợi",
   "queueStatusFailed": "Lỗi · chạm để thử lại",
+  "queueAlreadyInLibrary": "Đã có trong thư viện",
   "queueStatusDone": "Verified · đã vào Thư viện",
   "queueStatusFinalizing": "Đang ghi metadata...",
   "libraryAll": "Tất cả",

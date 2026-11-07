@@ -95,10 +95,13 @@ void main() {
           rig.emit(status);
           await tester.pump();
           expect(rig.entry.status, status);
-          expect(rig.lines(status), hasLength(1));
+          expect(rig.lines(status), hasLength(status == 'done' ? 1 : 0));
           if (status == 'done') {
             expect(rig.lines(status).single.message, contains('file=pending'));
-            expect(rig.lines(status).single.message, contains('soundcloud'));
+            expect(
+              rig.lines(status).single.message,
+              contains('service=pending'),
+            );
           }
         }
         rig.worker.snapshot = NativeWorkerSnapshot(
@@ -109,7 +112,7 @@ void main() {
               'item_id': id,
               'status': status,
               'file_path': '/final.flac',
-              'resolved_service': 'soundcloud',
+              'resolved_service': 'amazon',
               'error': status == 'failed' ? _error : null,
               'service': 'qobuz-web',
             }),
@@ -126,6 +129,7 @@ void main() {
         );
         if (status == 'done' && !progressFirst) {
           expect(rig.lines(status).single.message, contains('/final.flac'));
+          expect(rig.lines(status).single.message, contains('service=amazon'));
         }
         if (status == 'failed') {
           expect(rig.entry.error, _error);
@@ -162,10 +166,19 @@ void main() {
       await tester.pump();
       final failed = outcome == 'failure' || outcome == 'exception';
       expect(rig.entry.status, failed ? 'failed' : 'done');
-      expect(rig.lines(failed ? 'failed' : 'done'), hasLength(1));
+      expect(
+        rig.lines(failed ? 'failed' : 'done'),
+        hasLength(outcome == 'duplicate' ? 0 : 1),
+      );
       if (!failed) {
         expect(
-          rig.lines('done').single.message,
+          rig.log.entries
+              .firstWhere(
+                (e) => e.message.startsWith(
+                  outcome == 'duplicate' ? 'Duplicate skip;' : 'Completed ',
+                ),
+              )
+              .message,
           contains(outcome == 'duplicate' ? '/existing.flac' : '/final.flac'),
         );
       }
@@ -178,6 +191,96 @@ void main() {
     });
   }
 
+  for (final native in [false, true]) {
+    for (final progressFirst in [false, true]) {
+      for (final error in [
+        'resolve album folder: open /music/Artist/Existing song.flac: file exists',
+        'open /music/Artist/Existing song.flac: file exists',
+        'resolve album folder: open /music/song.flac: permission denied',
+        'prefix resolve album folder: open /music/song.flac: file exists',
+        'resolve album folder: open : file exists',
+        'resolve album folder: open /music/song.flac: file exists extra',
+      ]) {
+        _test(
+          'file collision native=$native progressFirst=$progressFirst: $error',
+          (tester) async {
+            final rig = _Rig(native: native);
+            addTearDown(rig.dispose);
+            await rig.queue.enqueue(
+              const Track(id: 'no-isrc', name: 'Song', artists: 'Artist'),
+              service: 'soundcloud',
+            );
+            await tester.pump();
+            if (progressFirst) {
+              rig.emit('failed');
+              await tester.pump();
+            }
+            if (native) {
+              rig.worker.snapshot = NativeWorkerSnapshot(
+                runId: rig.worker.runId!,
+                isRunning: false,
+                items: [
+                  NativeWorkerItemState.fromJson({
+                    'item_id': rig.entry.itemId,
+                    'status': 'failed',
+                    'error': error,
+                    'service': 'amazon',
+                  }),
+                ],
+              );
+              await tester.pump(const Duration(milliseconds: 500));
+            } else {
+              rig.bridge.result.complete({
+                'success': false,
+                'error_type': 'file_error',
+                'error': error,
+                'service': 'amazon',
+              });
+              await tester.pump();
+            }
+            final duplicate = error.startsWith(
+              'resolve album folder: open /music/Artist/',
+            );
+            expect(rig.entry.status, duplicate ? 'done' : 'failed');
+            if (duplicate) {
+              expect(rig.entry.error, isNull);
+              expect(rig.entry.filePath, '/music/Artist/Existing song.flac');
+              expect(rig.entry.alreadyInLibrary, isTrue);
+              expect(rig.entry.progress, 1.0);
+              expect(rig.lines('failed'), isEmpty);
+              final skips = rig.log.entries.where(
+                (e) => e.message.startsWith('Duplicate skip;'),
+              );
+              expect(skips, hasLength(1));
+              expect(skips.single.level, LogLevel.info);
+              expect(
+                skips.single.message,
+                contains('/music/Artist/Existing song.flac'),
+              );
+            } else {
+              expect(rig.entry.error, error);
+              expect(rig.lines('failed'), hasLength(1));
+            }
+          },
+        );
+      }
+    }
+  }
+
+  _test('Dart completion logs winning service', (tester) async {
+    final rig = _Rig(native: false);
+    addTearDown(rig.dispose);
+    await rig.queue.enqueue(_track, service: 'soundcloud');
+    await tester.pump();
+    rig.bridge.result.complete({
+      'success': true,
+      'file_path': '/final.flac',
+      'service': 'amazon',
+    });
+    await tester.pump();
+    expect(rig.lines('done').single.message, contains('service=amazon'));
+  });
+
   _test('progress failure then Dart failure logs once; retry logs again', (
     tester,
   ) async {
@@ -189,7 +292,7 @@ void main() {
     rig.emit('failed');
     await tester.pump();
     expect(rig.entry.status, 'failed');
-    expect(rig.lines('failed'), hasLength(1));
+    expect(rig.lines('failed'), isEmpty);
     rig.bridge.result.complete({
       'success': false,
       'error': _error,
@@ -269,7 +372,12 @@ void main() {
     rig.emit('done');
     await tester.pump();
     expect(rig.lines('done'), hasLength(1));
-    rig.bridge.result.complete({'success': true, 'file_path': '/final.flac'});
+    expect(rig.lines('done').single.message, contains('service=pending'));
+    rig.bridge.result.complete({
+      'success': true,
+      'file_path': '/final.flac',
+      'service': 'amazon',
+    });
     await tester.pump();
     expect(rig.lines('done'), hasLength(1));
   });

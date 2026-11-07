@@ -500,6 +500,12 @@ abstract class AppLocalizations {
   /// **'Failed · tap to retry'**
   String get queueStatusFailed;
 
+  /// No description provided for @queueAlreadyInLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Already in library'**
+  String get queueAlreadyInLibrary;
+
   /// No description provided for @queueStatusDone.
   ///
   /// In en, this message translates to:

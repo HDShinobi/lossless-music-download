@@ -216,6 +216,9 @@ class AppLocalizationsVi extends AppLocalizations {
   String get queueStatusFailed => 'Lỗi · chạm để thử lại';
 
   @override
+  String get queueAlreadyInLibrary => 'Đã có trong thư viện';
+
+  @override
   String get queueStatusDone => 'Verified · đã vào Thư viện';
 
   @override
