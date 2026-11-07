@@ -112,6 +112,7 @@ class DownloadEntry {
 
 class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   final Map<String, Sample> _samples = {};
+  final Map<String, Set<String>> _loggedLifecycleEvents = {};
 
   // Sequential download gate — mirrors SpotiFLAC's _processQueue() pattern.
   bool _isProcessing = false;
@@ -432,7 +433,11 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   }
 
   DownloadEntry _applyNativeItemState(DownloadEntry entry, NativeWorkerItemState item) {
-    if (entry.status == 'done' || entry.status == 'failed') return entry;
+    // Late terminal snapshots may supply the error/service missing in progress.
+    if ((entry.status == 'done' || entry.status == 'failed') &&
+        entry.status != item.status) {
+      return entry;
+    }
     final updated = entry.copyWith(
       status: item.status,
       progress: item.progress,
@@ -442,11 +447,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       verificationService: item.service,
       resolvedService: item.resolvedService,
     );
-    if (updated.status == 'failed') _logFailure(updated);
-    if (updated.status == 'done') {
-      printAppLog(LogLevel.info, 'Queue',
-          'Completed service=${updated.resolvedService ?? updated.service ?? 'auto'}; file=${item.filePath ?? 'unavailable'}');
-    }
+    _logTransition(entry, updated, filePath: item.filePath);
     return updated;
   }
 
@@ -480,9 +481,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         try {
           final dup = await bridge.checkDuplicate(target.dir, next.track.isrc!);
           if (dup['exists'] == true) {
-            printAppLog(LogLevel.info, 'Queue',
-                'Duplicate skipped service=${next.service ?? 'auto'}; file=${dup['path'] ?? 'unavailable'}');
-            _setStatus(next.itemId, 'done', progressIfDone: 1.0);
+            _setStatus(next.itemId, 'done', progressIfDone: 1.0,
+                filePath: dup['path']?.toString());
             ref.invalidate(libraryProvider);
             throw _DuplicateSkipped();
           }
@@ -568,16 +568,6 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
           await _handleRateLimited(next.itemId, err ?? '')) {
         return; // one delayed retry scheduled; don't surface the failure yet
       }
-      _setStatus(
-        next.itemId,
-        failed ? 'failed' : 'done',
-        progressIfDone: failed ? null : 1.0,
-        error: failed ? (err?.isNotEmpty == true ? err : 'unknown') : null,
-        verificationService:
-            failed && (resultService?.isNotEmpty ?? false) ? resultService : null,
-        resolvedService:
-            !failed && (resultService?.isNotEmpty ?? false) ? resultService : null,
-      );
       if (!failed) {
         // Some sources (Amazon's FLAC tier) deliver a FLAC stream wrapped in
         // MP4. Unwrap it before tagging so it gets the FLAC path, not the lossy
@@ -596,10 +586,19 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         if (ref.read(writeLrcSidecarProvider)) {
           await _writeLrcSidecar(bridge, res, next.track);
         }
-        printAppLog(LogLevel.info, 'Queue',
-            'Completed service=${resultService ?? resolvedService ?? 'auto'}; file=${res['file_path'] ?? 'unavailable'}');
-        ref.invalidate(libraryProvider);
       }
+      _setStatus(
+        next.itemId,
+        failed ? 'failed' : 'done',
+        progressIfDone: failed ? null : 1.0,
+        filePath: res['file_path']?.toString(),
+        error: failed ? (err?.isNotEmpty == true ? err : 'unknown') : null,
+        verificationService:
+            failed && (resultService?.isNotEmpty ?? false) ? resultService : null,
+        resolvedService:
+            !failed && (resultService?.isNotEmpty ?? false) ? resultService : null,
+      );
+      if (!failed) ref.invalidate(libraryProvider);
     } on _DuplicateSkipped {
       // Item skipped — status already set to done above.
     } catch (e) {
@@ -858,7 +857,7 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     // Map backend status string to our known keywords.
     final status = _mapStatus(p.status, fallback: entry.status);
 
-    return entry.copyWith(
+    final updated = entry.copyWith(
       status: status,
       progress: p.progress,
       bytesReceived: p.bytesReceived,
@@ -866,6 +865,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       speedBytesPerSec: speed,
       eta: eta,
     );
+    _logTransition(entry, updated);
+    return updated;
   }
 
   /// Maps a raw backend status string to a keyword understood by QueueItem's
@@ -889,40 +890,56 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
 
   void _setStatus(String itemId, String status,
       {double? progressIfDone, String? error, String? verificationService,
-      String? resolvedService}) {
-    state = [
-      for (final e in state)
-        if (e.itemId == itemId)
-          e.copyWith(
-            status: status,
-            progress: progressIfDone ?? e.progress,
-            error: error,
-            verificationService: verificationService,
-            resolvedService: resolvedService,
-          )
-        else
-          e,
-    ];
-    if (status == 'failed') {
-      for (final entry in state.where((e) => e.itemId == itemId)) {
-        _logFailure(entry);
-      }
-    }
+      String? resolvedService, String? filePath}) {
+    state = state.map((entry) {
+      if (entry.itemId != itemId) return entry;
+      final updated = entry.copyWith(
+        status: status,
+        progress: progressIfDone ?? entry.progress,
+        error: error,
+        verificationService: verificationService,
+        resolvedService: resolvedService,
+      );
+      _logTransition(entry, updated, filePath: filePath);
+      return updated;
+    }).toList();
   }
 
-  void _logFailure(DownloadEntry entry) {
-    final service = entry.verificationService ?? entry.service ?? 'auto';
-    printAppLog(LogLevel.error, 'Queue',
-        'Failed service=$service; item=${entry.itemId}; ${entry.error ?? 'unknown'}');
-    if (isExtensionVerificationRequired(entry.error ?? '')) {
+  /// Logs terminal transitions once per attempt across progress/result paths.
+  /// Progress has no file path: log file=pending immediately rather than wait
+  /// for a snapshot that might never arrive. Late failure details can still
+  /// produce the verification warning, without repeating the Failed line.
+  void _logTransition(DownloadEntry before, DownloadEntry after,
+      {String? filePath}) {
+    if (before.status != after.status && after.status == 'queued') {
+      // The automatic rate-limit retry reuses itemId for a new attempt.
+      _loggedLifecycleEvents.remove(after.itemId);
+    }
+    if (after.status != 'done' && after.status != 'failed') return;
+    final logged = _loggedLifecycleEvents.putIfAbsent(after.itemId, () => {});
+    if (before.status != after.status && logged.add(after.status)) {
+      if (after.status == 'done') {
+        printAppLog(LogLevel.info, 'Queue',
+            'Completed service=${after.resolvedService ?? after.service ?? 'auto'}; file=${filePath?.isNotEmpty == true ? filePath : 'pending'}');
+      } else {
+        final service = after.verificationService ?? after.service ?? 'auto';
+        printAppLog(LogLevel.error, 'Queue',
+            'Failed service=$service; item=${after.itemId}; ${after.error ?? 'unknown'}');
+      }
+    }
+    if (after.status == 'failed' &&
+        isExtensionVerificationRequired(after.error ?? '') &&
+        logged.add('verification')) {
+      final service = after.verificationService ?? after.service ?? 'auto';
       printAppLog(LogLevel.warning, 'Queue',
-          'Verification required for service/extension=$service; item=${entry.itemId}');
+          'Verification required for service/extension=$service; item=${after.itemId}');
     }
   }
 
   void _removeLocal(String itemId) {
     state = [for (final e in state) if (e.itemId != itemId) e];
     _samples.remove(itemId);
+    _loggedLifecycleEvents.remove(itemId);
   }
 
   // --- Rate-limit (HTTP 429) backoff — ported from SpotiFLAC ---------------
