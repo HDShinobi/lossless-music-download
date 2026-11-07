@@ -1,4 +1,8 @@
 import 'dart:io';
+import 'dart:async';
+
+import '../providers/batch_re_enrich_provider.dart';
+import '../widgets/batch_re_enrich_panel.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -66,7 +70,13 @@ class LibraryAlbumScreen extends ConsumerWidget {
     final asyncEntries = ref.watch(libraryProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(albumName)),
+      appBar: AppBar(title: Text(albumName), actions: [
+        IconButton(icon: const Icon(Icons.auto_fix_high), tooltip: t.batchRefreshAlbum,
+          onPressed: ref.watch(batchReEnrichProvider).running || !asyncEntries.hasValue
+            ? null : () => unawaited(ref.read(batchReEnrichProvider.notifier).start(
+              albumTracksFor(asyncEntries.value!, artistName, albumName)))),
+      ]),
+      bottomNavigationBar: const BatchReEnrichPanel(),
       body: asyncEntries.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text(t.libraryError)),

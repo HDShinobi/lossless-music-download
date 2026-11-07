@@ -66,6 +66,23 @@ void main() {
     await history.close();
     await dir.delete(recursive: true);
   });
+  test('re-enrichment updates path and tags but preserves download identity', () async {
+    final before = await add('download', song);
+    await history.updateReEnriched(before.filePath, {
+      'file_path': '${dir.path}/renamed.flac',
+      'enriched_metadata': {'track_name': 'Fresh', 'artist_name': 'New artist',
+        'album_name': 'New album', 'isrc': 'USNEW1234567', 'track_number': 4}
+    });
+    final after = (await history.list(search: 'fresh')).single;
+    expect(after.id, 'download');
+    expect(after.track.id, 'qobuz:42');
+    expect(after.service, 'qobuz');
+    expect(after.downloadedAt, before.downloadedAt);
+    expect(after.filePath, '${dir.path}/renamed.flac');
+    expect(after.track.artists, 'New artist');
+    expect(after.track.trackNumber, 4);
+    expect(await history.list(search: 'song'), isEmpty);
+  });
   test('unknown source never invents a Spotify provider key', () async {
     await add('unknown', const Track(id: '42', name: 'One', artists: 'A'));
     expect(

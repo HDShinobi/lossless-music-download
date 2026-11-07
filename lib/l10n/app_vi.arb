@@ -485,5 +485,46 @@
   "historyError": "Không thể tải lịch sử tải xuống",
   "historyDownloaded": "Đã tải",
   "historyNext": "Trang sau",
-  "historyPrevious": "Trang trước"
+  "historyPrevious": "Trang trước",
+  "batchRefreshMetadata": "Làm mới thông tin bài hát",
+  "batchRefreshAlbum": "Làm mới thông tin album",
+  "librarySelectAll": "Chọn tất cả",
+  "librarySelectAlbum": "Chọn cả album",
+  "batchRefreshCancelled": "Đã hủy làm mới",
+  "batchRefreshCancelling": "Đang hoàn tất tệp hiện tại…",
+  "batchRefreshDismiss": "Đóng",
+  "batchRefreshErrors": "Xem các tệp bị lỗi",
+  "librarySelectedCount": "Đã chọn {count} bài",
+  "@librarySelectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "batchRefreshProgress": "Đang làm mới {completed}/{total}",
+  "@batchRefreshProgress": {
+    "placeholders": {
+      "completed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "batchRefreshSummary": "Đã làm mới {success}/{total} · {failed} tệp bị lỗi",
+  "@batchRefreshSummary": {
+    "placeholders": {
+      "success": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  }
 }

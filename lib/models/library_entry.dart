@@ -20,6 +20,8 @@ class LibraryEntry {
   final int? trackNumber;
   final int? discNumber;
   final String? isrc;
+  final String? albumArtist, releaseDate, genre, composer, label, copyright;
+  final int? totalTracks, totalDiscs;
 
   const LibraryEntry({
     required this.path,
@@ -36,5 +38,13 @@ class LibraryEntry {
     this.trackNumber,
     this.discNumber,
     this.isrc,
+    this.albumArtist,
+    this.releaseDate,
+    this.genre,
+    this.composer,
+    this.label,
+    this.copyright,
+    this.totalTracks,
+    this.totalDiscs,
   });
 }

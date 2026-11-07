@@ -1084,4 +1084,43 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get historyPrevious => 'Trang trước';
+
+  @override
+  String get batchRefreshMetadata => 'Làm mới thông tin bài hát';
+
+  @override
+  String get batchRefreshAlbum => 'Làm mới thông tin album';
+
+  @override
+  String get librarySelectAll => 'Chọn tất cả';
+
+  @override
+  String get librarySelectAlbum => 'Chọn cả album';
+
+  @override
+  String get batchRefreshCancelled => 'Đã hủy làm mới';
+
+  @override
+  String get batchRefreshCancelling => 'Đang hoàn tất tệp hiện tại…';
+
+  @override
+  String get batchRefreshDismiss => 'Đóng';
+
+  @override
+  String get batchRefreshErrors => 'Xem các tệp bị lỗi';
+
+  @override
+  String librarySelectedCount(int count) {
+    return 'Đã chọn $count bài';
+  }
+
+  @override
+  String batchRefreshProgress(int completed, int total) {
+    return 'Đang làm mới $completed/$total';
+  }
+
+  @override
+  String batchRefreshSummary(int success, int total, int failed) {
+    return 'Đã làm mới $success/$total · $failed tệp bị lỗi';
+  }
 }

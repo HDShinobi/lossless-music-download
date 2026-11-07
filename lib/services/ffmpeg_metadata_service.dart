@@ -6,6 +6,8 @@ import 'package:ffmpeg_kit_flutter_new_full/return_code.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../models/metadata_separators.dart';
+
 /// Embeds tags + cover art + lyrics into NON-FLAC downloads (Opus / M4A / MP3)
 /// using the bundled FFmpeg. FLAC is tagged natively in the Go backend, so this
 /// service only runs as a fallback for lossy formats.
@@ -447,5 +449,118 @@ class FfmpegMetadataService {
       }
     }
     return out;
+  }
+}
+
+/// Preserve existing tags/artwork when no replacement was fetched. Stage next
+/// to the source, and rename only after FFmpeg succeeds, keeping audio intact
+/// on failure. The engine-owned downloaded cover is always released.
+Future<void> applyReEnrichFfmpeg(
+  String path,
+  Map<String, dynamic> result,
+  String artistTagMode,
+  MetadataSeparators separators,
+) async {
+  final ext = path.substring(path.lastIndexOf('.')).toLowerCase();
+  final output = '$path.reenrich-${DateTime.now().microsecondsSinceEpoch}$ext';
+  final cover = result['cover_path'] as String?;
+  try {
+    final raw = result['metadata'];
+    if (raw is! Map) throw StateError('Missing FFmpeg metadata');
+    final tags = raw.map((k, v) => MapEntry(k.toString(), v.toString()));
+    if (artistTagMode == 'primary') {
+      for (final key in ['ARTIST', 'ALBUMARTIST']) {
+        if (tags[key] != null) {
+          final separator = key == 'ARTIST'
+              ? separators.artist
+              : separators.albumArtist;
+          tags[key] = tags[key]!
+              .split(separator.isEmpty ? RegExp(r'[,;]') : separator)
+              .first
+              .trim();
+        }
+      }
+    }
+    final hasCover =
+        cover != null && cover.isNotEmpty && await File(cover).exists();
+    final args = <String>['-v', 'error', '-hide_banner', '-i', path];
+    if (hasCover) args.addAll(['-i', cover]);
+    args.addAll([
+      '-map',
+      hasCover ? '0:a' : '0',
+      '-map_metadata',
+      '0',
+      '-c',
+      'copy',
+    ]);
+    final vorbis = ext == '.opus' || ext == '.ogg';
+    if (hasCover && !vorbis) {
+      args.addAll(['-map', '1:v', '-disposition:v:0', 'attached_pic']);
+    }
+    if (hasCover && vorbis) {
+      final bytes = await File(cover).readAsBytes();
+      tags['METADATA_BLOCK_PICTURE'] =
+          FfmpegMetadataService.createMetadataBlockPictureBase64(
+            bytes,
+            FfmpegMetadataService.sniffMime(cover, bytes),
+          );
+    }
+    if (vorbis) {
+      // normalizeToVorbisComments deliberately accepts only audio metadata.
+      final vorbisTags = FfmpegMetadataService.normalizeToVorbisComments(tags);
+      for (final tag in vorbisTags.entries) {
+        final separator = tag.key == 'ARTIST'
+            ? separators.artist
+            : separators.albumArtist;
+        final split =
+            artistTagMode == 'split_vorbis' &&
+            separator.isEmpty &&
+            (tag.key == 'ARTIST' || tag.key == 'ALBUMARTIST');
+        final values = split
+            ? tag.value
+                  .split(
+                    RegExp(
+                      r'\s*[,;&]\s*|\s+x\s+|\s+(?:feat(?:uring|ured|ure)?|ft|with)\.?(?:\s+|$)',
+                      caseSensitive: false,
+                    ),
+                  )
+                  .map((s) => s.trim())
+                  .where((s) => s.isNotEmpty)
+                  .toSet()
+            : [tag.value];
+        for (final value in values) {
+          args.addAll(['-metadata', '${tag.key}=$value']);
+        }
+      }
+      if (tags['METADATA_BLOCK_PICTURE'] != null) {
+        args.addAll([
+          '-metadata',
+          'METADATA_BLOCK_PICTURE=${tags['METADATA_BLOCK_PICTURE']}',
+        ]);
+      }
+    } else {
+      FfmpegMetadataService.appendMappedMetadataArgs(
+        args,
+        ext == '.mp3'
+            ? FfmpegMetadataService.convertToId3Tags(tags)
+            : FfmpegMetadataService.convertToM4aTags(tags),
+      );
+    }
+    if (ext == '.mp3') args.addAll(['-id3v2_version', '3']);
+    if (ext == '.m4a' || ext == '.alac') args.addAll(['-f', 'mp4']);
+    args.addAll(['-y', output]);
+    if (!await FfmpegMetadataService.execRunner(args) ||
+        !await File(output).exists()) {
+      throw StateError('FFmpeg metadata write failed');
+    }
+    await File(output).rename(path);
+  } finally {
+    if (await File(output).exists()) await File(output).delete();
+    if (cover != null &&
+        cover.isNotEmpty &&
+        cover != path &&
+        await File(cover).exists()) {
+      await File(cover).delete();
+    }
   }
 }

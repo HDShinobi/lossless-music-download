@@ -1,4 +1,9 @@
 import 'dart:io';
+import 'dart:async';
+import '../helpers/re_enrich_fakes.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:lossless_music_download/providers/batch_re_enrich_provider.dart';
+import 'package:lossless_music_download/providers/download_history_provider.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -94,6 +99,38 @@ Widget buildLibraryScreen(List<dynamic> overrides) {
 }
 
 void main() {
+  testWidgets('long press selects, album/all selection and refresh dispatch batch', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final bridge = FakeBridge()..gate = Completer<void>();
+    await tester.pumpWidget(buildLibraryScreen([
+      libraryProvider.overrideWith((_) async => [albumEntry1, albumEntry2, singleEntry,
+        const LibraryEntry(path: '/other.flac', name: 'Other.flac', sizeBytes: 0,
+          artistName: 'ArtistA', albumName: 'AlbumOne', format: 'FLAC', verified: true)]),
+      backendBridgeProvider.overrideWithValue(bridge),
+      historyDatabaseProvider.overrideWith((_) async => FakeHistory()),
+    ]));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Track One'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Checkbox), findsNWidgets(4));
+    await tester.tap(find.text('Select album'));
+    await tester.pumpAndSettle();
+    expect(tester.widgetList<Checkbox>(find.byType(Checkbox)).where((c) => c.value == true), hasLength(2));
+    await tester.tap(find.text('Select all'));
+    await tester.pumpAndSettle();
+    expect(tester.widgetList<Checkbox>(find.byType(Checkbox)).every((c) => c.value == true), true);
+    await tester.tap(find.text('Refresh metadata'));
+    await tester.pump(); await tester.pump(const Duration(milliseconds: 50));
+    final context = tester.element(find.byType(LibraryScreen));
+    final container = ProviderScope.containerOf(context);
+    expect(container.read(batchReEnrichProvider).total, 4);
+    expect(bridge.requests, hasLength(1));
+    await tester.tap(find.text('Cancel'));
+    bridge.gate!.complete();
+    await tester.pumpAndSettle();
+    expect(container.read(batchReEnrichProvider).cancelled, true);
+    expect(find.text('Refresh cancelled'), findsOneWidget);
+  });
   group('libraryProvider ALAC integration', () {
     test('LibraryEntry.verified is true and format is ALAC for .alac file',
         () async {

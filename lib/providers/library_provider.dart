@@ -84,6 +84,14 @@ final libraryProvider = FutureProvider<List<LibraryEntry>>((ref) async {
       trackNumber: (item['trackNumber'] as num?)?.toInt(),
       discNumber: (item['discNumber'] as num?)?.toInt(),
       isrc: item['isrc'] as String?,
+      albumArtist: item['albumArtist'] as String?,
+      releaseDate: item['releaseDate'] as String?,
+      genre: item['genre'] as String?,
+      composer: item['composer'] as String?,
+      label: item['label'] as String?,
+      copyright: item['copyright'] as String?,
+      totalTracks: (item['totalTracks'] as num?)?.toInt(),
+      totalDiscs: (item['totalDiscs'] as num?)?.toInt(),
     );
   }).toList()
     ..sort((a, b) => (a.title ?? a.name).compareTo(b.title ?? b.name));

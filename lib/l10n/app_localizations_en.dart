@@ -1092,4 +1092,43 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get historyPrevious => 'Previous page';
+
+  @override
+  String get batchRefreshMetadata => 'Refresh metadata';
+
+  @override
+  String get batchRefreshAlbum => 'Refresh album';
+
+  @override
+  String get librarySelectAll => 'Select all';
+
+  @override
+  String get librarySelectAlbum => 'Select album';
+
+  @override
+  String get batchRefreshCancelled => 'Refresh cancelled';
+
+  @override
+  String get batchRefreshCancelling => 'Finishing current file…';
+
+  @override
+  String get batchRefreshDismiss => 'Close';
+
+  @override
+  String get batchRefreshErrors => 'View failures';
+
+  @override
+  String librarySelectedCount(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String batchRefreshProgress(int completed, int total) {
+    return 'Refreshing $completed/$total';
+  }
+
+  @override
+  String batchRefreshSummary(int success, int total, int failed) {
+    return '$success/$total refreshed · $failed failed';
+  }
 }

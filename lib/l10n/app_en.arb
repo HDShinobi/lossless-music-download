@@ -485,5 +485,46 @@
   "historyError": "Could not load download history",
   "historyDownloaded": "Downloaded",
   "historyNext": "Next page",
-  "historyPrevious": "Previous page"
+  "historyPrevious": "Previous page",
+  "batchRefreshMetadata": "Refresh metadata",
+  "batchRefreshAlbum": "Refresh album",
+  "librarySelectAll": "Select all",
+  "librarySelectAlbum": "Select album",
+  "batchRefreshCancelled": "Refresh cancelled",
+  "batchRefreshCancelling": "Finishing current file…",
+  "batchRefreshDismiss": "Close",
+  "batchRefreshErrors": "View failures",
+  "librarySelectedCount": "{count} selected",
+  "@librarySelectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "batchRefreshProgress": "Refreshing {completed}/{total}",
+  "@batchRefreshProgress": {
+    "placeholders": {
+      "completed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "batchRefreshSummary": "{success}/{total} refreshed · {failed} failed",
+  "@batchRefreshSummary": {
+    "placeholders": {
+      "success": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  }
 }

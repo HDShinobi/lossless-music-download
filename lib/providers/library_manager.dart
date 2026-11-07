@@ -1,9 +1,13 @@
 import 'dart:io';
 
+import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/ffmpeg_metadata_service.dart';
 import '../vendor/spotiflac/convert_service.dart';
+import '../services/library_re_enrich.dart';
+import 'download_options_provider.dart';
+import 'download_history_provider.dart';
 import 'extensions_provider.dart';
 import 'library_provider.dart';
 
@@ -111,6 +115,51 @@ class LibraryManager extends Notifier<void> {
     }
     ref.invalidate(libraryProvider);
     return newPath;
+  }
+
+  Future<ReEnrichOptions> reEnrichOptions() async {
+    await Future.wait([
+      ref.read(embedCoverProvider.notifier).ready,
+      ref.read(embedLyricsProvider.notifier).ready,
+      ref.read(writeLrcSidecarProvider.notifier).ready,
+      ref.read(artistTagModeProvider.notifier).ready,
+      ref.read(metadataSeparatorsProvider.notifier).ready,
+    ]);
+    final embedLyrics = ref.read(embedLyricsProvider);
+    final sidecar = ref.read(writeLrcSidecarProvider);
+    return ReEnrichOptions(
+      embedCover: ref.read(embedCoverProvider),
+      // Rust's embed_lyrics flag enables fetching; lyrics_mode controls where
+      // the result is written. A sidecar-only refresh must still fetch lyrics.
+      embedLyrics: embedLyrics || sidecar,
+      lyricsMode: sidecar ? (embedLyrics ? 'both' : 'external') : 'embed',
+      artistTagMode: ref.read(artistTagModeProvider),
+      separators: ref.read(metadataSeparatorsProvider),
+    );
+  }
+
+  Future<Map<String, dynamic>> reEnrichEntry(LibraryEntry entry,
+      {ReEnrichOptions? options, bool refreshLibrary = true}) async {
+    try {
+      late Map<String, dynamic> result;
+      Object? finishingError;
+      try {
+        result = await reEnrichLibraryEntry(ref.read(backendBridgeProvider),
+          entry, options ?? await reEnrichOptions());
+      } on ReEnrichPartialFailure catch (e) {
+        result = e.result;
+        finishingError = e.cause;
+      }
+      final history = await ref.read(historyDatabaseProvider.future);
+      await history.updateReEnriched(entry.path, result);
+      ref.read(historyRevisionProvider.notifier).changed();
+      await writeReEnrichSidecar(entry.path, result);
+      if (finishingError != null) throw finishingError;
+      return result;
+    } finally {
+      if (entry.coverPath != null) await FileImage(File(entry.coverPath!)).evict();
+      if (ref.mounted && refreshLibrary) ref.invalidate(libraryProvider);
+    }
   }
 
   /// Re-fetches metadata/cover/lyrics for [request] (backend reEnrichRequest

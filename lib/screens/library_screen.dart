@@ -1,4 +1,8 @@
 import 'dart:io';
+import 'dart:async';
+
+import '../providers/batch_re_enrich_provider.dart';
+import '../widgets/batch_re_enrich_panel.dart';
 
 import 'download_history_screen.dart';
 
@@ -19,6 +23,13 @@ class LibraryScreen extends ConsumerStatefulWidget {
 }
 
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
+  final _selected = <String>{};
+  bool get _selecting => _selected.isNotEmpty;
+
+  void _toggle(LibraryEntry entry) => setState(() {
+    if (!_selected.add(entry.path)) _selected.remove(entry.path);
+  });
+
   int _segment = 0; // 0=All, 1=Albums, 2=Singles
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
@@ -53,7 +64,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(t.tabLibrary),
+        leading: _selecting ? IconButton(icon: const Icon(Icons.close),
+          tooltip: t.batchRefreshDismiss,
+          onPressed: () => setState(_selected.clear)) : null,
+        title: Text(_selecting ? t.librarySelectedCount(_selected.length) : t.tabLibrary),
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
@@ -68,6 +82,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: const BatchReEnrichPanel(),
       body: asyncEntries.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text(t.libraryError)),
@@ -85,6 +100,28 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ),
+              if (_selecting)
+                Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Wrap(spacing: 8, children: [
+                    TextButton(onPressed: () => setState(() {
+                      _selected.addAll(_filter(entries).where((e) =>
+                        _segment != 2 || e.albumName == null).map((e) => e.path));
+                    }), child: Text(t.librarySelectAll)),
+                    TextButton(onPressed: () => setState(() {
+                      final albums = entries.where((e) => _selected.contains(e.path) &&
+                        e.albumName != null).map((e) =>
+                          ((e.artistName ?? '').toLowerCase(), e.albumName!.toLowerCase())).toSet();
+                      _selected.addAll(entries.where((e) => e.albumName != null &&
+                        albums.contains(((e.artistName ?? '').toLowerCase(),
+                          e.albumName!.toLowerCase()))).map((e) => e.path));
+                    }), child: Text(t.librarySelectAlbum)),
+                    TextButton.icon(icon: const Icon(Icons.auto_fix_high),
+                      onPressed: ref.watch(batchReEnrichProvider).running ? null : () {
+                        final tracks = entries.where((e) => _selected.contains(e.path)).toList();
+                        unawaited(ref.read(batchReEnrichProvider.notifier).start(tracks));
+                        setState(_selected.clear);
+                      }, label: Text(t.batchRefreshMetadata)),
+                  ])),
               // Segment toggle buttons
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -154,12 +191,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   Widget _buildAllView(List<LibraryEntry> entries) {
     return ListView.builder(
       itemCount: entries.length,
-      itemBuilder: (context, index) => LibraryTrackTile(
-        entry: entries[index],
-        onTap: () => context.push('/library/verified', extra: entries[index]),
-      ),
+      itemBuilder: (context, index) => _trackTile(context, entries[index]),
     );
   }
+
+  Widget _trackTile(BuildContext context, LibraryEntry entry) => LibraryTrackTile(
+    entry: entry,
+    selected: _selecting ? _selected.contains(entry.path) : null,
+    onSelected: (_) => _toggle(entry),
+    onLongPress: () => _toggle(entry),
+    onTap: () => _selecting ? _toggle(entry) : context.push('/library/verified', extra: entry),
+  );
 
   Widget _buildAlbumsView(BuildContext context, List<LibraryEntry> entries) {
     // Group entries that have an albumName by (artistName, albumName)
@@ -198,6 +240,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           album: album,
           tracks: tracks,
           coverEntry: coverEntry,
+          onLongPress: () => setState(() {
+            _selected.addAll(tracks.map((e) => e.path));
+            _segment = 0;
+          }),
           onTap: () => context.push(
             '/library/album',
             extra: LibraryAlbumRouteArgs(artistName: artist, albumName: album),
@@ -215,11 +261,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     }
     return ListView.builder(
       itemCount: singles.length,
-      itemBuilder: (context, index) => LibraryTrackTile(
-        entry: singles[index],
-        onTap: () =>
-            context.push('/library/verified', extra: singles[index]),
-      ),
+      itemBuilder: (context, index) => _trackTile(context, singles[index]),
     );
   }
 }
@@ -235,6 +277,7 @@ class _AlbumTile extends StatelessWidget {
     required this.tracks,
     required this.coverEntry,
     required this.onTap,
+    this.onLongPress,
   });
 
   final String artist;
@@ -242,6 +285,7 @@ class _AlbumTile extends StatelessWidget {
   final List<LibraryEntry> tracks;
   final LibraryEntry coverEntry;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -251,6 +295,7 @@ class _AlbumTile extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(

@@ -66,17 +66,11 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(SnackBar(content: Text(t.reEnrichStarted)));
     try {
-      await ref.read(libraryManagerProvider.notifier).reEnrich({
-        'file_path': entry.path,
-        'track_name': entry.title ?? _displayName,
-        'artist_name': entry.artistName ?? '',
-        'album_name': entry.albumName ?? '',
-        'embed_lyrics': true,
-        'max_quality': true,
-      });
+      await ref.read(libraryManagerProvider.notifier).reEnrichEntry(entry);
       if (!context.mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(t.reEnrichDone)));
     } catch (_) {
+      if (!context.mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(t.reEnrichFailed)));
     }
   }

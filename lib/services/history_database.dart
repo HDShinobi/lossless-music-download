@@ -274,6 +274,37 @@ class HistoryDatabase {
     });
   }
 
+  /// Refresh only rows owning this physical file. Keep provider ID, service,
+  /// timestamp and quality; rebuild all indexed lookup/search values.
+  Future<void> updateReEnriched(String oldPath, Map<String, dynamic> result) async {
+    final metadata = result['enriched_metadata'];
+    final tags = metadata is Map ? metadata : const {};
+    final newPath = result['file_path'] as String?;
+    final aliases = historyPathKeys(oldPath).toList();
+    final db = await database;
+    await db.transaction((txn) async {
+      final rows = await txn.query('history',
+        where: 'file_path IN (${List.filled(aliases.length, '?').join(',')})',
+        whereArgs: aliases);
+      for (final row in rows) {
+        final updated = Map<String, Object?>.from(row);
+        const fields = {'track_name': 'title', 'artist_name': 'artists',
+          'album_name': 'album', 'album_artist': 'album_artist', 'isrc': 'isrc',
+          'track_number': 'track_number', 'disc_number': 'disc_number',
+          'duration_ms': 'duration_ms', 'cover_url': 'cover_url'};
+        for (final field in fields.entries) {
+          final value = tags[field.key];
+          if (value is String && value.trim().isNotEmpty || value is num && value > 0) {
+            updated[field.value] = value;
+          }
+        }
+        if (newPath != null && newPath.trim().isNotEmpty) updated['file_path'] = newPath;
+        final entry = HistoryEntry.fromRow(updated);
+        await txn.update('history', entry.toRow(), where: 'id = ?', whereArgs: [entry.id]);
+      }
+    });
+  }
+
   Future<List<HistoryEntry>> list({
     String search = '',
     int limit = 100,

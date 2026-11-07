@@ -15,10 +15,16 @@ class LibraryTrackTile extends ConsumerWidget {
     super.key,
     required this.entry,
     this.onTap,
+    this.onLongPress,
+    this.selected,
+    this.onSelected,
   });
 
   final LibraryEntry entry;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final bool? selected;
+  final ValueChanged<bool?>? onSelected;
 
   String get _displayName {
     if (entry.title != null && entry.title!.isNotEmpty) return entry.title!;
@@ -47,6 +53,7 @@ class LibraryTrackTile extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         children: [
+          if (selected != null) Checkbox(value: selected, onChanged: onSelected),
           _CoverArt(entry: entry, tokens: tokens, cs: cs),
           const SizedBox(width: 12),
           Expanded(
@@ -106,8 +113,8 @@ class LibraryTrackTile extends ConsumerWidget {
       ),
     );
 
-    if (onTap != null) {
-      return InkWell(onTap: onTap, child: row);
+    if (onTap != null || onLongPress != null) {
+      return InkWell(onTap: onTap, onLongPress: onLongPress, child: row);
     }
     return row;
   }

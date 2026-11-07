@@ -2101,6 +2101,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Previous page'**
   String get historyPrevious;
+
+  /// No description provided for @batchRefreshMetadata.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh metadata'**
+  String get batchRefreshMetadata;
+
+  /// No description provided for @batchRefreshAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh album'**
+  String get batchRefreshAlbum;
+
+  /// No description provided for @librarySelectAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get librarySelectAll;
+
+  /// No description provided for @librarySelectAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'Select album'**
+  String get librarySelectAlbum;
+
+  /// No description provided for @batchRefreshCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh cancelled'**
+  String get batchRefreshCancelled;
+
+  /// No description provided for @batchRefreshCancelling.
+  ///
+  /// In en, this message translates to:
+  /// **'Finishing current file…'**
+  String get batchRefreshCancelling;
+
+  /// No description provided for @batchRefreshDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get batchRefreshDismiss;
+
+  /// No description provided for @batchRefreshErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'View failures'**
+  String get batchRefreshErrors;
+
+  /// No description provided for @librarySelectedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} selected'**
+  String librarySelectedCount(int count);
+
+  /// No description provided for @batchRefreshProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Refreshing {completed}/{total}'**
+  String batchRefreshProgress(int completed, int total);
+
+  /// No description provided for @batchRefreshSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{success}/{total} refreshed · {failed} failed'**
+  String batchRefreshSummary(int success, int total, int failed);
 }
 
 class _AppLocalizationsDelegate
