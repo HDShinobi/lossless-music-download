@@ -1,4 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lossless_music_download/screens/log_screen.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lossless_music_download/main.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
@@ -44,6 +47,42 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Thư viện'), findsWidgets);
     expect(find.byType(LibraryScreen), findsOneWidget);
+  });
+
+  testWidgets('Settings opens Logs and back returns to Settings', (t) async {
+    PackageInfo.setMockInitialValues(
+      appName: 'Lossless Music',
+      packageName: 'test',
+      version: '0.11.0',
+      buildNumber: '23',
+      buildSignature: '',
+    );
+    await t.pumpWidget(
+      ProviderScope(
+        overrides: [
+          extensionsProvider.overrideWith(() => _FakeExtensionsController()),
+          onboardingSeenProvider.overrideWith(() => _SeenOnboarding()),
+        ],
+        child: const MyApp(),
+      ),
+    );
+    await t.pumpAndSettle();
+    await t.tap(find.text('Cài đặt'));
+    await t.pumpAndSettle();
+    await t.scrollUntilVisible(
+      find.text('Nhật ký'),
+      300,
+      scrollable: find.descendant(
+        of: find.byType(SettingsScreen),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await t.tap(find.text('Nhật ký'));
+    await t.pumpAndSettle();
+    expect(find.byType(LogScreen), findsOneWidget);
+    expect(await t.binding.handlePopRoute(), isTrue);
+    await t.pumpAndSettle();
+    expect(find.byType(SettingsScreen), findsOneWidget);
   });
 
   // Guards the invariant that a Settings sub-page always leaves Settings

@@ -13,6 +13,7 @@ import 'screens/server_screen.dart';
 import 'screens/library_album_screen.dart';
 import 'screens/library_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/log_screen.dart';
 import 'screens/sources_screen.dart';
 import 'screens/extension_detail_screen.dart';
 import 'screens/verified_screen.dart';
@@ -114,6 +115,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                         ExtensionDetailScreen(id: s.pathParameters['id']!),
                   ),
                 ],
+              ),
+              GoRoute(
+                path: 'logs',
+                builder: (c, s) => const LogScreen(),
               ),
               GoRoute(
                 path: 'fallback-sources',

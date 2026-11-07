@@ -849,4 +849,41 @@ class AppLocalizationsEn extends AppLocalizations {
   String requiresEngine(String version) {
     return 'Requires engine $version';
   }
+
+  @override
+  String get logsTitle => 'Logs';
+
+  @override
+  String get logsAll => 'All';
+
+  @override
+  String get logsWarnPlus => 'Warn+';
+
+  @override
+  String get logsError => 'Error';
+
+  @override
+  String get logsCopyAll => 'Copy all';
+
+  @override
+  String get logsClear => 'Clear';
+
+  @override
+  String get logsCopied => 'Logs copied';
+
+  @override
+  String get logsEmpty => 'No logs yet';
+
+  @override
+  String logsAppVersion(String version) {
+    return 'App $version';
+  }
+
+  @override
+  String logsEngineVersion(String version) {
+    return 'Engine $version';
+  }
+
+  @override
+  String get logsVersionUnavailable => 'App version unavailable';
 }

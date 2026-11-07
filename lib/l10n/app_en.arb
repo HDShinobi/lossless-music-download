@@ -407,5 +407,18 @@
     "placeholders": {
       "version": {"type": "String"}
     }
-  }
+  },
+  "logsTitle": "Logs",
+  "logsAll": "All",
+  "logsWarnPlus": "Warn+",
+  "logsError": "Error",
+  "logsCopyAll": "Copy all",
+  "logsClear": "Clear",
+  "logsCopied": "Logs copied",
+  "logsEmpty": "No logs yet",
+  "logsAppVersion": "App {version}",
+  "@logsAppVersion": {"placeholders": {"version": {"type": "String"}}},
+  "logsEngineVersion": "Engine {version}",
+  "@logsEngineVersion": {"placeholders": {"version": {"type": "String"}}},
+  "logsVersionUnavailable": "App version unavailable"
 }

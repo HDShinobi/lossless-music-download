@@ -310,6 +310,14 @@ class SettingsScreen extends ConsumerWidget {
             onChanged: (v) =>
                 ref.read(writeLrcSidecarProvider.notifier).set(v),
           ),
+
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.article_outlined),
+            title: Text(t.logsTitle),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/settings/logs'),
+          ),
         ],
       ),
     );

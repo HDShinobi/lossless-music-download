@@ -407,5 +407,18 @@
     "placeholders": {
       "version": {"type": "String"}
     }
-  }
+  },
+  "logsTitle": "Nhật ký",
+  "logsAll": "Tất cả",
+  "logsWarnPlus": "Cảnh báo trở lên",
+  "logsError": "Lỗi",
+  "logsCopyAll": "Sao chép tất cả",
+  "logsClear": "Xóa nhật ký",
+  "logsCopied": "Đã sao chép nhật ký",
+  "logsEmpty": "Chưa có nhật ký",
+  "logsAppVersion": "Ứng dụng {version}",
+  "@logsAppVersion": {"placeholders": {"version": {"type": "String"}}},
+  "logsEngineVersion": "Engine {version}",
+  "@logsEngineVersion": {"placeholders": {"version": {"type": "String"}}},
+  "logsVersionUnavailable": "Không đọc được phiên bản ứng dụng"
 }

@@ -841,4 +841,41 @@ class AppLocalizationsVi extends AppLocalizations {
   String requiresEngine(String version) {
     return 'Cần engine $version';
   }
+
+  @override
+  String get logsTitle => 'Nhật ký';
+
+  @override
+  String get logsAll => 'Tất cả';
+
+  @override
+  String get logsWarnPlus => 'Cảnh báo trở lên';
+
+  @override
+  String get logsError => 'Lỗi';
+
+  @override
+  String get logsCopyAll => 'Sao chép tất cả';
+
+  @override
+  String get logsClear => 'Xóa nhật ký';
+
+  @override
+  String get logsCopied => 'Đã sao chép nhật ký';
+
+  @override
+  String get logsEmpty => 'Chưa có nhật ký';
+
+  @override
+  String logsAppVersion(String version) {
+    return 'Ứng dụng $version';
+  }
+
+  @override
+  String logsEngineVersion(String version) {
+    return 'Engine $version';
+  }
+
+  @override
+  String get logsVersionUnavailable => 'Không đọc được phiên bản ứng dụng';
 }

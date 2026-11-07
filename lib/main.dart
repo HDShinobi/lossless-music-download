@@ -9,9 +9,11 @@ import 'providers/download_options_provider.dart';
 import 'providers/fallback_pool_provider.dart';
 import 'providers/onboarding_provider.dart';
 import 'router.dart';
+import 'services/app_log.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  installAppLogHandlers(AppLog.instance);
   final container = ProviderContainer();
   await container.read(localeProvider.notifier).load();
   // Load the first-launch flag before the router is built so its initial

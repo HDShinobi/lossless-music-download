@@ -1651,6 +1651,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Requires engine {version}'**
   String requiresEngine(String version);
+
+  /// No description provided for @logsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs'**
+  String get logsTitle;
+
+  /// No description provided for @logsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get logsAll;
+
+  /// No description provided for @logsWarnPlus.
+  ///
+  /// In en, this message translates to:
+  /// **'Warn+'**
+  String get logsWarnPlus;
+
+  /// No description provided for @logsError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get logsError;
+
+  /// No description provided for @logsCopyAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy all'**
+  String get logsCopyAll;
+
+  /// No description provided for @logsClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get logsClear;
+
+  /// No description provided for @logsCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Logs copied'**
+  String get logsCopied;
+
+  /// No description provided for @logsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No logs yet'**
+  String get logsEmpty;
+
+  /// No description provided for @logsAppVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'App {version}'**
+  String logsAppVersion(String version);
+
+  /// No description provided for @logsEngineVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Engine {version}'**
+  String logsEngineVersion(String version);
+
+  /// No description provided for @logsVersionUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'App version unavailable'**
+  String get logsVersionUnavailable;
 }
 
 class _AppLocalizationsDelegate
