@@ -836,4 +836,9 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get onbReady => 'Sẵn sàng rồi — chúc bạn nghe vui!';
+
+  @override
+  String requiresEngine(String version) {
+    return 'Cần engine $version';
+  }
 }

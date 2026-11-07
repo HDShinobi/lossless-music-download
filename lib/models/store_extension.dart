@@ -2,9 +2,8 @@ class StoreExtension {
   final String id, displayName, version, description, category, downloadUrl, sourceName;
   final String? iconUrl;
 
-  /// Minimum app version this extension requires (registry `min_app_version`),
-  /// or null when unspecified. Used to skip auto-updating an extension that
-  /// needs a newer app than the one installed.
+  /// Minimum upstream engine version required (registry `min_app_version`),
+  /// or null when unspecified. Used to gate installs and updates.
   final String? minAppVersion;
 
   const StoreExtension({

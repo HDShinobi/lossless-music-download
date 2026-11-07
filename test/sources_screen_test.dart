@@ -213,19 +213,30 @@ void main() {
       expect(find.text('New version v2.0.0 available'), findsOneWidget);
     });
 
-    // Regression: registry min_app_version is SpotiFLAC's scheme (unrelated to
-    // this fork's version) and must NOT suppress the update.
     testWidgets(
-        'still offers the update even when min_app_version is set high',
+        'offers updates compatible with the upstream engine version',
         (tester) async {
       await pumpSourcesScreen(
         tester,
         [_fakeExt(id: 'qobuz', displayName: 'Qobuz')], // installed v1.2.3
-        catalogExts: [_fakeStore('qobuz', '2.0.0', minApp: '4.7.0')],
+        catalogExts: [_fakeStore('qobuz', '2.0.0', minApp: '5.3.0')],
       );
 
       expect(find.text('1 extension update available'), findsOneWidget);
       expect(find.text('Update to v2.0.0'), findsOneWidget);
+    });
+    testWidgets('hides update-all and per-extension update for a newer engine',
+        (tester) async {
+      await pumpSourcesScreen(
+        tester,
+        [_fakeExt(id: 'qobuz', displayName: 'Qobuz')],
+        catalogExts: [_fakeStore('qobuz', '2.0.0', minApp: '5.3.2')],
+      );
+
+      expect(find.text('Qobuz'), findsOneWidget);
+      expect(find.text('1 extension update available'), findsNothing);
+      expect(find.text('Update all'), findsNothing);
+      expect(find.text('Update to v2.0.0'), findsNothing);
     });
   });
 }

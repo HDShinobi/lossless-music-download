@@ -56,16 +56,38 @@ void main() {
       );
     });
 
-    // Regression: registry min_app_version is SpotiFLAC's 4.x scheme, unrelated
-    // to this fork's 0.x app version — it must NOT gate updates (doing so flagged
-    // every source as incompatible).
-    test('does not gate on min_app_version (different version scheme)', () {
-      final updates = computeExtensionUpdates(
-        [_installed('qobuz', '1.0.0')],
-        [_store('qobuz', '1.1.0', minApp: '4.7.0')],
+    test('skips updates requiring a newer engine', () {
+      expect(
+        computeExtensionUpdates(
+          [_installed('qobuz', '1.0.0')],
+          [_store('qobuz', '1.1.0', minApp: '5.3.2')],
+        ),
+        isEmpty,
       );
-      expect(updates, hasLength(1));
-      expect(updates.single.toVersion, '1.1.0');
+    });
+
+    for (final minimum in ['5.3.1', '5.3.0', null]) {
+      test('allows updates with minimum engine $minimum', () {
+        final updates = computeExtensionUpdates(
+          [_installed('qobuz', '1.0.0')],
+          [_store('qobuz', '1.1.0', minApp: minimum)],
+        );
+        expect(updates, hasLength(1));
+        expect(updates.single.toVersion, '1.1.0');
+      });
+    }
+
+    test('uses the supplied engine version for compatibility', () {
+      final installed = [_installed('qobuz', '1.0.0')];
+      final catalog = [_store('qobuz', '1.1.0', minApp: '5.4.0')];
+      expect(
+        computeExtensionUpdates(installed, catalog, engineVersion: '5.3.9'),
+        isEmpty,
+      );
+      expect(
+        computeExtensionUpdates(installed, catalog, engineVersion: '5.4.0'),
+        hasLength(1),
+      );
     });
 
     test('ignores catalog entries that are not installed', () {

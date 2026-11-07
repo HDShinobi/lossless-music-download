@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
+import '../engine_version.dart';
 import '../models/store_extension.dart';
 import '../providers/discover_provider.dart';
 import '../providers/extension_updates_provider.dart';
 import '../providers/extensions_provider.dart';
+import '../services/update_checker.dart' show isNewerVersion;
 
 /// The "Khám phá" (Discover) tab — shows the extension catalog from the
 /// aggregator, with category filtering and per-item install actions.
@@ -53,39 +55,57 @@ class _DiscoverTabState extends ConsumerState<DiscoverTab> {
           onSelect: (cat) => setState(() => _selectedCategory = cat),
         ),
         Expanded(
-          child: discoverAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, st) => Center(child: Text(t.discoverError)),
-            data: (list) {
-              final filtered = _selectedCategory.isEmpty
-                  ? list
-                  : list
-                      .where((e) =>
-                          e.category.toLowerCase() ==
-                          _selectedCategory.toLowerCase())
-                      .toList();
-
-              if (filtered.isEmpty) {
-                return Center(child: Text(t.discoverEmpty));
-              }
-
-              return ListView.builder(
-                itemCount: filtered.length,
-                itemBuilder: (ctx, i) => _ExtensionTile(
-                  ext: filtered[i],
-                  isInstalled: installedIds.contains(filtered[i].id),
-                  isInstalling: _installing.contains(filtered[i].id),
-                  update: updatesById[filtered[i].id],
-                  onInstall: () => _installExtension(context, t, filtered[i]),
-                  onUpdate: () => _updateExtension(context, t, filtered[i]),
-                ),
-              );
+          child: RefreshIndicator(
+            onRefresh: () async {
+              try {
+                final _ = await ref.refresh(discoverProvider.future);
+              } catch (_) {}
             },
+            child: discoverAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, st) => _scrollableMessage(t.discoverError),
+              data: (list) {
+                final filtered = _selectedCategory.isEmpty
+                    ? list
+                    : list
+                        .where((e) =>
+                            e.category.toLowerCase() ==
+                            _selectedCategory.toLowerCase())
+                        .toList();
+
+                if (filtered.isEmpty) {
+                  return _scrollableMessage(t.discoverEmpty);
+                }
+
+                return ListView.builder(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  itemCount: filtered.length,
+                  itemBuilder: (ctx, i) => _ExtensionTile(
+                    ext: filtered[i],
+                    isInstalled: installedIds.contains(filtered[i].id),
+                    isInstalling: _installing.contains(filtered[i].id),
+                    update: updatesById[filtered[i].id],
+                    onInstall: () => _installExtension(context, t, filtered[i]),
+                    onUpdate: () => _updateExtension(context, t, filtered[i]),
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ],
     );
   }
+
+  Widget _scrollableMessage(String message) => CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(child: Text(message)),
+          ),
+        ],
+      );
 
   // -------------------------------------------------------------------------
   // Actions
@@ -277,7 +297,11 @@ class _ExtensionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context);
-    final subtitle = '${ext.category} · ${ext.sourceName} · v${ext.version}';
+    final minimum = ext.minAppVersion;
+    final requiresNewerEngine =
+        minimum != null && isNewerVersion(minimum, kEngineVersion);
+    final subtitle = '${ext.category} · ${ext.sourceName} · v${ext.version}'
+        '${requiresNewerEngine ? '\n${t.requiresEngine(minimum)}' : ''}';
 
     Widget trailing;
     if (isInstalling) {
@@ -285,7 +309,7 @@ class _ExtensionTile extends StatelessWidget {
         onPressed: null,
         child: Text(t.installing),
       );
-    } else if (update != null) {
+    } else if (update != null && !requiresNewerEngine) {
       trailing = FilledButton.tonal(
         onPressed: onUpdate,
         child: Text(t.extensionUpdateTo(update!.toVersion)),
@@ -297,7 +321,7 @@ class _ExtensionTile extends StatelessWidget {
       );
     } else {
       trailing = TextButton(
-        onPressed: onInstall,
+        onPressed: requiresNewerEngine ? null : onInstall,
         child: Text(t.install),
       );
     }

@@ -44,6 +44,7 @@ WATCH_PATHS=(
   lib/services/platform_bridge.dart
 )
 ENGINE_VERSION_FILE="android/app/src/main/kotlin/xyz/losslessmusic/app/engine/EngineVersion.kt"
+DART_ENGINE_VERSION_FILE="lib/engine_version.dart"
 REGISTRY="docs/UPSTREAM-SYNC.md"
 
 check_vendored() {
@@ -79,6 +80,13 @@ check_vendored() {
     echo "    !! SPOTIFLAC_ENGINE_VERSION=$const_ver but baseline is v$tag_ver — bump EngineVersion.kt"; fail=1
   else
     echo "    SPOTIFLAC_ENGINE_VERSION=$const_ver matches baseline"
+  fi
+  local dart_ver
+  dart_ver="$(sed -nE "s/^const kEngineVersion *= *'([^']+)';/\1/p" "$DART_ENGINE_VERSION_FILE")"
+  if [[ -z "$const_ver" || -z "$dart_ver" || "$dart_ver" != "$const_ver" ]]; then
+    echo "    !! kEngineVersion=$dart_ver != SPOTIFLAC_ENGINE_VERSION=$const_ver — bump both engine version constants"; fail=1
+  else
+    echo "    kEngineVersion=$dart_ver matches SPOTIFLAC_ENGINE_VERSION"
   fi
   return $fail
 }
@@ -183,7 +191,8 @@ cat <<EOF
 ==> Next steps:
   1. Resolve conflict markers: git grep -n '<<<<<<<' -- ${INHERIT_PATHS[*]}
      Keep our LM-FORK(<id>) intent, or take upstream's hunk if it now contains the fix.
-  2. Bump SPOTIFLAC_ENGINE_VERSION in $ENGINE_VERSION_FILE to the target version.
+  2. Bump SPOTIFLAC_ENGINE_VERSION in $ENGINE_VERSION_FILE
+     and kEngineVersion in $DART_ENGINE_VERSION_FILE to the target version.
   3. Verify:
        (cd rust_backend && cargo test --locked -p mornye-extensions)
        (cd android && ./gradlew :app:buildRustBackend :app:testDebugUnitTest :app:assembleDebug)

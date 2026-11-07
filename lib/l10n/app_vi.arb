@@ -401,5 +401,11 @@
   "onbCastPlaying": "ĐANG PHÁT",
   "@onbCastPlaying": { "description": "Onboarding: badge on the active cast target" },
   "onbReady": "Sẵn sàng rồi — chúc bạn nghe vui!",
-  "@onbReady": { "description": "Onboarding: closing message on the final page" }
+  "@onbReady": { "description": "Onboarding: closing message on the final page" },
+  "requiresEngine": "Cần engine {version}",
+  "@requiresEngine": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  }
 }

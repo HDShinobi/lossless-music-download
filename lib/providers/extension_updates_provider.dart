@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../engine_version.dart';
 import '../models/installed_extension.dart';
 import '../models/store_extension.dart';
 import '../services/update_checker.dart' show isNewerVersion;
@@ -29,19 +30,20 @@ class ExtensionUpdate {
 /// Catalog entries that aren't installed are ignored — this is about updating,
 /// not discovering.
 ///
-/// NOTE: the registry's `min_app_version` is SpotiFLAC-Mobile's version scheme
-/// (4.x), which is unrelated to this fork's app version (0.x), so it is NOT
-/// used to gate updates — comparing the two would flag every source as
-/// incompatible.
+/// Registry `min_app_version` refers to the upstream engine version exposed
+/// to extensions, not this fork's app version. Incompatible updates are skipped.
 List<ExtensionUpdate> computeExtensionUpdates(
   List<InstalledExtension> installed,
-  List<StoreExtension> catalog,
-) {
+  List<StoreExtension> catalog, {
+  String engineVersion = kEngineVersion,
+}) {
   final byId = {for (final e in catalog) e.id: e};
   final updates = <ExtensionUpdate>[];
   for (final ext in installed) {
     final store = byId[ext.id];
     if (store == null) continue;
+    final minimum = store.minAppVersion;
+    if (minimum != null && isNewerVersion(minimum, engineVersion)) continue;
     if (!isNewerVersion(store.version, ext.version)) continue;
     updates.add(ExtensionUpdate(
       id: ext.id,

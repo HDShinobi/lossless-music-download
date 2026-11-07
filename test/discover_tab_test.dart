@@ -20,13 +20,31 @@ class _FakeDiscoverController extends DiscoverController {
   Future<List<StoreExtension>> build() async => _list;
 }
 
+class _RefreshingDiscoverController extends DiscoverController {
+  int fetches = 0;
+  final List<StoreExtension> initial;
+  _RefreshingDiscoverController(this.initial);
+
+  @override
+  Future<List<StoreExtension>> build() async {
+    fetches++;
+    return fetches == 1
+        ? initial
+        : [_fakeStoreExt(displayName: 'Refreshed Plugin', version: '2.0.0')];
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Fake DiscoverController — always throws (simulates AsyncError).
 // ---------------------------------------------------------------------------
 class _ErrorDiscoverController extends DiscoverController {
+  int fetches = 0;
+
   @override
-  Future<List<StoreExtension>> build() async =>
-      throw Exception('network error');
+  Future<List<StoreExtension>> build() async {
+    fetches++;
+    throw Exception('network error');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +83,7 @@ StoreExtension _fakeStoreExt({
   String displayName = 'Test Extension',
   String category = 'metadata',
   String version = '1.0.0',
+  String? minAppVersion,
 }) =>
     StoreExtension(
       id: id,
@@ -74,6 +93,7 @@ StoreExtension _fakeStoreExt({
       category: category,
       downloadUrl: 'https://example.com/test-ext.zip',
       sourceName: 'test-registry',
+      minAppVersion: minAppVersion,
     );
 
 // ---------------------------------------------------------------------------
@@ -83,6 +103,7 @@ Future<void> pumpDiscoverTab(
   WidgetTester tester, {
   required List<StoreExtension> catalog,
   List<InstalledExtension> installed = const [],
+  DiscoverController Function()? discoverController,
 }) async {
   final fakeBridge = _FakeBridge();
 
@@ -90,7 +111,9 @@ Future<void> pumpDiscoverTab(
     ProviderScope(
       overrides: [
         // Discover catalog
-        discoverProvider.overrideWith(() => _FakeDiscoverController(catalog)),
+        discoverProvider.overrideWith(
+          discoverController ?? () => _FakeDiscoverController(catalog),
+        ),
         // Aggregator URL
         aggregatorUrlProvider.overrideWith(
           () => _FakeAggregatorUrlNotifier('https://example.com/repos.json'),
@@ -254,6 +277,87 @@ void main() {
         }
       },
     );
+
+    testWidgets('disables install for an unsupported engine requirement',
+        (tester) async {
+      await pumpDiscoverTab(
+        tester,
+        catalog: [_fakeStoreExt(minAppVersion: '5.3.2')],
+      );
+      expect(find.textContaining('Requires engine 5.3.2'), findsOneWidget);
+      final button = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Install'),
+      );
+      expect(button.onPressed, isNull);
+    });
+
+    for (final minimum in ['5.3.1', '5.3.0', null]) {
+      testWidgets('allows install with minimum engine $minimum', (tester) async {
+        await pumpDiscoverTab(
+          tester,
+          catalog: [_fakeStoreExt(minAppVersion: minimum)],
+        );
+        final button = tester.widget<TextButton>(
+          find.widgetWithText(TextButton, 'Install'),
+        );
+        expect(button.onPressed, isNotNull);
+        expect(find.textContaining('Requires engine'), findsNothing);
+      });
+    }
+
+    testWidgets('does not offer an incompatible installed update',
+        (tester) async {
+      await pumpDiscoverTab(
+        tester,
+        catalog: [_fakeStoreExt(version: '2.0.0', minAppVersion: '5.3.2')],
+        installed: [_fakeInstalledExt(id: 'test-ext')],
+      );
+      expect(find.textContaining('Requires engine 5.3.2'), findsOneWidget);
+      expect(find.text('Update to v2.0.0'), findsNothing);
+      expect(find.text('Installed'), findsOneWidget);
+    });
+
+    for (final empty in [false, true]) {
+      testWidgets('pull-to-refresh refetches catalog (empty: $empty)',
+          (tester) async {
+        final controller = _RefreshingDiscoverController(
+          empty ? [] : [_fakeStoreExt(displayName: 'Original Plugin')],
+        );
+        await pumpDiscoverTab(
+          tester,
+          catalog: const [],
+          discoverController: () => controller,
+          installed: [_fakeInstalledExt(id: 'test-ext')],
+        );
+        await tester.drag(
+          find.byType(Scrollable).last,
+          const Offset(0, 400),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Refreshed Plugin'), findsOneWidget);
+        expect(find.text('Update to v2.0.0'), findsOneWidget);
+      });
+    }
+
+    testWidgets('pull-to-refresh retries from error without throwing',
+        (tester) async {
+      final controller = _ErrorDiscoverController();
+      await pumpDiscoverTab(
+        tester,
+        catalog: const [],
+        discoverController: () => controller,
+      );
+      final errorText = find.text('Could not load list. Check the source/URL.');
+      expect(errorText, findsOneWidget);
+      final initialFetches = controller.fetches;
+
+      await tester.drag(errorText, const Offset(0, 400));
+      await tester.pumpAndSettle();
+
+      expect(controller.fetches, greaterThan(initialFetches));
+      expect(tester.takeException(), isNull);
+      expect(errorText, findsOneWidget);
+    });
 
     // Regression: cancelling the change-aggregator dialog must not throw
     // "A TextEditingController was used after being disposed".

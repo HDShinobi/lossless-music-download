@@ -1645,6 +1645,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'All set — enjoy the music!'**
   String get onbReady;
+
+  /// No description provided for @requiresEngine.
+  ///
+  /// In en, this message translates to:
+  /// **'Requires engine {version}'**
+  String requiresEngine(String version);
 }
 
 class _AppLocalizationsDelegate

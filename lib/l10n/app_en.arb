@@ -401,5 +401,11 @@
   "onbCastPlaying": "PLAYING",
   "@onbCastPlaying": { "description": "Onboarding: badge on the active cast target" },
   "onbReady": "All set — enjoy the music!",
-  "@onbReady": { "description": "Onboarding: closing message on the final page" }
+  "@onbReady": { "description": "Onboarding: closing message on the final page" },
+  "requiresEngine": "Requires engine {version}",
+  "@requiresEngine": {
+    "placeholders": {
+      "version": {"type": "String"}
+    }
+  }
 }

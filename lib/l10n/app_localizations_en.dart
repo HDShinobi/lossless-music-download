@@ -844,4 +844,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get onbReady => 'All set — enjoy the music!';
+
+  @override
+  String requiresEngine(String version) {
+    return 'Requires engine $version';
+  }
 }
