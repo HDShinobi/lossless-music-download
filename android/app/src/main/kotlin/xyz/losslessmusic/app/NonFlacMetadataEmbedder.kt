@@ -51,30 +51,61 @@ object NonFlacMetadataEmbedder {
                 "m4a" -> embedM4a(context, filePath, metadata, coverPath)
                 "mp3" -> embedMp3(context, filePath, metadata, coverPath)
             }
+            // FFmpeg dictionaries collapse repeated keys. The existing engine
+            // editor writes real repeated Vorbis comments and preserves cover/lyrics.
+            if (extOf(filePath) in listOf("opus", "ogg") &&
+                request.optString("artist_tag_mode").trim().equals("split_vorbis", true)) {
+                Engines.current.editFileMetadata(filePath, vorbisArtistFields(request).toString())
+            }
         } finally {
             coverPath?.let { try { File(it).delete() } catch (_: Exception) {} }
         }
     }
 
-    private fun buildVorbisMetadata(request: JSONObject): MutableMap<String, String> {
+    internal fun buildVorbisMetadata(request: JSONObject): MutableMap<String, String> {
         val out = mutableMapOf<String, String>()
         fun put(key: String, value: String?) { if (!value.isNullOrEmpty()) out[key] = value }
         put("TITLE", request.optString("track_name", ""))
-        put("ARTIST", request.optString("artist_name", ""))
+        put("ARTIST", tagValue(request, "artist", "artist_name"))
         put("ALBUM", request.optString("album_name", ""))
-        put("ALBUMARTIST", request.optString("album_artist", ""))
+        put("ALBUMARTIST", tagValue(request, "album_artist", "album_artist"))
         put("DATE", request.optString("release_date", ""))
         put("ISRC", request.optString("isrc", ""))
-        put("GENRE", request.optString("genre", ""))
+        put("GENRE", tagValue(request, "genre", "genre"))
         put("ORGANIZATION", request.optString("label", ""))
         put("COPYRIGHT", request.optString("copyright", ""))
-        put("COMPOSER", request.optString("composer", ""))
+        put("COMPOSER", tagValue(request, "composer", "composer"))
         val trackNumber = request.optInt("track_number", 0)
         if (trackNumber > 0) out["TRACKNUMBER"] = trackNumber.toString()
         val discNumber = request.optInt("disc_number", 0)
         if (discNumber > 0) out["DISCNUMBER"] = discNumber.toString()
         return out
     }
+
+    private fun separator(request: JSONObject, field: String): String =
+        request.optJSONObject("metadata_separators")?.optString(field, "")
+            ?.takeIf { it.length <= 16 && it.none { c -> c <= '\u001f' || c == '\u007f' } } ?: ""
+
+    internal fun tagValue(request: JSONObject, field: String, source: String): String {
+        var value = request.optString(source, "")
+        if (field in listOf("artist", "album_artist") &&
+            request.optString("artist_tag_mode").trim().equals("primary", true)) {
+            value = value.trim().split(Regex(
+                "(?i)\\s*[,;&]\\s*|\\s+x\\s+|\\s+(?:feat(?:uring|ured|ure)?|ft|with)\\.?(?:\\s+|$)"
+            )).firstOrNull { it.trim().isNotEmpty() }?.trim() ?: value.trim()
+        }
+        val separator = separator(request, field)
+        return if (separator.isEmpty()) value else
+            value.split(Regex("\\s*[,;]\\s*")).map { it.trim() }
+                .filter { it.isNotEmpty() }.joinToString(separator)
+    }
+
+    internal fun vorbisArtistFields(request: JSONObject): JSONObject = JSONObject()
+        .put("artist_tag_mode", "split_vorbis")
+        .put("artist", request.optString("artist_name", ""))
+        .put("album_artist", request.optString("album_artist", ""))
+        .put("artist_separator", separator(request, "artist"))
+        .put("album_artist_separator", separator(request, "album_artist"))
 
     private fun fetchLyrics(request: JSONObject): String? {
         return try {
@@ -100,7 +131,7 @@ object NonFlacMetadataEmbedder {
             connection.readTimeout = 10_000
             connection.inputStream.use { input ->
                 val ext = if (url.lowercase().contains(".png")) "png" else "jpg"
-                val file = File(context.cacheDir, "cover_${System.currentTimeMillis()}.$ext")
+                val file = File.createTempFile("cover_", ".$ext", context.cacheDir)
                 file.outputStream().use { output -> input.copyTo(output) }
                 file.absolutePath
             }
@@ -151,7 +182,7 @@ object NonFlacMetadataEmbedder {
     }
 
     private fun embedOpus(context: Context, opusPath: String, metadata: Map<String, String>, coverPath: String?) {
-        val tempOutput = File(context.cacheDir, "temp_embed_${System.currentTimeMillis()}.opus").absolutePath
+        val tempOutput = File.createTempFile("temp_embed_", ".opus", context.cacheDir).absolutePath
         val args = mutableListOf(
             "-v", "error", "-hide_banner",
             "-i", opusPath,
@@ -171,7 +202,7 @@ object NonFlacMetadataEmbedder {
     }
 
     private fun embedM4a(context: Context, m4aPath: String, metadata: Map<String, String>, coverPath: String?) {
-        val tempOutput = File(context.cacheDir, "temp_embed_${System.currentTimeMillis()}.m4a").absolutePath
+        val tempOutput = File.createTempFile("temp_embed_", ".m4a", context.cacheDir).absolutePath
         val hasCover = coverPath != null
         val args = mutableListOf("-v", "error", "-hide_banner", "-i", m4aPath)
         if (hasCover) { args.add("-i"); args.add(coverPath!!) }
@@ -191,7 +222,7 @@ object NonFlacMetadataEmbedder {
     }
 
     private fun embedMp3(context: Context, mp3Path: String, metadata: Map<String, String>, coverPath: String?) {
-        val tempOutput = File(context.cacheDir, "temp_embed_${System.currentTimeMillis()}.mp3").absolutePath
+        val tempOutput = File.createTempFile("temp_embed_", ".mp3", context.cacheDir).absolutePath
         val hasCover = coverPath != null
         val args = mutableListOf("-v", "error", "-hide_banner", "-i", mp3Path)
         if (hasCover) { args.add("-i"); args.add(coverPath!!) }

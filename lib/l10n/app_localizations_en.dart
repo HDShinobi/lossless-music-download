@@ -974,4 +974,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get templatePreviewMulti => 'Preview · multiple discs';
+
+  @override
+  String get queuePause => 'Pause queue';
+
+  @override
+  String get queueResume => 'Resume queue';
+
+  @override
+  String get queuePaused => 'Paused — current downloads will finish';
+
+  @override
+  String get queueWaitingWifi => 'Waiting for Wi-Fi';
+
+  @override
+  String get queueClearCompleted => 'Clear completed';
+
+  @override
+  String get queueRetryAllFailed => 'Retry all failed';
+
+  @override
+  String get settingSimultaneousDownloads => 'Simultaneous downloads';
+
+  @override
+  String get settingWifiOnly => 'Download on Wi-Fi only';
+
+  @override
+  String get settingWifiOnlyDescription =>
+      'Wait for an unmetered Wi-Fi connection before starting new downloads.';
 }

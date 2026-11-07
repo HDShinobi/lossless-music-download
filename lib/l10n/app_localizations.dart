@@ -1873,6 +1873,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Preview · multiple discs'**
   String get templatePreviewMulti;
+
+  /// No description provided for @queuePause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause queue'**
+  String get queuePause;
+
+  /// No description provided for @queueResume.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume queue'**
+  String get queueResume;
+
+  /// No description provided for @queuePaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused — current downloads will finish'**
+  String get queuePaused;
+
+  /// No description provided for @queueWaitingWifi.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for Wi-Fi'**
+  String get queueWaitingWifi;
+
+  /// No description provided for @queueClearCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear completed'**
+  String get queueClearCompleted;
+
+  /// No description provided for @queueRetryAllFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry all failed'**
+  String get queueRetryAllFailed;
+
+  /// No description provided for @settingSimultaneousDownloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Simultaneous downloads'**
+  String get settingSimultaneousDownloads;
+
+  /// No description provided for @settingWifiOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Download on Wi-Fi only'**
+  String get settingWifiOnly;
+
+  /// No description provided for @settingWifiOnlyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for an unmetered Wi-Fi connection before starting new downloads.'**
+  String get settingWifiOnlyDescription;
 }
 
 class _AppLocalizationsDelegate

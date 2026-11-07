@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lossless_music_download/l10n/app_localizations.dart';
 import 'package:lossless_music_download/models/download_progress.dart';
 import 'package:lossless_music_download/models/download_request.dart';
@@ -194,6 +195,7 @@ const _fakeExt = InstalledExtension(
 // Tests
 // ---------------------------------------------------------------------------
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   group('SearchScreen batch download', () {
     testWidgets('normal mode: tap download calls controller', (tester) async {
       final bridge = _FakeBackendBridge();

@@ -1,7 +1,35 @@
+import 'dart:convert';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lossless_music_download/services/native_download_worker.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  test('worker sends limits and network policy and exposes queue actions', () async {
+    const channel = MethodChannel('worker-policy-test');
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(channel, (call) async { calls.add(call); return null; });
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(channel, null));
+    final worker = NativeDownloadWorker(channel);
+    await worker.start([], runId: 'r1', settings: {'concurrent_downloads': 3, 'wifi_only': true});
+    final settings = jsonDecode(calls.first.arguments['settingsJson'] as String);
+    expect(settings, {'run_id': 'r1', 'concurrent_downloads': 3, 'wifi_only': true});
+    await worker.pause();
+    await worker.resume();
+    expect(calls.map((c) => c.method), [
+      'startNativeDownloadWorker', 'pauseNativeDownloadWorker', 'resumeNativeDownloadWorker']);
+  });
+  test('snapshot exposes waiting reason independently of item progress', () {
+    final snapshot = NativeWorkerSnapshot.fromJson({
+      'is_running': true, 'is_paused': true, 'pause_reason': 'waiting_wifi',
+      'items': [{'item_id': 'a', 'status': 'queued'}],
+    });
+    expect(snapshot.isPaused, true);
+    expect(snapshot.pauseReason, 'waiting_wifi');
+    expect(snapshot.items.single.status, 'queued');
+  });
   group('buildNativeWorkerRequest', () {
     test('wraps item id, names, and request JSON', () {
       final result = buildNativeWorkerRequest(

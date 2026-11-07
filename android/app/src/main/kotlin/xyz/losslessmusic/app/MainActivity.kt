@@ -372,6 +372,11 @@ class MainActivity : FlutterActivity() {
             )
             true to null
         }
+        "pauseNativeDownloadWorker", "resumeNativeDownloadWorker" -> {
+            DownloadForegroundService.setPaused(applicationContext, call.method == "pauseNativeDownloadWorker")
+            true to null
+        }
+        "isDownloadNetworkAllowed" -> true to DownloadForegroundService.networkAllowed(applicationContext)
         "getNativeDownloadWorkerSnapshot" -> true to DownloadForegroundService.readSnapshot(applicationContext)
         "stopNativeDownloadWorker" -> {
             DownloadForegroundService.stop(applicationContext)

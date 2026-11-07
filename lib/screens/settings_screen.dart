@@ -257,6 +257,23 @@ class SettingsScreen extends ConsumerWidget {
               builder: (_) => const DownloadFileSettingsScreen())),
           ),
 
+          ListTile(
+            leading: const Icon(Icons.downloading_outlined),
+            title: Text(t.settingSimultaneousDownloads),
+            trailing: DropdownButton<int>(
+              value: ref.watch(simultaneousDownloadsProvider),
+              items: [for (final n in [1, 2, 3]) DropdownMenuItem(value: n, child: Text('$n'))],
+              onChanged: (n) { if (n != null) ref.read(simultaneousDownloadsProvider.notifier).set(n); },
+            ),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.wifi),
+            title: Text(t.settingWifiOnly),
+            subtitle: Text(t.settingWifiOnlyDescription),
+            value: ref.watch(wifiOnlyProvider),
+            onChanged: ref.read(wifiOnlyProvider.notifier).set,
+          ),
+
           // Folder layout
           ListTile(
             leading: const Icon(Icons.folder_copy_outlined),

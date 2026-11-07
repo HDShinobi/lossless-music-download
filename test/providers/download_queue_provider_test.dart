@@ -11,6 +11,7 @@ import 'package:lossless_music_download/models/download_request.dart';
 import 'package:lossless_music_download/models/installed_extension.dart';
 import 'package:lossless_music_download/models/track.dart';
 import 'package:lossless_music_download/providers/download_dir_provider.dart';
+import 'package:lossless_music_download/services/native_download_worker.dart';
 import 'package:lossless_music_download/providers/download_options_provider.dart';
 import 'package:lossless_music_download/providers/download_queue_provider.dart';
 import 'package:lossless_music_download/providers/extensions_provider.dart';
@@ -141,6 +142,62 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+  });
+
+  test('pause blocks new work; resume continues; clear only removes done', () async {
+    final bridge = _FakeBridge()..downloadResult = {'success': true};
+    final c = _makeContainer(bridge);
+    addTearDown(c.dispose);
+    final q = c.read(downloadQueueProvider.notifier);
+    await q.pause();
+    await q.enqueue(_track);
+    await _pump();
+    expect(bridge.downloadCalls, isEmpty);
+    expect(c.read(queuePauseReasonProvider), 'paused');
+    await q.resume();
+    await _pump();
+    expect(bridge.downloadCalls, hasLength(1));
+    q.clearCompleted();
+    expect(c.read(downloadQueueProvider), isEmpty);
+    expect(bridge.cancelCalls, isEmpty);
+  });
+
+  test('retry all failed preserves intent and leaves queued entries', () async {
+    final bridge = _FakeBridge()..downloadResult = {'success': false, 'error': 'bad'};
+    final c = _makeContainer(bridge);
+    addTearDown(c.dispose);
+    final q = c.read(downloadQueueProvider.notifier);
+    await q.enqueue(_track, service: 'qobuz', quality: 'FLAC');
+    await _pump();
+    await q.pause();
+    await q.enqueue(const Track(id: 'waiting', name: 'Waiting', artists: 'A'));
+    q.retryAllFailed();
+    await _pump();
+    expect(c.read(downloadQueueProvider), hasLength(2));
+    expect(c.read(downloadQueueProvider).every((e) => e.status == 'queued'), true);
+    final retried = c.read(downloadQueueProvider).firstWhere((e) => e.track.id == _track.id);
+    expect(retried.service, 'qobuz');
+    expect(retried.quality, 'FLAC');
+  });
+
+  test('Wi-Fi only fallback auto-resumes when an unmetered Wi-Fi returns', () async {
+    final bridge = _FakeBridge()..downloadResult = {'success': true};
+    var allowed = false;
+    final c = ProviderContainer(overrides: [
+      backendBridgeProvider.overrideWithValue(bridge),
+      downloadDirPathProvider.overrideWithValue(Future.value('/fake/downloads')),
+      downloadNetworkAllowedProvider.overrideWith((ref) async => allowed),
+    ]);
+    addTearDown(c.dispose);
+    await c.read(wifiOnlyProvider.notifier).set(true);
+    final q = c.read(downloadQueueProvider.notifier);
+    await q.enqueue(_track);
+    await _pump();
+    expect(bridge.downloadCalls, isEmpty);
+    expect(c.read(queuePauseReasonProvider), 'waiting_wifi');
+    allowed = true;
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    expect(bridge.downloadCalls, hasLength(1));
   });
 
   group('DownloadQueueController', () {

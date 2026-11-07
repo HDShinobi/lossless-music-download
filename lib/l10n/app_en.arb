@@ -447,5 +447,14 @@
   "templateFolderHelp": "Overrides folder layout. Separate folder levels with /. Metadata cannot add folder levels.",
   "templateDiscSafety": "For multi-disc albums, custom filenames without a disc placeholder automatically gain a disc- prefix. Tags remain the source for library titles with custom names.",
   "templatePreviewSingle": "Preview · single disc",
-  "templatePreviewMulti": "Preview · multiple discs"
+  "templatePreviewMulti": "Preview · multiple discs",
+  "queuePause": "Pause queue",
+  "queueResume": "Resume queue",
+  "queuePaused": "Paused — current downloads will finish",
+  "queueWaitingWifi": "Waiting for Wi-Fi",
+  "queueClearCompleted": "Clear completed",
+  "queueRetryAllFailed": "Retry all failed",
+  "settingSimultaneousDownloads": "Simultaneous downloads",
+  "settingWifiOnly": "Download on Wi-Fi only",
+  "settingWifiOnlyDescription": "Wait for an unmetered Wi-Fi connection before starting new downloads."
 }

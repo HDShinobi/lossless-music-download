@@ -2,11 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+import '../l10n/app_localizations.dart';
 import '../models/download_progress.dart';
 import '../models/download_request.dart';
 import '../models/installed_extension.dart';
@@ -26,6 +27,7 @@ import 'download_options_provider.dart';
 import 'downloads_provider.dart';
 import 'extensions_provider.dart';
 import 'library_provider.dart';
+import 'locale_provider.dart';
 
 // Sentinel used to short-circuit _processQueue when a duplicate is detected,
 // allowing the finally block (_isProcessing = false) to still run.
@@ -110,12 +112,74 @@ class DownloadEntry {
 // DownloadQueueController — client-side persistent download queue
 // ---------------------------------------------------------------------------
 
+final nativeQueueLabelsProvider = Provider<Map<String, String>>((ref) {
+  final locale = ref.watch(localeProvider);
+  final t = lookupAppLocalizations(locale);
+  return {'paused_label': t.queuePaused, 'waiting_wifi_label': t.queueWaitingWifi,
+    'pause_label': t.queuePause, 'resume_label': t.queueResume};
+});
+
+class QueuePauseReasonNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+  void set(String? value) => state = value;
+}
+
+final queuePauseReasonProvider = NotifierProvider<QueuePauseReasonNotifier, String?>(
+  QueuePauseReasonNotifier.new,
+);
+
 class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   final Map<String, Sample> _samples = {};
   final Map<String, Set<String>> _loggedLifecycleEvents = {};
 
-  // Sequential download gate — mirrors SpotiFLAC's _processQueue() pattern.
+  // One batch at a time; native execution owns per-item concurrency.
   bool _isProcessing = false;
+  bool _nativeRunStopped = false;
+  bool _manualPaused = false;
+  bool? _pendingPause;
+  NativeDownloadWorker? _activeWorker;
+
+  Future<void> pause() async {
+    _manualPaused = true;
+    _pendingPause = true;
+    ref.read(queuePauseReasonProvider.notifier).set('paused');
+    await _activeWorker?.pause();
+  }
+
+  Future<void> resume() async {
+    _manualPaused = false;
+    _pendingPause = false;
+    ref.read(queuePauseReasonProvider.notifier).set(null);
+    await _activeWorker?.resume();
+    if (ref.mounted) unawaited(_processQueue());
+  }
+
+  void clearCompleted() {
+    for (final entry in state.where((e) => e.status == 'done').toList()) {
+      _removeLocal(entry.itemId);
+    }
+  }
+
+  void retryAllFailed() {
+    for (final entry in state.where((e) => e.status == 'failed').toList()) {
+      retry(entry.itemId);
+    }
+  }
+
+  Future<bool> _waitForAdmission(String itemId) async {
+    while (ref.mounted && state.any((e) => e.itemId == itemId)) {
+      final allowed = !ref.read(wifiOnlyProvider) ||
+          await ref.read(downloadNetworkAllowedProvider.future);
+      if (!ref.mounted || !state.any((e) => e.itemId == itemId)) return false;
+      ref.read(queuePauseReasonProvider.notifier).set(
+        _manualPaused ? 'paused' : !allowed ? 'waiting_wifi' : null);
+      if (!_manualPaused && allowed) return true;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (ref.mounted) ref.invalidate(downloadNetworkAllowedProvider);
+    }
+    return false;
+  }
 
   // Items already given one rate-limit (HTTP 429) backoff retry. Mirrors
   // SpotiFLAC's _rateLimitRetriedItemIds — one delayed retry per item, then
@@ -124,6 +188,10 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
 
   @override
   List<DownloadEntry> build() {
+    final lifecycle = AppLifecycleListener(onResume: () {
+      if (ref.mounted) unawaited(_processQueue());
+    });
+    ref.onDispose(lifecycle.dispose);
     // Keep the poll alive and merge live progress into our entries.
     ref.listen<AsyncValue<List<DownloadProgress>>>(
       downloadsProvider,
@@ -165,21 +233,23 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   // the native background worker (Android) and falling back to the
   // Dart-only path for anything the native worker can't run.
   Future<void> _processQueue() async {
-    if (_isProcessing) return;
+    if (!ref.mounted || _isProcessing || _manualPaused) return;
     final queued = state.where((e) => e.status == 'queued').toList();
     if (queued.isEmpty) return;
 
     _isProcessing = true;
+    _nativeRunStopped = false;
+    var continueProcessing = true;
     try {
       final worker = ref.read(nativeDownloadWorkerProvider);
       if (worker.isAvailable) {
-        await _runNativeBatch(worker, queued);
+        continueProcessing = await _runNativeBatch(worker, queued);
       } else {
         await _runDartFallback(queued.first);
       }
     } finally {
       _isProcessing = false;
-      unawaited(_processQueue());
+      if (ref.mounted && continueProcessing) unawaited(_processQueue());
     }
   }
 
@@ -300,10 +370,12 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       metadataSeparators: ref.read(metadataSeparatorsProvider),
       writeLrcSidecar: ref.read(writeLrcSidecarProvider),
     );
-    return req.toJson();
+    final provider = (ref.read(extensionsProvider).value ?? const <InstalledExtension>[])
+        .where((e) => e.id == resolvedService).firstOrNull;
+    return {...req.toJson(), 'network_concurrency_limit': provider?.maxConcurrentDownloads ?? 3};
   }
 
-  Future<void> _runNativeBatch(
+  Future<bool> _runNativeBatch(
     NativeDownloadWorker worker,
     List<DownloadEntry> queued,
   ) async {
@@ -326,10 +398,24 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         queued.where((e) => !requests.any((r) => r['item_id'] == e.itemId)).toList();
 
     var fellBackToStartupTimeout = false;
+    var stoppedWithPending = false;
     if (requests.isNotEmpty) {
+      await Future.wait([
+        ref.read(simultaneousDownloadsProvider.notifier).ready,
+        ref.read(wifiOnlyProvider.notifier).ready,
+      ]);
+      if (!ref.mounted) return false;
       final runId = 'run_${DateTime.now().microsecondsSinceEpoch}';
       printAppLog(LogLevel.debug, 'Queue', 'Starting native batch: ${requests.length} items');
-      await worker.start(requests, runId: runId);
+      await worker.start(requests, runId: runId, settings: {
+        'concurrent_downloads': ref.read(simultaneousDownloadsProvider),
+        'wifi_only': ref.read(wifiOnlyProvider),
+        'is_paused': _manualPaused,
+        // Notification labels come from the same selected locale as queue UI.
+        ...ref.read(nativeQueueLabelsProvider),
+      });
+      _activeWorker = worker;
+      if (_manualPaused) await worker.pause();
 
       // Poll until the native worker reports it's done with this run. If it
       // never even starts within 30s (matching upstream's startup timeout),
@@ -342,8 +428,9 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       // starts and a run that goes silent mid-flight (e.g. sustained
       // getSnapshot() exceptions).
       var lastSeenAt = DateTime.now();
-      while (true) {
+      while (ref.mounted) {
         await Future<void>.delayed(const Duration(milliseconds: 500));
+        if (!ref.mounted) return false;
         NativeWorkerSnapshot? snapshot;
         try {
           snapshot = await worker.getSnapshot();
@@ -362,8 +449,16 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
         started = true;
         lastSeenAt = DateTime.now();
         _mergeNativeSnapshot(snapshot, byItemId);
-        if (!snapshot.isRunning) break;
+        if (!snapshot.isRunning) {
+          stoppedWithPending = snapshot.items.any((i) =>
+              byItemId.containsKey(i.itemId) && i.status == 'queued');
+          _nativeRunStopped = stoppedWithPending;
+          break;
+        }
       }
+      _activeWorker = null;
+      if (!ref.mounted) return false;
+      ref.read(queuePauseReasonProvider.notifier).set(_manualPaused ? 'paused' : null);
       ref.invalidate(libraryProvider);
     }
 
@@ -373,12 +468,18 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     for (final entry in fallbackEntries) {
       await _runDartFallback(entry);
     }
+    return !stoppedWithPending;
   }
 
   void _mergeNativeSnapshot(
     NativeWorkerSnapshot snapshot,
     Map<String, DownloadEntry> byItemId,
   ) {
+    final nativeManualPause = snapshot.pauseReason == 'paused';
+    if (_pendingPause == nativeManualPause) _pendingPause = null;
+    if (_pendingPause == null) _manualPaused = nativeManualPause;
+    ref.read(queuePauseReasonProvider.notifier).set(_manualPaused
+        ? 'paused' : snapshot.pauseReason == 'waiting_wifi' ? 'waiting_wifi' : null);
     if (!snapshot.items.any((i) => byItemId.containsKey(i.itemId))) return;
     state = [
       for (final entry in state)
@@ -434,9 +535,20 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
   // for non-Android platforms, items the native worker's gate rejects, and
   // runs whose native snapshot stalls.
   Future<void> _runDartFallback(DownloadEntry next) async {
-    printAppLog(LogLevel.debug, 'Queue', 'Starting Dart fallback: ${next.itemId}');
+    if (!ref.mounted || !state.any((e) => e.itemId == next.itemId &&
+        e.status != 'done' && e.status != 'failed')) {
+      return;
+    }
     _setStatus(next.itemId, 'downloading');
     try {
+      await ref.read(wifiOnlyProvider.notifier).ready;
+      if (!ref.mounted || !state.any((e) => e.itemId == next.itemId)) return;
+      if (_manualPaused || ref.read(wifiOnlyProvider)) {
+        _setStatus(next.itemId, 'queued');
+        if (!await _waitForAdmission(next.itemId)) return;
+        _setStatus(next.itemId, 'downloading');
+      }
+      printAppLog(LogLevel.debug, 'Queue', 'Starting Dart fallback: ${next.itemId}');
       final dir = await ref.read(downloadDirProvider.future);
       final bridge = ref.read(backendBridgeProvider);
       final dlProviders = (ref.read(extensionsProvider).value ??
@@ -806,7 +918,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
     DownloadProgress? p,
     int nowMs,
   ) {
-    // Terminal entries stay as-is.
+    // Late engine progress cannot revive an item requeued by native stop.
+    if (_nativeRunStopped && entry.status == 'queued') return entry;
     if (entry.status == 'done' || entry.status == 'failed') return entry;
     // No matching backend progress yet — keep current state.
     if (p == null) return entry;

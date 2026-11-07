@@ -21,6 +21,8 @@ class QueueScreen extends ConsumerWidget {
     // Watch the client-side persistent queue.
     final entries = ref.watch(downloadQueueProvider);
 
+    final reason = ref.watch(queuePauseReasonProvider);
+    final controller = ref.read(downloadQueueProvider.notifier);
     final Widget body;
     if (entries.isEmpty) {
       body = Center(child: Text(t.queueEmpty));
@@ -35,8 +37,30 @@ class QueueScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(t.tabQueue)),
-      body: body,
+      appBar: AppBar(title: Text(t.tabQueue), actions: [
+        IconButton(
+          tooltip: reason == 'paused' ? t.queueResume : t.queuePause,
+          icon: Icon(reason == 'paused' ? Icons.play_arrow : Icons.pause),
+          onPressed: reason == 'paused' ? controller.resume : controller.pause,
+        ),
+        PopupMenuButton<String>(
+          onSelected: (value) => value == 'clear'
+              ? controller.clearCompleted() : controller.retryAllFailed(),
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'clear', enabled: entries.any((e) => e.status == 'done'),
+              child: Text(t.queueClearCompleted)),
+            PopupMenuItem(value: 'retry', enabled: entries.any((e) => e.status == 'failed'),
+              child: Text(t.queueRetryAllFailed)),
+          ],
+        ),
+      ]),
+      body: Column(children: [
+        if (reason != null) ListTile(
+          leading: Icon(reason == 'waiting_wifi' ? Icons.wifi_off : Icons.pause_circle_outline),
+          title: Text(reason == 'waiting_wifi' ? t.queueWaitingWifi : t.queuePaused),
+        ),
+        Expanded(child: body),
+      ]),
     );
   }
 

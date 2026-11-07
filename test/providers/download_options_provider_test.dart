@@ -4,6 +4,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lossless_music_download/providers/download_options_provider.dart';
 
 void main() {
+  test('worker settings default to sequential and any network; persist and clamp', () async {
+    SharedPreferences.setMockInitialValues({});
+    final c = ProviderContainer();
+    expect(c.read(simultaneousDownloadsProvider), 1);
+    expect(c.read(wifiOnlyProvider), false);
+    await c.read(simultaneousDownloadsProvider.notifier).set(3);
+    await c.read(wifiOnlyProvider.notifier).set(true);
+    c.dispose();
+    final restored = ProviderContainer();
+    addTearDown(restored.dispose);
+    restored.read(simultaneousDownloadsProvider);
+    restored.read(wifiOnlyProvider);
+    await Future<void>.delayed(Duration.zero);
+    expect(restored.read(simultaneousDownloadsProvider), 3);
+    expect(restored.read(wifiOnlyProvider), true);
+    await restored.read(simultaneousDownloadsProvider.notifier).set(99);
+    expect(restored.read(simultaneousDownloadsProvider), 3);
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {

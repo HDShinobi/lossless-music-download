@@ -8,6 +8,9 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -17,7 +20,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -47,6 +52,8 @@ class DownloadForegroundService : Service() {
         private const val EXTRA_PROGRESS = "progress"
         private const val EXTRA_TOTAL = "total"
         private const val SNAPSHOT_FILE = "native_download_worker_snapshot.json"
+        private const val ACTION_PAUSE = "xyz.losslessmusic.app.action.PAUSE"
+        private const val ACTION_RESUME = "xyz.losslessmusic.app.action.RESUME"
         private const val ACTION_START_QUEUE = "xyz.losslessmusic.app.action.START_QUEUE"
         private const val EXTRA_REQUESTS_JSON = "requests_json"
         private const val EXTRA_SETTINGS_JSON = "settings_json"
@@ -92,6 +99,20 @@ class DownloadForegroundService : Service() {
             }
         }
 
+        fun setPaused(context: Context, paused: Boolean) {
+            context.startService(Intent(context, DownloadForegroundService::class.java)
+                .setAction(if (paused) ACTION_PAUSE else ACTION_RESUME))
+        }
+
+        fun networkAllowed(context: Context): Boolean {
+            val cm = context.getSystemService(ConnectivityManager::class.java)
+            val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+            return (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) &&
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+        }
+
         fun readSnapshot(context: Context): String {
             val file = File(context.filesDir, SNAPSHOT_FILE)
             if (!file.exists()) return ""
@@ -106,27 +127,6 @@ class DownloadForegroundService : Service() {
         val requestJson: String,
     )
 
-    private data class WorkerItemState(
-        val itemId: String,
-        var status: String = "queued",
-        var progress: Double = 0.0,
-        var bytesReceived: Long = 0L,
-        var bytesTotal: Long = 0L,
-        var error: String? = null,
-        // Seconds the backend asked us to wait before retrying a rate-limited
-        // (HTTP 429) item, from the download result's `retry_after_seconds`.
-        // 0 when absent. Surfaced to Dart so its backoff honors the server's
-        // Retry-After instead of the 30s default (which retries too early and
-        // gets the IP re-throttled). Mirrors SpotiFLAC's retry_after handling.
-        var retryAfterSeconds: Int = 0,
-        // Extension the backend reported for a failed download (its result's
-        // `service` field) — lets Dart open the right verification challenge.
-        var service: String? = null,
-        // Winning provider reported by a successful download's result JSON.
-        var resolvedService: String? = null,
-        var filePath: String? = null,
-    )
-
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var wakeLock: PowerManager.WakeLock? = null
     private var notifTitle = "Downloading..."
@@ -134,10 +134,18 @@ class DownloadForegroundService : Service() {
     private var notifProgress = 0L
     private var notifTotal = 0L
     @Volatile private var currentRunId = ""
-    private val workerItems = mutableListOf<WorkerItemState>()
+    private val workerItems = mutableListOf<NativeWorkerItemState>()
     private val workerItemsLock = Any()
     private var workerJob: Job? = null
-    @Volatile private var currentItemId = ""
+    @Volatile private var workerStopped = true
+    private var gate = NativeQueueGate(1)
+    private var wifiOnly = false
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var networkFallbackJob: Job? = null
+    private var pausedLabel = "Paused"
+    private var waitingLabel = "Waiting for Wi-Fi"
+    private var pauseLabel = "Pause"
+    private var resumeLabel = "Resume"
 
     override fun onCreate() {
         Engines.init(applicationContext)
@@ -166,6 +174,15 @@ class DownloadForegroundService : Service() {
         }
 
         when (intent.action) {
+            ACTION_PAUSE, ACTION_RESUME -> {
+                if (workerJob?.isActive != true) {
+                    // startId-scoped: never tear down a START_QUEUE queued behind us.
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
+                gate.setPaused(intent.action == ACTION_PAUSE)
+                refreshQueueState()
+            }
             ACTION_START -> startForegroundService()
             ACTION_STOP -> stopForegroundService()
             ACTION_UPDATE -> {
@@ -236,10 +253,15 @@ class DownloadForegroundService : Service() {
         // which cancels the engine download only on an explicit user pause/cancel. Explicit user
         // cancellation still works: it goes through the Dart remove() path, which
         // calls Engines.current.cancelDownload() directly.
+        if (!workerStopped) {
+            workerStopped = true
+            synchronized(workerItemsLock) { workerItems.forEach { it.requeueOnStop() } }
+            writeSnapshot(isRunning = false)
+        }
         workerJob?.cancel()
         workerJob = null
-        currentItemId = ""
         isRunning = false
+        unregisterNetworkCallback()
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -274,11 +296,23 @@ class DownloadForegroundService : Service() {
         }
         if (requests.isEmpty()) return
 
-        currentRunId = try { JSONObject(settingsJson).optString("run_id", "") } catch (_: Exception) { "" }
+        // A second START_QUEUE must never replace a batch whose blocking engine calls are alive.
+        if (workerJob?.isActive == true) return
+        val settings = try { JSONObject(settingsJson) } catch (_: Exception) { JSONObject() }
+        currentRunId = settings.optString("run_id", "")
+        gate = NativeQueueGate(settings.optInt("concurrent_downloads", 1))
+        gate.setPaused(settings.optBoolean("is_paused", false))
+        wifiOnly = settings.optBoolean("wifi_only", false)
+        pausedLabel = settings.optString("paused_label", "Paused")
+        waitingLabel = settings.optString("waiting_wifi_label", "Waiting for Wi-Fi")
+        pauseLabel = settings.optString("pause_label", "Pause")
+        resumeLabel = settings.optString("resume_label", "Resume")
+        workerStopped = false
         synchronized(workerItemsLock) {
             workerItems.clear()
-            workerItems.addAll(requests.map { WorkerItemState(itemId = it.itemId) })
+            workerItems.addAll(requests.map { NativeWorkerItemState(itemId = it.itemId) })
         }
+        registerNetworkCallback()
         startForegroundService()
         writeSnapshot(isRunning = true)
 
@@ -286,85 +320,170 @@ class DownloadForegroundService : Service() {
         workerJob = serviceScope.launch { runWorker(requests) }
     }
 
-    private fun updateItem(itemId: String, update: (WorkerItemState) -> Unit) {
+    private fun updateItem(itemId: String, update: (NativeWorkerItemState) -> Unit) {
         synchronized(workerItemsLock) {
+            if (workerStopped) return
             workerItems.firstOrNull { it.itemId == itemId }?.let(update)
         }
     }
 
     private suspend fun runWorker(requests: List<WorkerRequest>) {
-        for (request in requests) {
-            if (!serviceScope.isActive) break
-            currentItemId = request.itemId
-            updateItem(request.itemId) { it.status = "downloading" }
-            notifTitle = if (requests.size > 1) "Downloading ${requests.size} tracks" else request.trackName
-            notifText = request.artistName
-            writeSnapshot(isRunning = true)
-
-            // Preflight duplicate check (mirrors the Dart-only path).
-            if (isDuplicate(request.requestJson)) {
-                updateItem(request.itemId) { it.status = "done"; it.progress = 1.0 }
+        gate.runAll(requests,
+            providerKey = { request ->
+                val payload = try { JSONObject(request.requestJson) } catch (_: Exception) { JSONObject() }
+                payload.optString("download_provider", "").ifBlank { payload.optString("service", "") }
+                    .trim().lowercase().ifBlank { "default" }
+            },
+            providerLimit = { request ->
+                try { JSONObject(request.requestJson).optInt("network_concurrency_limit", 3) }
+                catch (_: Exception) { 3 }
+            },
+        ) { request ->
+            try { processItem(request, requests.size) }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                updateItem(request.itemId) { it.status = "failed"; it.error = e.message }
                 writeSnapshot(isRunning = true)
-                continue
             }
-
-            val progressJob = serviceScope.launch { pollProgress(request.itemId) }
-            val resultJson = try {
-                Engines.current.downloadByStrategy(request.requestJson)
-            } catch (e: Exception) {
-                progressJob.cancel()
-                updateItem(request.itemId) { it.status = "failed"; it.error = e.message ?: "download failed" }
-                writeSnapshot(isRunning = true)
-                continue
-            }
-            progressJob.cancel()
-
-            val result = try { JSONObject(resultJson) } catch (_: Exception) { JSONObject() }
-            val failed = !result.optBoolean("success", false)
-            if (failed) {
-                val error = result.optString("error", "unknown")
-                val service = result.optString("service", "").ifEmpty { null }
-                val retryAfter = result.optInt("retry_after_seconds", 0)
-                updateItem(request.itemId) {
-                    it.status = "failed"
-                    it.error = error
-                    it.retryAfterSeconds = retryAfter
-                    it.service = service
-                }
-                writeSnapshot(isRunning = true)
-                continue
-            }
-
-            updateItem(request.itemId) { it.status = "finalizing" }
-            val winning = result.optString("service", "").ifEmpty { null }
-            updateItem(request.itemId) { it.resolvedService = winning }
-            writeSnapshot(isRunning = true)
-            // Amazon's lossless tier delivers an *encrypted* MP4 plus the key in
-            // the result; the engine only forwards it, so decrypt (and unwrap the
-            // FLAC out of the MP4) here, before the sidecar and tagging steps see
-            // the path. Without this the file is ciphertext that merely labels
-            // itself as hi-res FLAC.
-            val filePath = try {
-                Mp4FlacUnwrapper.finalize(result.toString(), request.requestJson)
-            } catch (e: Exception) {
-                android.util.Log.w("DownloadForegroundService", "MP4 finalize failed: ${e.message}")
-                result.optString("file_path", "")
-            }
-            LrcSidecarWriter.maybeWrite(filePath, request.requestJson)
-            if (filePath.isNotEmpty() && NonFlacMetadataEmbedder.isEmbeddable(filePath)) {
-                try {
-                    NonFlacMetadataEmbedder.embed(applicationContext, filePath, request.requestJson)
-                } catch (e: Exception) {
-                    android.util.Log.w("DownloadForegroundService", "Non-FLAC metadata embed failed: ${e.message}")
-                }
-            }
-            // FLAC needs no extra step -- the engine already tagged it natively.
-
-            updateItem(request.itemId) { it.status = "done"; it.progress = 1.0; it.filePath = filePath }
-            writeSnapshot(isRunning = true)
         }
         writeSnapshot(isRunning = false)
         stopForegroundService()
+    }
+
+    private suspend fun processItem(request: WorkerRequest, count: Int) {
+        currentCoroutineContext().ensureActive()
+        updateItem(request.itemId) { it.status = "downloading" }
+        notifTitle = if (count > 1) "Downloading ${count} tracks" else request.trackName
+        notifText = request.artistName
+        writeSnapshot(isRunning = true)
+
+        // Preflight duplicate check (mirrors the Dart-only path).
+        val duplicate = isDuplicate(request.requestJson)
+        currentCoroutineContext().ensureActive()
+        if (duplicate) {
+            updateItem(request.itemId) { it.status = "done"; it.progress = 1.0 }
+            writeSnapshot(isRunning = true)
+            return
+        }
+
+        val progressJob = CoroutineScope(currentCoroutineContext()).launch { pollProgress(request.itemId) }
+        val resultJson = try {
+            Engines.current.downloadByStrategy(request.requestJson)
+        } catch (e: Exception) {
+            currentCoroutineContext().ensureActive()
+            progressJob.cancel()
+            updateItem(request.itemId) { it.status = "failed"; it.error = e.message ?: "download failed" }
+            writeSnapshot(isRunning = true)
+            return
+        }
+        progressJob.cancel()
+        currentCoroutineContext().ensureActive()
+
+        val result = try { JSONObject(resultJson) } catch (_: Exception) { JSONObject() }
+        val failed = !result.optBoolean("success", false)
+        if (failed) {
+            val error = result.optString("error", "unknown")
+            val service = result.optString("service", "").ifEmpty { null }
+            val retryAfter = result.optInt("retry_after_seconds", 0)
+            updateItem(request.itemId) {
+                it.status = "failed"
+                it.error = error
+                it.retryAfterSeconds = retryAfter
+                it.service = service
+            }
+            writeSnapshot(isRunning = true)
+            return
+        }
+
+        updateItem(request.itemId) { it.status = "finalizing" }
+        val winning = result.optString("service", "").ifEmpty { null }
+        updateItem(request.itemId) { it.resolvedService = winning }
+        writeSnapshot(isRunning = true)
+        // Amazon's lossless tier delivers an *encrypted* MP4 plus the key in
+        // the result; the engine only forwards it, so decrypt (and unwrap the
+        // FLAC out of the MP4) here, before the sidecar and tagging steps see
+        // the path. Without this the file is ciphertext that merely labels
+        // itself as hi-res FLAC.
+        val filePath = try {
+            Mp4FlacUnwrapper.finalize(result.toString(), request.requestJson)
+        } catch (e: Exception) {
+            android.util.Log.w("DownloadForegroundService", "MP4 finalize failed: ${e.message}")
+            result.optString("file_path", "")
+        }
+        LrcSidecarWriter.maybeWrite(filePath, request.requestJson)
+        if (filePath.isNotEmpty() && NonFlacMetadataEmbedder.isEmbeddable(filePath)) {
+            try {
+                NonFlacMetadataEmbedder.embed(applicationContext, filePath, request.requestJson)
+            } catch (e: Exception) {
+                android.util.Log.w("DownloadForegroundService", "Non-FLAC metadata embed failed: ${e.message}")
+            }
+        }
+        // FLAC needs no extra step -- the engine already tagged it natively.
+
+        currentCoroutineContext().ensureActive()
+        updateItem(request.itemId) { it.status = "done"; it.progress = 1.0; it.filePath = filePath }
+        writeSnapshot(isRunning = true)
+    }
+
+    private fun refreshQueueState() {
+        if (workerStopped) return
+        writeSnapshot(isRunning = workerJob?.isActive == true)
+        if (isRunning) getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, buildNotification())
+    }
+
+    private fun refreshNetwork() {
+        val allowed = networkAllowed(this)
+        gate.setNetwork(wifiOnly, allowed, allowed)
+        refreshQueueState()
+    }
+
+    private fun registerNetworkCallback() {
+        unregisterNetworkCallback()
+        val allowed = networkAllowed(this)
+        gate.setNetwork(wifiOnly, allowed, allowed)
+        if (!wifiOnly) return
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            private var trackedNetwork: Network? = null
+            override fun onAvailable(network: Network) { trackedNetwork = network }
+            override fun onLost(network: Network) {
+                if (network != trackedNetwork) return
+                trackedNetwork = null
+                gate.setNetwork(wifiOnly, wifi = false, unmetered = false)
+                refreshQueueState()
+            }
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                if (network != trackedNetwork) return
+                gate.setNetwork(wifiOnly,
+                    wifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI),
+                    ethernet = caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET),
+                    internet = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
+                    unmetered = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED))
+                refreshQueueState()
+            }
+        }
+        try {
+            getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(callback)
+            networkCallback = callback
+        } catch (e: Exception) {
+            android.util.Log.w("DownloadForegroundService", "Network callback unavailable: ${e.message}")
+        }
+        // Also recover from missed callbacks while waiting for an allowed network.
+        networkFallbackJob = serviceScope.launch {
+            while (isActive) {
+                delay(5000)
+                if (gate.pauseReason == "waiting_wifi") refreshNetwork()
+            }
+        }
+    }
+
+    private fun unregisterNetworkCallback() {
+        networkFallbackJob?.cancel()
+        networkFallbackJob = null
+        networkCallback?.let {
+            runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(it) }
+        }
+        networkCallback = null
     }
 
     private fun isDuplicate(requestJson: String): Boolean {
@@ -380,9 +499,10 @@ class DownloadForegroundService : Service() {
     }
 
     private suspend fun pollProgress(itemId: String) {
-        while (serviceScope.isActive) {
+        while (currentCoroutineContext().isActive) {
             try {
                 val root = JSONObject(Engines.current.getAllDownloadProgress())
+                currentCoroutineContext().ensureActive()
                 val items = root.optJSONObject("items")
                 val progress = items?.optJSONObject(itemId)
                 if (progress != null) {
@@ -418,9 +538,14 @@ class DownloadForegroundService : Service() {
 
     @Synchronized
     private fun writeSnapshot(isRunning: Boolean) {
+        // A blocking engine call may return after stop cancelled its coroutine.
+        if (isRunning && workerStopped) return
+        val pauseReason = gate.pauseReason
         val snapshot = JSONObject()
             .put("run_id", currentRunId)
             .put("is_running", isRunning)
+            .put("is_paused", pauseReason != null)
+            .put("pause_reason", pauseReason ?: "")
         val items = JSONArray()
         synchronized(workerItemsLock) {
             for (item in workerItems) {
@@ -459,13 +584,21 @@ class DownloadForegroundService : Service() {
         )
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(notifTitle)
-            .setContentText(notifText)
+            .setContentText(when (gate.pauseReason) { "paused" -> pausedLabel; "waiting_wifi" -> waitingLabel; else -> notifText })
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+        if (currentRunId.isNotEmpty()) {
+            val manualPaused = gate.pauseReason == "paused"
+            val action = Intent(this, DownloadForegroundService::class.java)
+                .setAction(if (manualPaused) ACTION_RESUME else ACTION_PAUSE)
+            builder.addAction(0, if (manualPaused) resumeLabel else pauseLabel,
+                PendingIntent.getService(this, 1, action,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+        }
         if (notifTotal > 0) {
             builder.setProgress(100, (notifProgress * 100 / notifTotal).toInt(), false)
         } else {
@@ -475,11 +608,11 @@ class DownloadForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        // Never cancel the engine download for the current item here (see stopForegroundService):
+        // Never cancel engine downloads for active items here (see stopForegroundService):
         // a stale cancel entry would poison a later re-download of the same
         // itemId. Cancelling the coroutine scope stops further processing; any
         // in-flight native download simply runs to completion on its own thread.
-        releaseWakeLock()
+        stopForegroundService()
         serviceScope.cancel()
         isRunning = false
         super.onDestroy()
@@ -487,9 +620,8 @@ class DownloadForegroundService : Service() {
 
     override fun onTimeout(startId: Int, fgsType: Int) {
         // Android 15+ dataSync foreground services get a 6-hour cumulative
-        // runtime limit per 24h. Stop cleanly; unfinished items stay
-        // "downloading" in the last snapshot and are re-queued the next time
-        // the app opens and re-triggers the queue.
+        // runtime limit per 24h. Publish the stopped run with unfinished items
+        // queued so Dart can release its poll and resume on the next admission.
         android.util.Log.w("DownloadForegroundService", "Foreground service timeout reached; stopping.")
         stopForegroundService()
     }

@@ -49,6 +49,13 @@ class InstalledExtension {
 
   bool get hasHomeFeed => capabilities['homeFeed'] == true;
 
+  /// Mirrors upstream's downloadTransfer policy and its default of 3.
+  int get maxConcurrentDownloads {
+    final transfer = capabilities['downloadTransfer'];
+    final limit = transfer is Map ? transfer['maxConcurrentDownloads'] : null;
+    return limit is num ? limit.round().clamp(1, 3) : 3;
+  }
+
   /// The source hands lossless audio back inside a container the app has to
   /// unwrap (Amazon's FLAC tier ships FLAC inside MP4). Both spellings are
   /// accepted because extensions in the wild use either.

@@ -56,11 +56,12 @@ class _BoolPrefNotifier extends Notifier<bool> {
   final String _key;
   final bool _defaultValue;
   bool _explicitlySet = false;
+  late Future<void> ready;
 
   @override
   bool build() {
     _explicitlySet = false;
-    Future.microtask(() async {
+    ready = Future.microtask(() async {
       final p = await SharedPreferences.getInstance();
       if (ref.mounted && !_explicitlySet) state = p.getBool(_key) ?? _defaultValue;
     });
@@ -206,3 +207,33 @@ class MetadataSeparatorsNotifier extends Notifier<MetadataSeparators> {
 final metadataSeparatorsProvider =
     NotifierProvider<MetadataSeparatorsNotifier, MetadataSeparators>(
       MetadataSeparatorsNotifier.new);
+
+final wifiOnlyProvider = NotifierProvider<_BoolPrefNotifier, bool>(
+  () => _BoolPrefNotifier('download_wifi_only', false),
+);
+
+class SimultaneousDownloadsNotifier extends Notifier<int> {
+  static const _key = 'simultaneous_downloads';
+  bool _explicitlySet = false;
+  late Future<void> ready;
+  @override
+  int build() {
+    _explicitlySet = false;
+    ready = Future.microtask(() async {
+      final p = await SharedPreferences.getInstance();
+      if (ref.mounted && !_explicitlySet) {
+        state = (p.getInt(_key) ?? 1).clamp(1, 3);
+      }
+    });
+    return 1;
+  }
+  Future<void> set(int value) async {
+    _explicitlySet = true;
+    state = value.clamp(1, 3);
+    final p = await SharedPreferences.getInstance();
+    await p.setInt(_key, state);
+  }
+}
+
+final simultaneousDownloadsProvider =
+    NotifierProvider<SimultaneousDownloadsNotifier, int>(SimultaneousDownloadsNotifier.new);

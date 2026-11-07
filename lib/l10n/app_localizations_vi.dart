@@ -966,4 +966,32 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get templatePreviewMulti => 'Xem trước · nhiều đĩa';
+
+  @override
+  String get queuePause => 'Tạm dừng hàng đợi';
+
+  @override
+  String get queueResume => 'Tiếp tục tải';
+
+  @override
+  String get queuePaused => 'Đã tạm dừng — các bài đang tải sẽ hoàn tất';
+
+  @override
+  String get queueWaitingWifi => 'Đang chờ Wi-Fi';
+
+  @override
+  String get queueClearCompleted => 'Xóa các mục đã tải xong';
+
+  @override
+  String get queueRetryAllFailed => 'Thử lại tất cả bài tải lỗi';
+
+  @override
+  String get settingSimultaneousDownloads => 'Số bài tải cùng lúc';
+
+  @override
+  String get settingWifiOnly => 'Chỉ tải qua Wi-Fi';
+
+  @override
+  String get settingWifiOnlyDescription =>
+      'Chờ kết nối Wi-Fi không tính phí trước khi tải bài tiếp theo.';
 }

@@ -66,6 +66,7 @@ class _Worker extends NativeDownloadWorker {
   Future<void> start(
     List<Map<String, dynamic>> requests, {
     required String runId,
+    Map<String, dynamic> settings = const {},
   }) async {
     this.runId = runId;
   }

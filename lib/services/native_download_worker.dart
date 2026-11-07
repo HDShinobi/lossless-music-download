@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// A single item's state as reported by the native download worker snapshot.
 class NativeWorkerItemState {
@@ -59,17 +60,23 @@ class NativeWorkerItemState {
 class NativeWorkerSnapshot {
   final String runId;
   final bool isRunning;
+  final bool isPaused;
+  final String? pauseReason;
   final List<NativeWorkerItemState> items;
 
   const NativeWorkerSnapshot({
     required this.runId,
     required this.isRunning,
+    this.isPaused = false,
+    this.pauseReason,
     required this.items,
   });
 
   factory NativeWorkerSnapshot.fromJson(Map<String, dynamic> j) => NativeWorkerSnapshot(
         runId: (j['run_id'] ?? '').toString(),
         isRunning: j['is_running'] == true,
+        isPaused: j['is_paused'] == true,
+        pauseReason: j['pause_reason']?.toString(),
         items: (j['items'] as List? ?? const [])
             .map((e) => NativeWorkerItemState.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList(),
@@ -103,10 +110,10 @@ class NativeDownloadWorker {
 
   bool get isAvailable => Platform.isAndroid;
 
-  Future<void> start(List<Map<String, dynamic>> requests, {required String runId}) {
+  Future<void> start(List<Map<String, dynamic>> requests, {required String runId, Map<String, dynamic> settings = const {}}) {
     return _c.invokeMethod('startNativeDownloadWorker', {
       'requestsJson': jsonEncode(requests),
-      'settingsJson': jsonEncode({'run_id': runId}),
+      'settingsJson': jsonEncode({...settings, 'run_id': runId}),
     });
   }
 
@@ -116,5 +123,18 @@ class NativeDownloadWorker {
     return NativeWorkerSnapshot.fromJson(Map<String, dynamic>.from(jsonDecode(raw)));
   }
 
+  Future<void> pause() => _c.invokeMethod('pauseNativeDownloadWorker');
+  Future<void> resume() => _c.invokeMethod('resumeNativeDownloadWorker');
+
+  Future<bool> isNetworkAllowed() async => !Platform.isAndroid ||
+      await _c.invokeMethod<bool>('isDownloadNetworkAllowed') == true;
+
   Future<void> stop() => _c.invokeMethod('stopNativeDownloadWorker');
 }
+
+/// Fallback execution still uses Android's active-network policy, not reachability
+/// guesses. Polling also recovers from a missed platform callback.
+final downloadNetworkAllowedProvider = FutureProvider<bool>((ref) async {
+  try { return await NativeDownloadWorker().isNetworkAllowed(); }
+  catch (_) { return false; }
+});
