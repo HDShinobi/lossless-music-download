@@ -406,7 +406,10 @@ class DownloadForegroundService : Service() {
         // FLAC out of the MP4) here, before the sidecar and tagging steps see
         // the path. Without this the file is ciphertext that merely labels
         // itself as hi-res FLAC.
-        val filePath = outputPostProcessor.run(result) {
+        // An existing destination is the user's file: never decrypt, re-tag or
+        // add sidecars to it.
+        val alreadyExists = result.optBoolean("already_exists", false)
+        val filePath = if (alreadyExists) result.optString("file_path", "") else outputPostProcessor.run(result) {
             val finalizedPath = try {
                 Mp4FlacUnwrapper.finalize(result.toString(), request.requestJson)
             } catch (e: Exception) {
@@ -426,7 +429,10 @@ class DownloadForegroundService : Service() {
         // FLAC needs no extra step -- the engine already tagged it natively.
 
         currentCoroutineContext().ensureActive()
-        updateItem(request.itemId) { it.status = "done"; it.progress = 1.0; it.filePath = filePath }
+        updateItem(request.itemId) {
+            it.status = "done"; it.progress = 1.0; it.filePath = filePath
+            it.alreadyExists = alreadyExists
+        }
         writeSnapshot(isRunning = true)
     }
 
@@ -562,6 +568,7 @@ class DownloadForegroundService : Service() {
                         .put("progress", item.progress)
                         .put("bytes_received", item.bytesReceived)
                         .put("bytes_total", item.bytesTotal)
+                        .put("already_exists", item.alreadyExists)
                         .apply { item.error?.let { put("error", it) } }
                         .apply { if (item.retryAfterSeconds > 0) put("retry_after_seconds", item.retryAfterSeconds) }
                         .apply { item.service?.let { put("service", it) } }

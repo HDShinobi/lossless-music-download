@@ -223,6 +223,8 @@ void main() {
     );
     expect(result.moved, 1);
     expect(result.cancelled, isTrue);
+    expect(result.skipped, 1);
+    expect(result.movedSources, hasLength(1));
   });
   test(
     'shared album cover follows selected files but stays with unselected audio',
@@ -293,6 +295,77 @@ void main() {
     expect(await File(p.items.single.target).exists(), isFalse);
     expect((await db.list()).single.filePath, one.filePath);
   });
+  test(
+    'placeholder scan tags use history without doubling the track number',
+    () async {
+      final file = File('${root.path}/The Weeknd/15. Less Than Zero.flac');
+      await file.parent.create(recursive: true);
+      await file.writeAsString('audio');
+      await db.upsert(
+        HistoryEntry(
+          id: 'tagless',
+          track: const Track(
+            id: 'deezer:15',
+            name: 'Less Than Zero',
+            artists: 'The Weeknd',
+            albumName: 'Dawn FM',
+            trackNumber: 15,
+          ),
+          service: 'deezer',
+          filePath: file.path,
+          downloadedAt: DateTime(2026),
+        ),
+      );
+      final p = await service.plan(
+        root: root.path,
+        mode: FolderOrganization.artistAlbum,
+        tags: [
+          LibraryEntry(
+            path: file.path,
+            name: '15. Less Than Zero.flac',
+            title: '15. Less Than Zero',
+            artistName: 'Unknown Artist',
+            albumName: 'Unknown Album',
+            sizeBytes: 5,
+            format: 'FLAC',
+            verified: true,
+          ),
+        ],
+      );
+      expect(
+        p.items.single.target,
+        '${root.path}/The Weeknd/Dawn FM/15. Less Than Zero.flac',
+      );
+    },
+  );
+  test(
+    'partial real tags supplement history while placeholders are absent',
+    () async {
+      final one = await add('one');
+      final p = await service.plan(
+        root: root.path,
+        mode: FolderOrganization.artistAlbum,
+        filenameTemplate: '{title}',
+        tags: [
+          LibraryEntry(
+            path: one.filePath,
+            name: 'one.flac',
+            title: 'one',
+            artistName: 'Edited Artist',
+            albumName: 'Unknown Album',
+            releaseDate: '2025-01-01',
+            sizeBytes: 5,
+            format: 'FLAC',
+            verified: true,
+          ),
+        ],
+      );
+      expect(
+        p.items.single.target,
+        '${root.path}/Edited Artist/Album/Song.flac',
+      );
+    },
+  );
   test('real tags supplement old history metadata for templates', () async {
     final one = await add('one');
     final p = await service.plan(

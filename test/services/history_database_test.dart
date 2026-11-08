@@ -210,6 +210,39 @@ void main() {
       missing.filePath,
     );
   });
+  for (final placeholder in ['artist', 'album', 'title']) {
+    test(
+      'relocation rejects matching $placeholder placeholder without ISRC',
+      () async {
+        final title = placeholder == 'title' ? 'same' : 'Song';
+        final artist = placeholder == 'artist' ? 'Unknown Artist' : 'Artist';
+        final album = placeholder == 'album' ? 'Unknown Album' : 'Album';
+        final missing = await add(
+          'same',
+          Track(id: 'old', name: title, artists: artist, albumName: album),
+        );
+        final path = '${dir.path}/music/same.flac';
+        await Directory('${dir.path}/music').create();
+        await File(missing.filePath).rename(path);
+        expect(
+          await history.relocate(
+            dir.path,
+            scannedEntries: [
+              scanned(
+                path,
+                isrc: null,
+                title: title,
+                artist: artist,
+                album: album,
+              ),
+            ],
+          ),
+          0,
+        );
+        expect((await history.list()).single.filePath, missing.filePath);
+      },
+    );
+  }
   test('relocation accepts complete normalized tags without ISRC', () async {
     final missing = await add('same', song);
     final path = '${dir.path}/music/same.flac';

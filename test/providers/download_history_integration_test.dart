@@ -88,6 +88,7 @@ class Worker extends NativeDownloadWorker {
   String? run;
   String? item;
   bool withPath = false;
+  bool alreadyExists = false;
   String? error;
   int starts = 0;
   Map<String, dynamic>? lastRequest;
@@ -113,16 +114,17 @@ class Worker extends NativeDownloadWorker {
     runId: run!,
     isRunning: !withPath,
     items: [
-      NativeWorkerItemState(
-        itemId: item!,
-        status: error == null ? 'done' : 'failed',
-        error: error,
-        progress: 1,
-        bytesReceived: 5,
-        bytesTotal: 5,
-        filePath: withPath ? path : null,
-        resolvedService: 'tidal',
-      ),
+      NativeWorkerItemState.fromJson({
+        'item_id': item!,
+        'status': error == null ? 'done' : 'failed',
+        'error': error,
+        'progress': 1,
+        'bytes_received': 5,
+        'bytes_total': 5,
+        'file_path': withPath ? path : null,
+        'resolved_service': 'tidal',
+        'already_exists': alreadyExists,
+      }),
     ],
   );
 }
@@ -248,6 +250,24 @@ void main() {
       );
     },
   );
+  test('native success already_exists marks duplicate and records history once', () async {
+    final file = await File('${dir.path}/existing.flac').writeAsString('audio');
+    final worker = Worker(file.path)..withPath = true..alreadyExists = true;
+    container = setup(worker: worker);
+    await container.read(downloadQueueProvider.notifier).enqueue(song);
+    await waitFor(() async => (await db.list()).isNotEmpty);
+    final entry = container.read(downloadQueueProvider).single;
+    expect(entry.status, 'done');
+    expect(entry.alreadyInLibrary, isTrue);
+    expect(entry.filePath, file.path);
+    expect(entry.error, isNull);
+    expect((await db.list()).single.filePath, file.path);
+    expect((await db.list()).single.service, 'tidal');
+    await settle();
+    expect(await db.list(), hasLength(1));
+    expect(bridge.downloads, 0);
+    expect(await file.readAsString(), 'audio');
+  });
   test(
     'native completion without path waits and records the later final snapshot once',
     () async {

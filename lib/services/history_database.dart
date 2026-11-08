@@ -465,9 +465,9 @@ class HistoryDatabase {
     return title.isNotEmpty &&
         artist.isNotEmpty &&
         album.isNotEmpty &&
-        title == _text(candidate.title) &&
-        artist == _text(candidate.artistName) &&
-        album == _text(candidate.albumName);
+        title == _text(candidate.taggedTitle) &&
+        artist == _text(candidate.taggedArtistName) &&
+        album == _text(candidate.taggedAlbumName);
   }
 
   Future<int> relocate(

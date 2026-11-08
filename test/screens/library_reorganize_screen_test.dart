@@ -150,13 +150,18 @@ void main() {
       },
     );
   }
-  testWidgets(
-    'preview does not move until apply, then reports result and history path',
-    (tester) async {
+  for (final outcome in ['moved', 'failed', 'skipped']) {
+    testWidgets('preview waits for apply, then reports $outcome result', (
+      tester,
+    ) async {
+      final fails = outcome == 'failed';
+      final skipped = outcome == 'skipped';
       final runningStates = <bool>[];
       final container = ProviderContainer(
         overrides: [
-          downloadQueueProvider.overrideWith(_Queue.new),
+          downloadQueueProvider.overrideWith(
+            skipped ? LibraryQueueFake.new : _Queue.new,
+          ),
           historyDatabaseProvider.overrideWith((_) async => db),
           downloadDirProvider.overrideWith((_) async => root.path),
           libraryProvider.overrideWith((_) async => []),
@@ -186,16 +191,32 @@ void main() {
       }
       expect(find.textContaining('old.flac'), findsOneWidget);
       expect(await tester.runAsync(file.exists), isTrue);
+      if (fails) {
+        await tester.runAsync(() async {
+          final target = File('${root.path}/Artist/Album/Song.flac');
+          await target.parent.create(recursive: true);
+          await target.writeAsString('user audio');
+        });
+      }
       await tester.tap(find.text('Apply changes'));
+      if (skipped) {
+        (container.read(downloadQueueProvider.notifier) as LibraryQueueFake)
+            .replace([queueEntry('processing')]);
+      }
       for (var i = 0; i < 30; i++) {
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 20)),
         );
         await tester.pump(const Duration(milliseconds: 20));
-        if (find.textContaining('1 moved').evaluate().isNotEmpty) break;
+        if (find
+            .textContaining('${outcome == "moved" ? 1 : 0} moved')
+            .evaluate()
+            .isNotEmpty) {
+          break;
+        }
       }
       expect(
-        find.textContaining('1 moved'),
+        find.textContaining('${outcome == "moved" ? 1 : 0} moved'),
         findsOneWidget,
         reason: tester
             .widgetList<Text>(find.byType(Text))
@@ -204,10 +225,21 @@ void main() {
       );
       expect(
         (await tester.runAsync(db.list))!.single.filePath,
-        '${root.path}/Artist/Album/Song.flac',
+        outcome == 'moved' ? '${root.path}/Artist/Album/Song.flac' : file.path,
+      );
+      expect(
+        find.textContaining('${outcome == "moved" ? 0 : 1} skipped'),
+        findsOneWidget,
+      );
+      expect(find.text('Will move'), findsNothing);
+      expect(
+        fails
+            ? find.textContaining('Failed:')
+            : find.text(skipped ? 'Skipped' : 'Moved'),
+        findsOneWidget,
       );
       expect(runningStates, [true, false, true, false]);
       await tester.pumpWidget(const SizedBox());
-    },
-  );
+    });
+  }
 }

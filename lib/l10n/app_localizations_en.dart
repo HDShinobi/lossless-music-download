@@ -1142,6 +1142,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get reorganizeApply => 'Apply changes';
 
   @override
+  String get reorganizeMoved => 'Moved';
+
+  @override
+  String get reorganizeSkipped => 'Skipped';
+
+  @override
+  String reorganizeFailed(String error) {
+    return 'Failed: $error';
+  }
+
+  @override
   String get reorganizeReady => 'Will move';
 
   @override

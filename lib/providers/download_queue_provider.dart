@@ -677,7 +677,8 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       verificationService: item.service,
       resolvedService: item.resolvedService,
       filePath: existingPath ?? item.filePath,
-      alreadyInLibrary: existingPath != null || entry.alreadyInLibrary,
+      alreadyInLibrary: existingPath != null ||
+          (item.status == 'done' && item.alreadyExists) || entry.alreadyInLibrary,
     );
     _logTransition(entry, updated, filePath: updated.filePath);
     return updated;

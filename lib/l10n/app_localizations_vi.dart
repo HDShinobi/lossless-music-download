@@ -1134,6 +1134,17 @@ class AppLocalizationsVi extends AppLocalizations {
   String get reorganizeApply => 'Áp dụng thay đổi';
 
   @override
+  String get reorganizeMoved => 'Đã di chuyển';
+
+  @override
+  String get reorganizeSkipped => 'Đã bỏ qua';
+
+  @override
+  String reorganizeFailed(String error) {
+    return 'Thất bại: $error';
+  }
+
+  @override
   String get reorganizeReady => 'Sẽ di chuyển';
 
   @override

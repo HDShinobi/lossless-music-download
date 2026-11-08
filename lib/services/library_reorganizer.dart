@@ -46,11 +46,13 @@ class LibraryReorganizationResult {
     this.moved,
     this.skipped,
     this.cancelled,
-    this.errors,
-  );
+    this.errors, {
+    this.movedSources = const {},
+  });
   final int moved, skipped;
   final bool cancelled;
   final Map<String, String> errors;
+  final Set<String> movedSources;
 }
 
 String _parent(String path) => File(path).parent.path;
@@ -253,9 +255,9 @@ class LibraryReorganizer {
         final track = Track(
           id: old.id,
           source: old.source,
-          name: text(tag?.title) ?? old.name,
-          artists: text(tag?.artistName) ?? old.artists,
-          albumName: text(tag?.albumName) ?? old.albumName,
+          name: tag?.taggedTitle ?? old.name,
+          artists: tag?.taggedArtistName ?? old.artists,
+          albumName: tag?.taggedAlbumName ?? old.albumName,
           albumArtist: text(tag?.albumArtist) ?? old.albumArtist,
           trackNumber: tag?.trackNumber ?? old.trackNumber,
           discNumber: tag?.discNumber ?? old.discNumber,
@@ -400,9 +402,12 @@ class LibraryReorganizer {
     final errors = <String, String>{...recoveryErrors};
     final sharedCopies = <String, String>{};
     final vacated = <String>{};
+    final movedSources = <String>{};
     for (final item in plan.items) {
       if (isCancelled?.call() == true) {
         cancelled = true;
+        // Unprocessed rows remain in place and display as skipped.
+        skipped = plan.items.length - moved;
         break;
       }
       if (item.status != ReorganizationStatus.ready ||
@@ -485,6 +490,7 @@ class LibraryReorganizer {
           sharedCopies[part.target] = part.source;
         }
         vacated.add(_parent(item.source));
+        movedSources.add(item.source);
         moved++;
       } catch (e) {
         skipped++;
@@ -548,7 +554,13 @@ class LibraryReorganizer {
         current = _parent(current);
       }
     }
-    return LibraryReorganizationResult(moved, skipped, cancelled, errors);
+    return LibraryReorganizationResult(
+      moved,
+      skipped,
+      cancelled,
+      errors,
+      movedSources: movedSources,
+    );
   }
 
   Future<void> _copyVerified(String source, String target) async {

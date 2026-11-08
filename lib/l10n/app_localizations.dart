@@ -2186,6 +2186,24 @@ abstract class AppLocalizations {
   /// **'Apply changes'**
   String get reorganizeApply;
 
+  /// No description provided for @reorganizeMoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved'**
+  String get reorganizeMoved;
+
+  /// No description provided for @reorganizeSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped'**
+  String get reorganizeSkipped;
+
+  /// No description provided for @reorganizeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed: {error}'**
+  String reorganizeFailed(String error);
+
   /// No description provided for @reorganizeReady.
   ///
   /// In en, this message translates to:

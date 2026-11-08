@@ -29,6 +29,9 @@ class NativeWorkerItemState {
   /// Final path after native container conversion and metadata finalization.
   final String? filePath;
 
+  /// Engine success reused the destination instead of downloading a new file.
+  final bool alreadyExists;
+
   const NativeWorkerItemState({
     required this.itemId,
     required this.status,
@@ -40,6 +43,7 @@ class NativeWorkerItemState {
     this.service,
     this.resolvedService,
     this.filePath,
+    this.alreadyExists = false,
   });
 
   factory NativeWorkerItemState.fromJson(Map<String, dynamic> j) => NativeWorkerItemState(
@@ -53,6 +57,7 @@ class NativeWorkerItemState {
         service: j['service']?.toString(),
         resolvedService: j['resolved_service']?.toString(),
         filePath: j['file_path']?.toString(),
+        alreadyExists: j['already_exists'] == true,
       );
 }
 

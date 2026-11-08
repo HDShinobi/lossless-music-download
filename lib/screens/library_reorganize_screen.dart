@@ -181,7 +181,15 @@ class _LibraryReorganizeState extends ConsumerState<LibraryReorganizeScreen> {
                           isThreeLine: true,
                           title: Text('${item.source}\n→ ${item.target}'),
                           subtitle: Text(
-                            result?.errors[item.source] ?? status(item.status),
+                            result == null
+                                ? status(item.status)
+                                : result.errors.containsKey(item.source)
+                                ? t.reorganizeFailed(
+                                    result.errors[item.source]!,
+                                  )
+                                : result.movedSources.contains(item.source)
+                                ? t.reorganizeMoved
+                                : t.reorganizeSkipped,
                           ),
                         );
                       },

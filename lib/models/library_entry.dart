@@ -23,6 +23,26 @@ class LibraryEntry {
   final String? albumArtist, releaseDate, genre, composer, label, copyright;
   final int? totalTracks, totalDiscs;
 
+  // Scanner placeholders are display values, never embedded tag evidence.
+  // Keep them out of both history relocation and reorganization precedence.
+  String? get taggedTitle {
+    final filename = path.split('/').last;
+    final dot = filename.lastIndexOf('.');
+    final stem = dot < 0 ? filename : filename.substring(0, dot);
+    return _tagText(title, stem);
+  }
+
+  String? get taggedArtistName => _tagText(artistName, 'Unknown Artist');
+  String? get taggedAlbumName => _tagText(albumName, 'Unknown Album');
+
+  String? _tagText(String? value, String placeholder) =>
+      tagsFromFallback ||
+          value == null ||
+          value.trim().isEmpty ||
+          value.trim() == placeholder
+      ? null
+      : value;
+
   const LibraryEntry({
     required this.path,
     required this.name,

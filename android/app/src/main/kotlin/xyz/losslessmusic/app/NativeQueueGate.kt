@@ -79,6 +79,7 @@ internal data class NativeWorkerItemState(
     // Winning provider reported by a successful download's result JSON.
     var resolvedService: String? = null,
     var filePath: String? = null,
+    var alreadyExists: Boolean = false,
 ) {
     fun requeueOnStop() {
         if (status != "downloading" && status != "finalizing") return
