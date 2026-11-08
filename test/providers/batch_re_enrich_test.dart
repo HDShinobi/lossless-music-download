@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:lossless_music_download/providers/library_manager.dart';
+import 'package:lossless_music_download/services/library_re_enrich.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,6 +50,57 @@ void main() {
     );
   });
   tearDown(() => container.dispose());
+  test('single-track mutations only refuse the file the queue is writing', () async {
+    (container.read(downloadQueueProvider.notifier) as LibraryQueueFake)
+        .replace([queueEntry('processing', filePath: '/downloads/busy.flac')]);
+    final manager = container.read(libraryManagerProvider.notifier);
+    await manager.delete('/downloads/other.flac');
+    await expectLater(manager.delete('/downloads/busy.flac'),
+        throwsA(isA<LibraryBusyException>()));
+    expect(container.read(libraryReorganizeRunningProvider), isFalse);
+  });
+  for (final busy in ['batch', 'reorganize']) {
+    test('single-track mutations refuse while $busy is running', () async {
+      Future<void>? job;
+      if (busy == 'batch') {
+        bridge.gate = Completer<void>();
+        job = container.read(batchReEnrichProvider.notifier).start([entry(1)]);
+      } else {
+        container.read(libraryReorganizeRunningProvider.notifier).tryStart();
+      }
+      final manager = container.read(libraryManagerProvider.notifier);
+      await expectLater(manager.delete('/missing.flac'), throwsA(isA<LibraryBusyException>()));
+      await expectLater(manager.editMetadata('/missing.flac', {'title': 'X'}), throwsA(isA<LibraryBusyException>()));
+      await expectLater(manager.reEnrichEntry(entry(4)), throwsA(isA<LibraryBusyException>()));
+      await expectLater(manager.convert('/missing.flac', 'mp3', '320k'), throwsA(isA<LibraryBusyException>()));
+      await expectLater(manager.reEnrich({'file_path': '/missing.flac'}), throwsA(isA<LibraryBusyException>()));
+      if (job != null) { bridge.gate!.complete(); await job; }
+    });
+  }
+  test('single re-enrich claims busy until completion and releases on failure', () async {
+    bridge.gate = Completer<void>();
+    final job = container.read(libraryManagerProvider.notifier).reEnrichEntry(entry(2), options: const ReEnrichOptions());
+    expect(container.read(libraryBusyProvider), isTrue);
+    expect(container.read(libraryReorganizeRunningProvider.notifier).tryStart(), isFalse);
+    await container.read(batchReEnrichProvider.notifier).start([entry(1)]);
+    expect(container.read(batchReEnrichProvider).running, isFalse);
+    final failed = expectLater(job, throwsStateError);
+    bridge.gate!.complete();
+    await failed;
+    expect(container.read(libraryBusyProvider), isFalse);
+  });
+  test('history error after written tags still succeeds and writes lyrics', () async {
+    final dir = await Directory.systemTemp.createTemp('reenrich-history-');
+    addTearDown(() => dir.delete(recursive: true));
+    history.error = StateError('database unavailable');
+    bridge.writeResult = {'method': 'native', 'success': true,
+      'write_external_lrc': true, 'lyrics': '[00:01]Hello'};
+    final item = LibraryEntry(path: '${dir.path}/song.flac', name: 'song.flac',
+      sizeBytes: 0, format: 'FLAC', verified: true);
+    await container.read(batchReEnrichProvider.notifier).start([item]);
+    expect(container.read(batchReEnrichProvider).failures, isEmpty);
+    expect(await File('${dir.path}/song.lrc').readAsString(), '[00:01]Hello');
+  });
   test(
     'reorganize claims the library and blocks batch and another reorganize',
     () async {

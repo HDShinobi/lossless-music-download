@@ -177,6 +177,17 @@ void main() {
         expect(await dir.list().length, 1);
       },
     );
+    test('vanished source is not recreated by FFmpeg publication', () async {
+      FfmpegMetadataService.execRunner = (args) async {
+        await File(args.last).writeAsString('updated');
+        await File(path).delete();
+        return true;
+      };
+      await expectLater(applyReEnrichFfmpeg(path, {'metadata': {'TITLE': 'Fresh'}},
+        'joined', const MetadataSeparators()), throwsStateError);
+      expect(await File(path).exists(), isFalse);
+      expect(await dir.list().length, 0);
+    });
     test(
       'failure preserves original and removes staging and downloaded cover',
       () async {

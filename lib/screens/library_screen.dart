@@ -327,7 +327,7 @@ class _AlbumTile extends StatelessWidget {
                       File(coverPath),
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _coverPlaceholder(cs),
+                      errorBuilder: (_, _, _) => _coverPlaceholder(cs),
                     )
                   : _coverPlaceholder(cs),
             ),

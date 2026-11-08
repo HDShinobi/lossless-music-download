@@ -131,6 +131,7 @@ class LibraryReorganizer {
       if (intent['root'] != root) continue;
       final parts = (intent['parts'] as List).cast<Map<String, dynamic>>();
       var complete = true;
+      var audioAtTarget = false;
       for (var i = 0; i < parts.length; i++) {
         final part = parts[i];
         final source = part['source'] as String;
@@ -153,10 +154,19 @@ class LibraryReorganizer {
           if (sourceFull &&
               to.type == FileSystemEntityType.file &&
               to.size == 0) {
-            // The intent was persisted before our exclusive reservation.
-            await File(target).delete();
+            if (i > 0 && audioAtTarget) {
+              if (part['shared'] == true) {
+                await _copyVerified(source, target);
+              } else {
+                await _move(source, target);
+              }
+            } else {
+              // No audio move committed: roll back the reservation.
+              await File(target).delete();
+            }
           } else if (from.type == FileSystemEntityType.notFound && targetFull) {
             if (i == 0) {
+              audioAtTarget = true;
               final id = intent['id'] as String;
               if (!await history.updateFilePath(id, source, target)) {
                 final current = await db.query(
@@ -171,7 +181,16 @@ class LibraryReorganizer {
               }
             }
           } else if (sourceFull && to.type == FileSystemEntityType.notFound) {
-            // Killed before reservation, or rollback already restored source.
+            if (i > 0 && audioAtTarget) {
+              await Directory(_parent(target)).create(recursive: true);
+              await File(target).create(exclusive: true);
+              if (part['shared'] == true) {
+                await _copyVerified(source, target);
+              } else {
+                await _move(source, target);
+              }
+            }
+            // Otherwise killed before reservation, or rollback restored source.
           } else if (sourceFull && targetFull && part['shared'] == true) {
             // Shared artwork intentionally keeps its source copy.
           } else {
@@ -283,15 +302,7 @@ class LibraryReorganizer {
         if (!await _safe(root, entry.filePath) || !await _safe(root, target)) {
           status = ReorganizationStatus.unsafe;
         } else if (!await File(entry.filePath).exists()) {
-          if (entry.fileSize != null &&
-              entry.fileSize! > 0 &&
-              await File(target).exists() &&
-              await File(target).length() == entry.fileSize &&
-              await history.updateFilePath(entry.id, entry.filePath, target)) {
-            status = ReorganizationStatus.unchanged;
-          } else {
-            status = ReorganizationStatus.missing;
-          }
+          status = ReorganizationStatus.missing;
         } else if (entry.filePath == target) {
           status = ReorganizationStatus.unchanged;
         }
@@ -351,6 +362,10 @@ class LibraryReorganizer {
         ReorganizationSidecar(item.source, item.target),
         ...item.sidecars,
       ]) {
+        if (part.shared && await _exists(part.target)) {
+          item.sidecars.remove(part);
+          continue;
+        }
         claims.putIfAbsent(part.target.toLowerCase(), () => []).add((
           item: item,
           source: part.source,

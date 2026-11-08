@@ -243,11 +243,11 @@ void main() {
         await File('${root.path}/Artist/Album/cover.jpg').readAsString(),
         'cover',
       );
-      // A pre-existing cover is a conflict, even though the audio target is free.
-      expect(
-        (await plan(selection: {two.filePath})).items.single.status,
-        ReorganizationStatus.conflict,
-      );
+      final next = await plan(selection: {two.filePath});
+      expect(next.items.single.status, ReorganizationStatus.ready);
+      expect(next.items.single.sidecars, isEmpty);
+      expect((await service.apply(next)).moved, 1);
+      expect(await cover.exists(), isTrue);
     },
   );
   test(
@@ -474,6 +474,41 @@ void main() {
       expect(intents.isEmpty, !['both', 'wrong'].contains(stage));
     });
   }
+  for (final reserved in [true, false]) {
+    test('recovery finishes pending bundle after audio move (reserved=$reserved)', () async {
+      final entry = await add('one');
+      final lyrics = await File(entry.filePath.replaceAll('.flac', '.lrc')).writeAsString('lyrics');
+      final cover = await File('${root.path}/old/cover.jpg').writeAsString('cover');
+      final item = (await plan()).items.single;
+      final parts = [ReorganizationSidecar(item.source, item.target), ...item.sidecars];
+      await File(item.target).parent.create(recursive: true);
+      await (await db.database).insert('history_meta', {
+        'key': 'reorganize:${entry.id}',
+        'value': jsonEncode({'root': root.path, 'id': entry.id, 'parts': [
+          for (final part in parts) {'source': part.source, 'target': part.target,
+            'size': await File(part.source).length(), 'shared': part.shared},
+        ]}),
+      });
+      await File(item.source).rename(item.target);
+      if (reserved) {
+        for (final part in item.sidecars) { await File(part.target).create(); }
+      }
+      expect(await service.recover(root.path), isEmpty);
+      expect(await lyrics.exists(), isFalse);
+      expect(await cover.exists(), isTrue);
+      expect(await File(item.target.replaceAll('.flac', '.lrc')).readAsString(), 'lyrics');
+      expect(await File('${File(item.target).parent.path}/cover.jpg').readAsString(), 'cover');
+      expect(await (await db.database).query('history_meta', where: "key LIKE 'reorganize:%'"), isEmpty);
+    });
+  }
+  test('existing non-shared lyrics still conflict during preview', () async {
+    final entry = await add('one');
+    await File(entry.filePath.replaceAll('.flac', '.lrc')).writeAsString('lyrics');
+    final target = File((await plan()).items.single.target.replaceAll('.flac', '.lrc'));
+    await target.parent.create(recursive: true);
+    await target.writeAsString('user lyrics');
+    expect((await plan()).items.single.status, ReorganizationStatus.conflict);
+  });
   test('apply persists audio and sidecar intents before rename', () async {
     final entry = await add('one');
     await File(
@@ -505,14 +540,16 @@ void main() {
     );
   });
   test(
-    'missing history relinks only a target with matching recorded size',
+    'preview preserves missing history despite an equal-sized unrelated target',
     () async {
       final entry = await add('one');
       final target = File((await plan()).items.single.target);
       await target.parent.create(recursive: true);
-      await File(entry.filePath).rename(target.path);
-      expect((await plan()).unchanged, 1);
-      expect((await db.list()).single.filePath, target.path);
+      await File(entry.filePath).delete();
+      await target.writeAsString('unrelated');
+      expect(await target.length(), entry.fileSize);
+      expect((await plan()).items.single.status, ReorganizationStatus.missing);
+      expect((await db.list()).single.filePath, entry.filePath);
     },
   );
   test(

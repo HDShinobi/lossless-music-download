@@ -37,9 +37,11 @@ class LibraryReorganizeRunning extends Notifier<bool> {
   @override
   bool build() => false;
 
-  bool tryStart() {
+  /// [ignoreQueue]: single-file edits only conflict with the queue on their own
+  /// path, which the caller checks via [isActiveLibraryDownloadPath].
+  bool tryStart({bool ignoreQueue = false}) {
     if (isLibraryBusy(
-      queueRunning: ref.read(libraryQueueBusyProvider),
+      queueRunning: !ignoreQueue && ref.read(libraryQueueBusyProvider),
       reEnrichRunning: ref.read(batchReEnrichProvider).running,
       reorganizeRunning: state,
     )) {

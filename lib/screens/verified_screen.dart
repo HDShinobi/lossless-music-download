@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../l10n/app_localizations.dart';
 import '../providers/library_manager.dart';
+import '../providers/library_busy_provider.dart';
 import '../providers/library_provider.dart';
 import '../services/download_paths.dart';
 import '../theme/app_tokens.dart';
@@ -45,7 +46,16 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
 
   // ---- Management actions ----
 
+  bool _refuseWhileBusy(BuildContext context) {
+    if (!ref.read(libraryBusyProvider)) return false;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(AppLocalizations.of(context).libraryBusyHint),
+    ));
+    return true;
+  }
+
   Future<void> _edit(BuildContext context) async {
+    if (_refuseWhileBusy(context)) return;
     final t = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final fields = await showEditMetadataSheet(context, entry);
@@ -56,12 +66,15 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
             fields,
           );
       messenger.showSnackBar(SnackBar(content: Text(t.editSaved)));
+    } on LibraryBusyException {
+      messenger.showSnackBar(SnackBar(content: Text(t.libraryBusyHint)));
     } catch (_) {
       messenger.showSnackBar(SnackBar(content: Text(t.editFailed)));
     }
   }
 
   Future<void> _reEnrich(BuildContext context) async {
+    if (_refuseWhileBusy(context)) return;
     final t = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(SnackBar(content: Text(t.reEnrichStarted)));
@@ -69,6 +82,9 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
       await ref.read(libraryManagerProvider.notifier).reEnrichEntry(entry);
       if (!context.mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(t.reEnrichDone)));
+    } on LibraryBusyException {
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(t.libraryBusyHint)));
     } catch (_) {
       if (!context.mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(t.reEnrichFailed)));
@@ -76,13 +92,23 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
   }
 
   Future<void> _replayGain(BuildContext context) async {
+    if (_refuseWhileBusy(context)) return;
     final t = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(SnackBar(content: Text(t.replayGainStarted)));
-    final ok = await ReplayGainService.applyToFile(
-      entry.path,
-      ref.read(backendBridgeProvider),
-    );
+    final running = ref.read(libraryReorganizeRunningProvider.notifier);
+    if (!running.tryStart()) {
+      messenger.showSnackBar(SnackBar(content: Text(t.libraryBusyHint)));
+      return;
+    }
+    late bool ok;
+    try {
+      ok = await ReplayGainService.applyToFile(
+        entry.path, ref.read(backendBridgeProvider),
+      );
+    } finally {
+      running.finish();
+    }
     if (!context.mounted) return;
     messenger.showSnackBar(SnackBar(
       content: Text(ok ? t.replayGainDone : t.replayGainFailed),
@@ -90,10 +116,12 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
   }
 
   Future<void> _convert(BuildContext context) async {
+    if (_refuseWhileBusy(context)) return;
     final t = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final choice = await showConvertSheet(context);
-    if (choice == null) return;
+    if (choice == null || !context.mounted) return;
+    if (_refuseWhileBusy(context)) return;
     messenger.showSnackBar(SnackBar(content: Text(t.convertStarted)));
     final newPath = await ref.read(libraryManagerProvider.notifier).convert(
           entry.path,
@@ -111,6 +139,7 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
+    if (_refuseWhileBusy(context)) return;
     final t = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final ok = await showDialog<bool>(
@@ -133,8 +162,14 @@ class _VerifiedScreenState extends ConsumerState<VerifiedScreen> {
         ],
       ),
     );
-    if (ok != true) return;
-    await ref.read(libraryManagerProvider.notifier).delete(entry.path);
+    if (ok != true || !context.mounted) return;
+    try {
+      await ref.read(libraryManagerProvider.notifier).delete(entry.path);
+    } on LibraryBusyException {
+      if (!context.mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(t.libraryBusyHint)));
+      return;
+    }
     if (!context.mounted) return;
     messenger.showSnackBar(SnackBar(content: Text(t.deleteDone)));
     context.pop(); // back to library (which re-scans)

@@ -27,6 +27,14 @@ const song = Track(
 
 class CountingHistoryDatabase extends HistoryDatabase {
   int prechecks = 0;
+  Completer<void>? relocateGate;
+  final relocateEntered = Completer<void>();
+  @override
+  Future<int> relocate(String root, {int limit = 128, Iterable<LibraryEntry> scannedEntries = const []}) async {
+    if (!relocateEntered.isCompleted) relocateEntered.complete();
+    await relocateGate?.future;
+    return super.relocate(root, scannedEntries: scannedEntries);
+  }
   CountingHistoryDatabase({required super.path, super.factory});
   @override
   Future<List<HistoryEntry?>> findBatch(
@@ -177,10 +185,46 @@ void main() {
     await db.close();
     await dir.delete(recursive: true);
   });
+  test('library renders before history relocation and first backfill finish', () async {
+    final file = await File('${dir.path}/render.flac').writeAsString('audio');
+    bridge.scan = [{'filePath': file.path}];
+    db.relocateGate = Completer<void>();
+    container = setup();
+    final loaded = container.read(libraryProvider.future);
+    await db.relocateEntered.future;
+    try {
+      expect((await loaded.timeout(const Duration(seconds: 1))).single.path, file.path);
+      expect(await db.list(), isEmpty);
+    } finally { db.relocateGate!.complete(); }
+    await waitFor(() async => (await db.list()).isNotEmpty);
+  });
+  for (final mode in ['precheck', 'indexed', 'native']) {
+    test('alreadyInLibrary $mode preserves original history identity and date', () async {
+      final file = await File('${dir.path}/owned.flac').writeAsString('audio');
+      final original = HistoryEntry(id: 'original', track: mode == 'precheck' ? song :
+        const Track(id: 'different', name: 'Different', artists: 'Other'),
+        service: 'original-provider', filePath: file.path, downloadedAt: DateTime(2020));
+      await db.upsert(original);
+      if (mode == 'indexed') bridge.indexedPath = file.path;
+      final worker = Worker(file.path)..withPath = true..alreadyExists = true;
+      container = setup(worker: worker);
+      await container.read(downloadQueueProvider.notifier).enqueue(mode == 'indexed'
+        ? const Track(id: 'indexed', name: 'Song', artists: 'Artist', isrc: 'USABC1234567') : song);
+      await waitFor(() => container.read(downloadQueueProvider).single.status == 'done');
+      await settle();
+      final row = (await db.list()).single;
+      expect(row.id, original.id);
+      expect(row.track.id, original.track.id);
+      expect(row.downloadedAt, original.downloadedAt);
+      expect(row.service, original.service);
+    });
+  }
   test('library scan hides all re-enrich temps and removes only stale orphans', () async {
     await File('${dir.path}/old.flac').writeAsString('original');
     await File('${dir.path}/new.mp3').writeAsString('original');
     final stale = await File('${dir.path}/old.flac.reenrich-1762531200000000.flac').writeAsString('old');
+    final unscanned = await File('${dir.path}/old.flac.reenrich-1762531200000001.flac').writeAsString('unscanned');
+    await unscanned.setLastModified(DateTime(2020));
     final fresh = await File('${dir.path}/new.mp3.reenrich-1762531200000000.mp3').writeAsString('new');
     final song = await File('${dir.path}/song.flac').writeAsString('audio');
     await stale.setLastModified(DateTime.now().subtract(const Duration(minutes: 10)));
@@ -189,7 +233,9 @@ void main() {
     final entries = await container.read(libraryProvider.future);
     expect(entries.map((e) => e.path), [song.path]);
     expect(await stale.exists(), isFalse);
+    expect(await unscanned.exists(), isTrue);
     expect(await fresh.exists(), isTrue);
+    await waitFor(() async => (await db.list()).isNotEmpty);
     expect((await db.list()).map((e) => e.filePath), [song.path]);
   });
 
@@ -402,6 +448,7 @@ void main() {
       ];
       container = setup();
       await container.read(libraryProvider.future);
+      await waitFor(() async => (await db.list()).isNotEmpty);
       final original = (await db.list()).single;
       expect(original.fileSize, 5);
       expect(original.track.isrc, 'USABC1234567');
@@ -412,6 +459,7 @@ void main() {
       bridge.scan.single['filePath'] = moved;
       container.invalidate(libraryProvider);
       await container.read(libraryProvider.future);
+      await waitFor(() async => (await db.list()).single.filePath == moved);
       expect((await db.list()).single.filePath, moved);
       await db.remove(original.id);
       container.invalidate(libraryProvider);

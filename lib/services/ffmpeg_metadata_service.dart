@@ -553,6 +553,9 @@ Future<void> applyReEnrichFfmpeg(
         !await File(output).exists()) {
       throw StateError('FFmpeg metadata write failed');
     }
+    if (!await File(path).exists()) {
+      throw StateError('Source vanished during metadata write');
+    }
     await File(output).rename(path);
   } finally {
     if (await File(output).exists()) await File(output).delete();

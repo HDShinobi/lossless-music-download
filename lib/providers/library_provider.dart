@@ -43,8 +43,10 @@ final libraryProvider = FutureProvider<List<LibraryEntry>>((ref) async {
   await bridge.setLibraryCoverCacheDir(coverDir);
 
   // Scan the folder — Go reads embedded tags for ALL files.
-  await cleanupReEnrichOrphans(dir);
-  final items = (await bridge.scanLibraryFolder(dir)).where((item) =>
+  final scanned = await bridge.scanLibraryFolder(dir);
+  await cleanupReEnrichOrphans(dir, candidates: scanned
+      .map((item) => item['filePath'] as String? ?? ''));
+  final items = scanned.where((item) =>
     !isReEnrichTemporary(item['filePath'] as String? ?? ''));
 
   final entries = items.map((item) {
@@ -108,7 +110,14 @@ final libraryProvider = FutureProvider<List<LibraryEntry>>((ref) async {
   // Reuse the scan already needed by Library. Never start a second scan just
   // for backfill. Repair at most 128 paths; seed in 256-row pages, yielding
   // between pages so the initial library can render while indexing continues.
+  unawaited(_indexHistory(ref, dir, entries));
+  return entries;
+});
+
+Future<void> _indexHistory(Ref ref, String dir, List<LibraryEntry> entries) async {
   try {
+    await Future<void>.delayed(Duration.zero);
+    if (!ref.mounted) return;
     final history = await ref.read(historyDatabaseProvider.future);
     final repaired = await history.relocate(dir, scannedEntries: entries);
     final seeds = entries.map((e) => HistoryEntry(
@@ -128,8 +137,7 @@ final libraryProvider = FutureProvider<List<LibraryEntry>>((ref) async {
   } catch (_) {
     // The library remains usable if history storage is temporarily unavailable.
   }
-  return entries;
-});
+}
 
 Future<void> _continueHistoryBackfill(Ref ref, HistoryDatabase history,
     String root, List<HistoryEntry> entries) async {

@@ -381,6 +381,12 @@ class DownloadQueueController extends Notifier<List<DownloadEntry>> {
       if (_recordedHistory[entry.itemId] == fingerprint) continue;
       try {
         final db = await ref.read(historyDatabaseProvider.future);
+        if (entry.alreadyInLibrary && (await (await db.database).query(
+          'history', columns: ['id'], where: 'file_path = ?', whereArgs: [path], limit: 1,
+        )).isNotEmpty) {
+          _recordedHistory[entry.itemId] = fingerprint;
+          continue;
+        }
         final stat = await File(path).stat();
         await db.upsert(HistoryEntry(id: entry.itemId, track: entry.track,
           service: service, filePath: path,

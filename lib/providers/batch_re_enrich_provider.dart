@@ -86,6 +86,7 @@ class BatchReEnrich extends Notifier<BatchReEnrichState> {
             entry,
             options: options,
             refreshLibrary: false,
+            inBatch: true,
           );
         } catch (e) {
           failures.add(

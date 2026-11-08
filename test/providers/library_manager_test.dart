@@ -1,4 +1,8 @@
 import 'dart:io';
+import 'dart:async';
+import 'package:lossless_music_download/providers/library_busy_provider.dart';
+import 'package:lossless_music_download/providers/download_queue_provider.dart';
+import '../helpers/library_queue_fake.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,17 +12,48 @@ import 'package:lossless_music_download/services/backend_bridge.dart';
 
 class _FakeBridge extends BackendBridge {
   final List<({String path, Map<String, String> fields})> edits = [];
+  Completer<void>? gate;
   Map<String, dynamic> editResult = {'success': true, 'method': 'native'};
 
   @override
   Future<Map<String, dynamic>> editFileMetadata(
-      String filePath, Map<String, String> metadata) async {
+    String filePath,
+    Map<String, String> metadata,
+  ) async {
+    await gate?.future;
     edits.add((path: filePath, fields: metadata));
     return editResult;
   }
 }
 
 void main() {
+  test(
+    'edit and delete hold the shared running state for their duration',
+    () async {
+      final fake = _FakeBridge()..gate = Completer<void>();
+      final container = ProviderContainer(
+        overrides: [
+          backendBridgeProvider.overrideWithValue(fake),
+          downloadQueueProvider.overrideWith(LibraryQueueFake.new),
+        ],
+      );
+      addTearDown(container.dispose);
+      final manager = container.read(libraryManagerProvider.notifier);
+      final editing = manager.editMetadata('/song.flac', {'title': 'New'});
+      expect(container.read(libraryBusyProvider), isTrue);
+      expect(
+        container.read(libraryReorganizeRunningProvider.notifier).tryStart(),
+        isFalse,
+      );
+      fake.gate!.complete();
+      await editing;
+      expect(container.read(libraryBusyProvider), isFalse);
+      final deleting = manager.delete('/missing.flac');
+      expect(container.read(libraryBusyProvider), isTrue);
+      await deleting;
+      expect(container.read(libraryBusyProvider), isFalse);
+    },
+  );
   group('buildEditFields', () {
     test('maps non-empty form values to lowercase backend keys', () {
       final f = buildEditFields(
@@ -60,7 +95,9 @@ void main() {
       await file.writeAsString('x');
       expect(file.existsSync(), isTrue);
 
-      final container = ProviderContainer();
+      final container = ProviderContainer(
+        overrides: [downloadQueueProvider.overrideWith(LibraryQueueFake.new)],
+      );
       addTearDown(container.dispose);
 
       await container.read(libraryManagerProvider.notifier).delete(file.path);
@@ -70,7 +107,9 @@ void main() {
     });
 
     test('does not throw when the file is already gone', () async {
-      final container = ProviderContainer();
+      final container = ProviderContainer(
+        overrides: [downloadQueueProvider.overrideWith(LibraryQueueFake.new)],
+      );
       addTearDown(container.dispose);
       await expectLater(
         container
@@ -85,14 +124,17 @@ void main() {
     test('forwards the built fields to the backend bridge', () async {
       final fake = _FakeBridge();
       final container = ProviderContainer(
-        overrides: [backendBridgeProvider.overrideWithValue(fake)],
+        overrides: [
+          backendBridgeProvider.overrideWithValue(fake),
+          downloadQueueProvider.overrideWith(LibraryQueueFake.new),
+        ],
       );
       addTearDown(container.dispose);
 
       await container.read(libraryManagerProvider.notifier).editMetadata(
-            '/music/song.flac',
-            {'title': 'New Title', 'artist': 'New Artist'},
-          );
+        '/music/song.flac',
+        {'title': 'New Title', 'artist': 'New Artist'},
+      );
 
       expect(fake.edits, hasLength(1));
       expect(fake.edits.single.path, '/music/song.flac');

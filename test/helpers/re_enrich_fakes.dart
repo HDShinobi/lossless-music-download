@@ -5,6 +5,7 @@ import 'package:lossless_music_download/services/history_database.dart';
 class FakeBridge extends BackendBridge {
   final requests = <Map<String, dynamic>>[];
   Object? editError;
+  Map<String, dynamic>? writeResult;
   @override
   Future<Map<String, dynamic>> editFileMetadata(
     String path,
@@ -38,7 +39,7 @@ class FakeBridge extends BackendBridge {
     if (request['file_path'] == '/3.flac') {
       return {'success': false, 'error': 'write failed'};
     }
-    return {
+    return writeResult ?? {
       'method': 'native',
       'success': true,
       'enriched_metadata': {
@@ -52,11 +53,13 @@ class FakeBridge extends BackendBridge {
 class FakeHistory extends HistoryDatabase {
   FakeHistory() : super(path: ':memory:');
   final paths = <String>[];
+  Object? error;
   @override
   Future<void> updateReEnriched(
     String path,
     Map<String, dynamic> result,
   ) async {
+    if (error != null) throw error!;
     paths.add(path);
   }
 }

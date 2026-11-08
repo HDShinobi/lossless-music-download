@@ -13,16 +13,27 @@ bool isReEnrichTemporary(String path) => _original(path) != null;
 /// Never follow links or delete fresh output belonging to an active tag write.
 Future<void> cleanupReEnrichOrphans(
   String root, {
+  Iterable<String>? candidates,
   Duration minimumAge = const Duration(minutes: 5),
 }) async {
   final cutoff = DateTime.now().subtract(minimumAge);
   try {
-    await for (final entity in Directory(
-      root,
-    ).list(recursive: true, followLinks: false)) {
+    final entities = candidates == null
+        ? Directory(root).list(recursive: true, followLinks: false)
+        : Stream<FileSystemEntity>.fromIterable(
+            candidates
+                .where(
+                  (path) =>
+                      path.startsWith('$root/') && isReEnrichTemporary(path),
+                )
+                .map(File.new),
+          );
+    await for (final entity in entities) {
       if (entity is! File || !isReEnrichTemporary(entity.path)) continue;
       try {
-        if (await FileSystemEntity.type(
+        if (await FileSystemEntity.type(entity.path, followLinks: false) ==
+                FileSystemEntityType.file &&
+            await FileSystemEntity.type(
                   _original(entity.path)!,
                   followLinks: false,
                 ) ==
